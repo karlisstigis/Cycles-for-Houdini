@@ -1,0 +1,119 @@
+From 662f5e4877d0f1fae1a6c58d887e6b3c1eb69ff0 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:35 +0100
+Subject: [PATCH] independent attribute buffers
+
+Locked-Patch: patches/0040-independent-attribute-buffers.patch
+Locked-Patch-SHA256: 39a7a5980b28af0ae1a1477f7a90b8136d75320496c6e74fe9ef3f14cb2abc7f
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_shading_payload_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 4724b445aa47c629dadccdb8162bdbfc0dac77b8
+Previous-Patch: patches/0040-independent-attribute-buffers.patch
+Previous-Patch-SHA256: 39a7a5980b28af0ae1a1477f7a90b8136d75320496c6e74fe9ef3f14cb2abc7f
+Rationale: Attribute-only reallocations must not invalidate independent primitive buffers; positions/radii have distinct ownership even when represented as attributes.
+Contract: independent attribute buffers
+Tests: tests/houdini_shading_payload_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index e6b1e737d1e51e5bbdf763ebf5febbf687eced26..c2f30fec35ec0b1e4fccc37d8f22af9a3a18e814 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -632,8 +632,11 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
+   /* tag the device arrays for reallocation or modification */
+   DeviceScene *dscene = &scene->dscene;
+ 
+-  if (device_update_flags & (DEVICE_MESH_DATA_NEEDS_REALLOC | DEVICE_CURVE_DATA_NEEDS_REALLOC |
+-                             DEVICE_POINT_DATA_NEEDS_REALLOC))
++  /* Attribute tables have independent storage. A new shader attribute must not
++   * discard unchanged primitive arrays or the acceleration structure. Composite
++   * flags above still request both domains for real topology changes. */
++  if (device_update_flags & (MESH_DATA_NEED_REALLOC | CURVE_DATA_NEED_REALLOC |
++                             POINT_DATA_NEED_REALLOC))
+   {
+     scene->bvh.reset();
+ 
+@@ -646,17 +649,20 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
+     dscene->prim_object.tag_realloc();
+     dscene->prim_time.tag_realloc();
+ 
+-    if (device_update_flags & DEVICE_MESH_DATA_NEEDS_REALLOC) {
++    if (device_update_flags & MESH_DATA_NEED_REALLOC) {
++      dscene->tri_verts.tag_realloc();
+       dscene->tri_vindex.tag_realloc();
+       dscene->tri_shader.tag_realloc();
+     }
+ 
+-    if (device_update_flags & DEVICE_CURVE_DATA_NEEDS_REALLOC) {
++    if (device_update_flags & CURVE_DATA_NEED_REALLOC) {
++      dscene->curve_keys.tag_realloc();
+       dscene->curves.tag_realloc();
+       dscene->curve_segments.tag_realloc();
+     }
+ 
+-    if (device_update_flags & DEVICE_POINT_DATA_NEEDS_REALLOC) {
++    if (device_update_flags & POINT_DATA_NEED_REALLOC) {
++      dscene->points.tag_realloc();
+       dscene->points_shader.tag_realloc();
+     }
+   }
+@@ -684,9 +690,6 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
+   if (device_update_flags & ATTR_FLOAT3_NEEDS_REALLOC) {
+     dscene->attributes_map.tag_realloc();
+     dscene->attributes_float3.tag_realloc();
+-    dscene->tri_verts.tag_realloc();
+-    dscene->curve_keys.tag_realloc();
+-    dscene->points.tag_realloc();
+   }
+   else if (device_update_flags & ATTR_FLOAT3_MODIFIED) {
+     dscene->attributes_float3.tag_modified();
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index 67df9a94d9b4c881ac5714c5d896dd8c11af70a8..9ca617801628016114a20431e8ce6d789a2b82c0 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -729,6 +729,24 @@ void GeometryManager::device_update_attributes(Device *device,
+       dscene->attributes_spherical_harmonics_rest.need_realloc(),
+   };
+ 
++  /* Position and radius use dedicated primitive buffers, even though their
++   * socket types share an ordinary attribute pool. Reallocating that pool must
++   * not mark unrelated primitive data for copying. */
++  const auto attribute_needs_realloc = [&](const Geometry *geom, const Attribute *attr) {
++    if (attr->std == ATTR_STD_POSITION ||
++        (attr->std == ATTR_STD_RADIUS && (geom->is_hair() || geom->is_pointcloud())))
++    {
++      if (geom->is_hair()) {
++        return dscene->curve_keys.need_realloc();
++      }
++      if (geom->is_pointcloud()) {
++        return dscene->points.need_realloc();
++      }
++      return dscene->tri_verts.need_realloc();
++    }
++    return attributes_need_realloc[Attribute::kernel_type(*attr)];
++  };
++
+   /* Fill in attributes. */
+   for (size_t i = 0; i < scene->geometry.size(); i++) {
+     Geometry *geom = scene->geometry[i];
+@@ -749,8 +767,8 @@ void GeometryManager::device_update_attributes(Device *device,
+         }
+         added[attr] = &req;
+ 
+-        /* force a copy if we need to reallocate all the data */
+-        attr->modified |= attributes_need_realloc[int(Attribute::kernel_type(*attr))];
++        /* Force a copy only when this attribute's actual backing buffer moved. */
++        attr->modified |= attribute_needs_realloc(geom, attr);
+       }
+ 
+       builder.add(geom, attr, ATTR_PRIM_GEOMETRY, req.type, req.desc);
+@@ -781,7 +799,7 @@ void GeometryManager::device_update_attributes(Device *device,
+         }
+         added[attr] = &req;
+ 
+-        attr->modified |= attributes_need_realloc[int(Attribute::kernel_type(*attr))];
++        attr->modified |= attribute_needs_realloc(object->geometry, attr);
+       }
+ 
+       builder.add(object->geometry, attr, ATTR_PRIM_GEOMETRY, req.type, req.desc);

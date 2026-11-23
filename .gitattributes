@@ -1,0 +1,7 @@
+# Pinned upstream Git blobs verified byte-for-byte by the release packager.
+packaging/notices/openpgl/** -text
+# All third-party notices are verified byte-for-byte against packaging/notices/index.json, and
+# the patch series against source.lock.json: keep their exact bytes in every checkout (a
+# Windows clone with core.autocrlf=true would otherwise get CRLF copies that fail both checks).
+packaging/notices/** -text
+patches/*.patch -text

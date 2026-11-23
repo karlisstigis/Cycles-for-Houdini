@@ -1,0 +1,2892 @@
+From 4d492d9aa604e322e9cf586bb8c65900d5d3c6f0 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:42 +0100
+Subject: [PATCH] nested dielectrics
+
+Locked-Patch: patches/0074-nested-dielectrics.patch
+Locked-Patch-SHA256: e82678b8bd2030dcbdd223afc022452f0a339abc6bf1db661986738e0fc6b63c
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_nested_dielectrics_plumbing_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: e6775e761804d1a6c2a9891cd429cc8d48874e2c
+Previous-Patch: patches/0074-nested-dielectrics.patch
+Previous-Patch-SHA256: e82678b8bd2030dcbdd223afc022452f0a339abc6bf1db661986738e0fc6b63c
+Rationale: Priority-based nested dielectrics add medium state, overflow diagnostics and opt-in GPU allocations, changing transport semantics beyond a local bug fix.
+Contract: nested dielectrics
+Tests: tests/houdini_nested_dielectrics_plumbing_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/device/device.cpp b/src/device/device.cpp
+index b9963c4037ed6384fe8dc1ff07562c0efec2c920..eb55131f0c5f7e4e7dc8a8d9151782ad5ca2ffab 100644
+--- a/src/device/device.cpp
++++ b/src/device/device.cpp
+@@ -598,6 +598,26 @@ void Device::mem_or_from_device(device_memory &mem)
+   mem.host_pointer = combined;
+ }
+ 
++uint64_t Device::mem_read_uint32_counter(device_memory &mem)
++{
++  assert(mem.data_type == TYPE_UINT && mem.data_elements == 1 && mem.data_size == 1);
++  if (info.type == DEVICE_CPU) {
++    return *reinterpret_cast<const uint *>(mem.device_pointer);
++  }
++  uint value = 0;
++  void *host = mem.host_pointer;
++  mem.host_pointer = &value;
++  try {
++    mem_copy_from(mem, 0, 1, 1, sizeof(value));
++  }
++  catch (...) {
++    mem.host_pointer = host;
++    throw;
++  }
++  mem.host_pointer = host;
++  return value;
++}
++
+ device_ptr Device::mem_device_ptr(const device_memory &mem, Device *sub_device)
+ {
+   assert(sub_device == this);
+diff --git a/src/device/device.h b/src/device/device.h
+index beec47d5e60914d69e4227aea669f5c6233f8a7d..ccef1fee2e3dd8e8d42769ca1e6fb2d6fb5cb074 100644
+--- a/src/device/device.h
++++ b/src/device/device.h
+@@ -327,6 +327,10 @@ class Device {
+    * The host buffer is not zeroed as part of this. */
+   virtual void mem_or_from_device(device_memory &mem);
+ 
++  /* Read one uint32 counter, summed once per distinct allocation on multi-devices.
++   * Does not overwrite the host buffer, which CPU/unified devices may still use. */
++  virtual uint64_t mem_read_uint32_counter(device_memory &mem);
++
+   /* Sub-devices */
+ 
+   /* Run given callback for every individual device which will be handling rendering.
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index fdeb1fb5b5484c7fdadedb81b01a26807153524d..3c8066ef41ca21e0674063e69e6f4ebfb917089d 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -626,6 +626,29 @@ class MultiDevice : public Device {
+     mem.device_pointer = key;
+   }
+ 
++  uint64_t mem_read_uint32_counter(device_memory &mem) override
++  {
++    const device_ptr key = mem.device_pointer;
++    uint64_t total = 0;
++    try {
++      /* Peer devices share an allocation: read its owner exactly once. */
++      for (const vector<SubDevice *> &island : peer_islands) {
++        SubDevice *owner = find_matching_mem_device(key, *island.front());
++        mem.device = owner->device.get();
++        mem.device_pointer = ptr_map_find(*owner, key);
++        total += owner->device->mem_read_uint32_counter(mem);
++      }
++    }
++    catch (...) {
++      mem.device = this;
++      mem.device_pointer = key;
++      throw;
++    }
++    mem.device = this;
++    mem.device_pointer = key;
++    return total;
++  }
++
+   void mem_copy_from(
+       device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem) override
+   {
+diff --git a/src/integrator/path_trace_work_gpu.cpp b/src/integrator/path_trace_work_gpu.cpp
+index 84c2ec03a76c3d3d9694977d02767427847c4751..cd2fabe21c0bb0f85fc8bf2e84c9791d845e9f13 100644
+--- a/src/integrator/path_trace_work_gpu.cpp
++++ b/src/integrator/path_trace_work_gpu.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "integrator/path_trace_work_gpu.h"
+ 
++#include <cstring>
++
+ #include "device/device.h"
+ 
+ #include "integrator/pass_accessor_gpu.h"
+@@ -20,36 +22,40 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++/* Nested dielectrics: its state members are only allocated while the feature is on, so scenes
++ * with volumes but without the feature keep exactly their previous state memory. */
++static bool is_nested_dielectric_state_member(const char *parent_struct, const char *name)
++{
++  return strcmp(parent_struct, "nested_stack") == 0 ||
++         strcmp(parent_struct, "shadow_nested_stack") == 0 || strcmp(name, "nested_masked") == 0;
++}
++
+ static size_t estimate_single_state_size(const uint64_t kernel_features,
+-                                         const int volume_stack_size)
++                                        const int volume_stack_size,
++                                        const bool nested_on,
++                                        const int nested_stack_size)
+ {
+   size_t state_size = 0;
+ 
+ #define KERNEL_STRUCT_VOLUME_STACK_SIZE (volume_stack_size)
++#define KERNEL_STRUCT_NESTED_STACK_SIZE (nested_stack_size)
+ #define KERNEL_STRUCT_BEGIN(name) for (int array_index = 0;; array_index++) {
+-
++#define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
++  if (KernelFeatureRequest(feature).test(kernel_features) && \
++      (nested_on || !is_nested_dielectric_state_member(#parent_struct, #name))) { \
++    state_size += sizeof(gpu_state_storage<type>::gpu_type); \
++  }
+ #ifdef __INTEGRATOR_GPU_PACKED_STATE__
+-#  define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
+-    state_size += (KernelFeatureRequest(feature).test(kernel_features)) ? \
+-                      sizeof(gpu_state_storage<type>::gpu_type) : \
+-                      0;
+ #  define KERNEL_STRUCT_MEMBER_PACKED(parent_struct, type, name, feature)
+ #  define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) \
+     KERNEL_STRUCT_BEGIN(parent_struct) \
+     KERNEL_STRUCT_MEMBER(parent_struct, packed_##parent_struct, packed, feature)
+ #else
+-#  define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
+-    state_size += (KernelFeatureRequest(feature).test(kernel_features)) ? \
+-                      sizeof(gpu_state_storage<type>::gpu_type) : \
+-                      0;
+ #  define KERNEL_STRUCT_MEMBER_PACKED KERNEL_STRUCT_MEMBER
+ #  define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) KERNEL_STRUCT_BEGIN(parent_struct)
+ #endif
+ 
+-#define KERNEL_STRUCT_ARRAY_MEMBER(parent_struct, type, name, feature) \
+-  state_size += (KernelFeatureRequest(feature).test(kernel_features)) ? \
+-                    sizeof(gpu_state_storage<type>::gpu_type) : \
+-                    0;
++#define KERNEL_STRUCT_ARRAY_MEMBER KERNEL_STRUCT_MEMBER
+ #define KERNEL_STRUCT_END(name) \
+   (void)array_index; \
+   break; \
+@@ -65,6 +71,7 @@ static size_t estimate_single_state_size(const uint64_t kernel_features,
+ #include "kernel/integrator/shadow_state_template.h"
+ 
+ #undef KERNEL_STRUCT_VOLUME_STACK_SIZE
++#undef KERNEL_STRUCT_NESTED_STACK_SIZE
+ #undef KERNEL_STRUCT_BEGIN
+ #undef KERNEL_STRUCT_BEGIN_PACKED
+ #undef KERNEL_STRUCT_MEMBER
+@@ -122,14 +129,20 @@ void PathTraceWorkGPU::alloc_integrator_soa()
+    * Note that both disabling and enabling features may require memory
+    * allocations, so we check for equality. */
+   const int volume_stack_size = device_scene_->data.volume_stack_size;
++  const int requested_nested_stack_size = max(device_scene_->data.integrator.nested_stack_size, 1);
++  const bool nested_on = device_scene_->data.integrator.nested_dielectrics != 0;
+   const uint64_t kernel_features = device_scene_->data.kernel_features;
+   if (integrator_state_soa_kernel_features_ == kernel_features &&
+-      integrator_state_soa_volume_stack_size_ == volume_stack_size)
++      integrator_state_soa_volume_stack_size_ == volume_stack_size &&
++      integrator_state_soa_nested_on_ == nested_on &&
++      integrator_state_soa_nested_stack_size_ == requested_nested_stack_size)
+   {
+     return;
+   }
+   integrator_state_soa_kernel_features_ = kernel_features;
+   integrator_state_soa_volume_stack_size_ = volume_stack_size;
++  integrator_state_soa_nested_on_ = nested_on;
++  integrator_state_soa_nested_stack_size_ = requested_nested_stack_size;
+ 
+   /* Free existing state, before state size estimation which takes into account free memory. */
+   integrator_state_soa_.clear();
+@@ -137,7 +150,8 @@ void PathTraceWorkGPU::alloc_integrator_soa()
+   /* Determine the number of path states. Deferring this for as long as possible allows the
+    * back-end to make better decisions about memory availability. */
+   const size_t single_state_size = estimate_single_state_size(
+-      kernel_features, integrator_state_soa_volume_stack_size_);
++      kernel_features, integrator_state_soa_volume_stack_size_, nested_on,
++      integrator_state_soa_nested_stack_size_);
+ 
+   max_num_paths_ = queue_->num_concurrent_states(single_state_size);
+ 
+@@ -154,7 +168,8 @@ void PathTraceWorkGPU::alloc_integrator_soa()
+ #define KERNEL_STRUCT_BEGIN(name) for (int array_index = 0;; array_index++) {
+ #define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
+   integrator_state_gpu_.parent_struct.name = nullptr; \
+-  if (KernelFeatureRequest(feature).test(kernel_features)) { \
++  if (KernelFeatureRequest(feature).test(kernel_features) && \
++      (nested_on || !is_nested_dielectric_state_member(#parent_struct, #name))) { \
+     string name_str = string_printf("%sintegrator_state_" #parent_struct "_" #name, \
+                                     shadow ? "shadow_" : ""); \
+     auto array = make_unique<device_only_memory<gpu_state_storage<type>::gpu_type>>( \
+@@ -183,7 +198,8 @@ void PathTraceWorkGPU::alloc_integrator_soa()
+ 
+ #define KERNEL_STRUCT_ARRAY_MEMBER(parent_struct, type, name, feature) \
+   integrator_state_gpu_.parent_struct[array_index].name = nullptr; \
+-  if (KernelFeatureRequest(feature).test(kernel_features)) { \
++  if (KernelFeatureRequest(feature).test(kernel_features) && \
++      (nested_on || !is_nested_dielectric_state_member(#parent_struct, #name))) { \
+     string name_str = string_printf( \
+         "%sintegrator_state_" #name "_%d", shadow ? "shadow_" : "", array_index); \
+     auto array = make_unique<device_only_memory<gpu_state_storage<type>::gpu_type>>( \
+@@ -204,6 +220,7 @@ void PathTraceWorkGPU::alloc_integrator_soa()
+   } \
+   }
+ #define KERNEL_STRUCT_VOLUME_STACK_SIZE (integrator_state_soa_volume_stack_size_)
++#define KERNEL_STRUCT_NESTED_STACK_SIZE (integrator_state_soa_nested_stack_size_)
+ 
+   bool shadow = false;
+ #include "kernel/integrator/state_template.h"
+@@ -219,8 +236,10 @@ void PathTraceWorkGPU::alloc_integrator_soa()
+ #undef KERNEL_STRUCT_END
+ #undef KERNEL_STRUCT_END_ARRAY
+ #undef KERNEL_STRUCT_VOLUME_STACK_SIZE
++#undef KERNEL_STRUCT_NESTED_STACK_SIZE
+ 
+   if (LOG_IS_ON(LOG_LEVEL_TRACE)) {
++
+     size_t total_soa_size = 0;
+     for (auto &&soa_memory : integrator_state_soa_) {
+       total_soa_size += soa_memory->memory_size();
+diff --git a/src/integrator/path_trace_work_gpu.h b/src/integrator/path_trace_work_gpu.h
+index 8f47b1b9b0881632d9330877151761103760e8fb..534cd6d2867121e9f570e86ee6434f021d609078 100644
+--- a/src/integrator/path_trace_work_gpu.h
++++ b/src/integrator/path_trace_work_gpu.h
+@@ -132,6 +132,11 @@ class PathTraceWorkGPU : public PathTraceWork {
+   vector<unique_ptr<device_memory>> integrator_state_soa_;
+   uint64_t integrator_state_soa_kernel_features_;
+   int integrator_state_soa_volume_stack_size_ = 0;
++  /* Nested dielectrics stack size the state was allocated for. */
++  int integrator_state_soa_nested_stack_size_ = 0;
++  bool integrator_state_soa_nested_on_ = false;
++
++
+   /* Keep track of number of queued kernels. */
+   device_vector<IntegratorQueueCounter> integrator_queue_counter_;
+   /* Shader sorting. */
+diff --git a/src/kernel/CMakeLists.txt b/src/kernel/CMakeLists.txt
+index 954083688b30bc3d12c55830ee04d440707225b7..b7e80032f5e0701de23deb57fcc2c03aeed9ee2b 100644
+--- a/src/kernel/CMakeLists.txt
++++ b/src/kernel/CMakeLists.txt
+@@ -196,7 +196,9 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
+   integrator/guiding.h
+   integrator/megakernel.h
+   integrator/mnee.h
++  integrator/nested_dielectric.h
+   integrator/path_state.h
++
+   integrator/pt_ris_nee.h
+   integrator/pt_ris_nee_common.h
+   integrator/shade_background.h
+diff --git a/src/kernel/data_arrays.h b/src/kernel/data_arrays.h
+index f9a35c33e9ad86165a1c8a445ba84f1c7ec395d4..1c17b0bf2e5e8b9d4c431da0d41ae165be0a5d22 100644
+--- a/src/kernel/data_arrays.h
++++ b/src/kernel/data_arrays.h
+@@ -102,5 +102,10 @@ KERNEL_DATA_ARRAY_WRITABLE(uint8_t, image_texture_tile_access_state)
+ KERNEL_DATA_ARRAY(KernelImageUDIM, image_texture_udims)
+ KERNEL_DATA_ARRAY(KernelImageInfo, image_info)
+ 
++/* Nested dielectrics: number of media probes (camera +Z probe, SSS replay) that ended unresolved.
++ * Allocated and written only while nested dielectrics are on. */
++KERNEL_DATA_ARRAY_WRITABLE(uint, nested_probe_unresolved)
++
++
+ #undef KERNEL_DATA_ARRAY
+ #undef KERNEL_DATA_ARRAY_WRITABLE
+diff --git a/src/kernel/data_template.h b/src/kernel/data_template.h
+index ce00bc7023be9e96e380eaa259cb3c4fe0b66f00..7b433d00701e6cce3930559140fd29bef5cadfee 100644
+--- a/src/kernel/data_template.h
++++ b/src/kernel/data_template.h
+@@ -242,6 +242,16 @@ KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_mode)
+ KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_ml)
+ KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_mb)
+ KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_pad)
++/* Nested dielectrics (Cycles Houdini patch 0074). Two 16-byte groups. */
++KERNEL_STRUCT_MEMBER(integrator, int, nested_dielectrics)
++KERNEL_STRUCT_MEMBER(integrator, int, nested_max_masked)
++KERNEL_STRUCT_MEMBER(integrator, int, nested_stack_size)
++KERNEL_STRUCT_MEMBER(integrator, int, nested_tie_mode)
++KERNEL_STRUCT_MEMBER(integrator, int, nested_camera_probe)
++KERNEL_STRUCT_MEMBER(integrator, int, nested_pad0)
++KERNEL_STRUCT_MEMBER(integrator, int, nested_pad1)
++KERNEL_STRUCT_MEMBER(integrator, int, nested_pad2)
++
+ 
+ KERNEL_STRUCT_MEMBER(integrator, float2, pixel_jitter)
+ KERNEL_STRUCT_END(KernelIntegrator)
+diff --git a/src/kernel/integrator/init_from_camera.h b/src/kernel/integrator/init_from_camera.h
+index 9e275f44d1d83292f63332c78250810ae1d31f7b..9eb794ce9a738a2f31c068d3ee7c7b136d330268 100644
+--- a/src/kernel/integrator/init_from_camera.h
++++ b/src/kernel/integrator/init_from_camera.h
+@@ -121,7 +121,8 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
+     path_state_init_integrator(kg, state, sample, rng_pixel, T);
+     integrator_path_next(state,
+                          DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA,
+-                         kernel_data.cam.is_inside_volume ?
++                         (kernel_data.cam.is_inside_volume ||
++                          kernel_data.integrator.nested_camera_probe) ?
+                              DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK :
+                              DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
+   }
+@@ -131,8 +132,9 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
+ 
+     /* Continue with intersect_closest kernel, optionally initializing volume
+      * stack before that if the camera may be inside a volume. */
+-    if (kernel_data.cam.is_inside_volume) {
++    if (kernel_data.cam.is_inside_volume || kernel_data.integrator.nested_camera_probe) {
+       integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK);
++
+     }
+     else {
+       integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
+diff --git a/src/kernel/integrator/intersect_closest.h b/src/kernel/integrator/intersect_closest.h
+index 65a270ba342efdf8a536f4d797312eca7ca40c9f..35a43cfefce4ea882f28d09b7d0d5532c53b5f9f 100644
+--- a/src/kernel/integrator/intersect_closest.h
++++ b/src/kernel/integrator/intersect_closest.h
+@@ -28,7 +28,8 @@ ccl_device_forceinline bool integrator_intersect_skip_lights(KernelGlobals kg,
+ 
+ ccl_device_forceinline bool integrator_intersect_terminate(KernelGlobals kg,
+                                                            IntegratorState state,
+-                                                           const int shader_flags)
++                                                           const int shader_flags,
++                                                           const bool nested_masked = false)
+ {
+ 
+   /* Optional AO bounce termination.
+@@ -49,6 +50,15 @@ ccl_device_forceinline bool integrator_intersect_terminate(KernelGlobals kg,
+     }
+   }
+ 
++#ifdef __VOLUME__
++  if (nested_masked) {
++    /* Nested dielectrics: a buried boundary is not a scattering event. No Russian roulette and
++     * no random number is used, so the path continues exactly as if the surface were absent. */
++    INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = 1.0f;
++    return false;
++  }
++#endif
++
+   /* Load random number state. */
+   RNGState rng_state;
+   path_state_rng_load(state, &rng_state);
+@@ -230,8 +240,9 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
+     const bool hit_surface = hit && !(isect->type & PRIMITIVE_LAMP);
+     const int shader = (hit_surface) ? intersection_get_shader(kg, isect) : SHADER_NONE;
+     const int flags = (hit_surface) ? kernel_data_fetch(shaders, shader).flags : 0;
++    const bool nested_masked = hit_surface && nested_isect_is_masked(kg, state, isect, flags);
+ 
+-    if (!integrator_intersect_terminate(kg, state, flags)) {
++    if (!integrator_intersect_terminate(kg, state, flags, nested_masked)) {
+       if (kernel_data.integrator.volume_ray_marching) {
+         integrator_path_next(
+             state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING);
+@@ -256,8 +267,14 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
+       /* Hit a surface, continue with surface kernel unless terminated. */
+       const int shader = intersection_get_shader(kg, isect);
+       const int flags = kernel_data_fetch(shaders, shader).flags;
++#ifdef __VOLUME__
++      const bool nested_masked = nested_isect_is_masked(kg, state, isect, flags);
++#else
++      const bool nested_masked = false;
++#endif
++
++      if (!integrator_intersect_terminate(kg, state, flags, nested_masked)) {
+ 
+-      if (!integrator_intersect_terminate(kg, state, flags)) {
+         const uint object_flags = intersection_get_object_flags(kg, isect);
+         const bool use_caustics = kernel_data.integrator.use_caustics &&
+                                   (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
+@@ -411,12 +428,20 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
+     const bool has_receiver_ancestor = INTEGRATOR_STATE(state, path, mnee) &
+                                        PATH_MNEE_RECEIVER_ANCESTOR;
+     INTEGRATOR_STATE_WRITE(state, path, mnee) &= ~PATH_MNEE_CULL_LIGHT_CONNECTION;
+-    if (from_caustic_caster && has_receiver_ancestor) {
++    /* Nested dielectrics: MNEE fell back for chains through nested media, keep their light
++     * connections (PATH_MNEE_NESTED is never set with the feature off). */
++    const bool nested_chain = (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_NESTED) != 0;
++    if (from_caustic_caster && has_receiver_ancestor && !nested_chain) {
+       INTEGRATOR_STATE_WRITE(state, path, mnee) |= PATH_MNEE_CULL_LIGHT_CONNECTION;
+     }
+     if (from_caustic_receiver) {
+       INTEGRATOR_STATE_WRITE(state, path, mnee) |= PATH_MNEE_RECEIVER_ANCESTOR;
++      /* PATH_MNEE_NESTED is reset where the receiver's MNEE starts (intersect_mnee.h) and set by
++       * nested crossings of this continuation (shade_surface.h). */
++
+     }
++
++
+   }
+ #endif /* __MNEE__ */
+ 
+diff --git a/src/kernel/integrator/intersect_mnee.h b/src/kernel/integrator/intersect_mnee.h
+index 9cf054ac8f1a813e0ebd8e8092f3e235d7b27a45..35d93d6fe88f062a08ca12ed1e22b3c3500e3dac 100644
+--- a/src/kernel/integrator/intersect_mnee.h
++++ b/src/kernel/integrator/intersect_mnee.h
+@@ -23,6 +23,17 @@ integrate_surface_mnee(KernelGlobals kg,
+   /* Kernel must only be scheduled for caustic receivers. */
+   kernel_assert(sd->object_flag & SD_OBJECT_CAUSTICS_RECEIVER);
+ 
++#  ifdef __VOLUME__
++  /* Nested dielectrics: a new receiver starts a new caustic chain. PATH_MNEE_NESTED is set again
++   * only by nested crossings of the BSDF continuation itself (shade_surface.h); MNEE rejects nested
++   * solved chains on its side (mnee.h), so each chain is counted by exactly one estimator. */
++
++  if (kernel_data.integrator.nested_dielectrics) {
++    INTEGRATOR_STATE_WRITE(state, path, mnee) &= ~PATH_MNEE_NESTED;
++  }
++#  endif
++
++
+   if (!kernel_data.integrator.use_direct_light) {
+     return SHADER_EVAL_OK;
+   }
+diff --git a/src/kernel/integrator/intersect_subsurface.h b/src/kernel/integrator/intersect_subsurface.h
+index b1e58d7aab1d623839bc58dfc130c6b6fc4304bb..09765d4a00aca03b2084187d1f45c898c2b9c837 100644
+--- a/src/kernel/integrator/intersect_subsurface.h
++++ b/src/kernel/integrator/intersect_subsurface.h
+@@ -13,11 +13,18 @@ ccl_device void integrator_intersect_subsurface(KernelGlobals kg, IntegratorStat
+   PROFILING_INIT(kg, PROFILING_INTERSECT_SUBSURFACE);
+ 
+ #ifdef __SUBSURFACE__
+-  if (subsurface_scatter(kg, state)) {
++  bool cache_miss = false;
++  if (subsurface_scatter(kg, state, cache_miss)) {
++    return;
++  }
++  if (cache_miss) {
++    /* Nested dielectrics replay hit a texture cache miss: nothing was committed, retry. */
++    integrator_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE);
+     return;
+   }
+ #endif
+ 
++
+   integrator_path_terminate(kg, state, nullptr, DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE);
+ }
+ 
+diff --git a/src/kernel/integrator/intersect_volume_stack.h b/src/kernel/integrator/intersect_volume_stack.h
+index 40c72b9f53c5207d5592d778f42642f6b3151c48..cc8d928886d4db1ac9527ba9eb1719bd83e28299 100644
+--- a/src/kernel/integrator/intersect_volume_stack.h
++++ b/src/kernel/integrator/intersect_volume_stack.h
+@@ -9,6 +9,7 @@
+ #include "kernel/geom/shader_data.h"
+ 
+ #include "kernel/integrator/intersect_closest.h"
++#include "kernel/integrator/surface_shader.h"
+ #include "kernel/integrator/volume_stack.h"
+ 
+ CCL_NAMESPACE_BEGIN
+@@ -56,7 +57,7 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
+         continue;
+       }
+       shader_setup_from_ray(kg, stack_sd, &volume_ray, isect);
+-      volume_stack_enter_exit<false>(kg, state, stack_sd);
++      volume_stack_enter_exit<false, false>(kg, state, stack_sd);
+     }
+   }
+ #  else
+@@ -68,7 +69,7 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
+     /* Ignore self, SSS itself already enters and exits the object. */
+     if (isect.object != volume_ray.self.object) {
+       shader_setup_from_ray(kg, stack_sd, &volume_ray, &isect);
+-      volume_stack_enter_exit<false>(kg, state, stack_sd);
++      volume_stack_enter_exit<false, false>(kg, state, stack_sd);
+     }
+     /* Move ray forward. */
+     volume_ray.tmin = intersection_t_offset(isect.t);
+@@ -79,6 +80,314 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
+ #  endif
+ }
+ 
++#ifdef __VOLUME__
++/* Nested dielectrics. Participating objects get their own probes: ordinary closest-hit queries
++ * stepping along a ray, independent of the volume probe and its SD_OBJECT_HAS_VOLUME filter.
++ * Non-participating hits are stepped over without shading; the budget is in hits, large enough
++ * for dense scenes. If it runs out, objects whose boundary was not reached are treated as not
++ * containing the probe origin (nothing is fabricated). */
++#  define NESTED_PROBE_MAX_STEPS 4096
++
++ccl_device_forceinline bool nested_probe_hit_participates(KernelGlobals kg,
++                                                          const ccl_private Intersection *isect)
++{
++  if (!(isect->type & PRIMITIVE_TRIANGLE)) {
++    return false;
++  }
++  const int shader = intersection_get_shader(kg, isect);
++  return nested_flags_participate(kernel_data_fetch(object_flag, isect->object),
++                                  kernel_data_fetch(shaders, shader).flags);
++}
++
++/* IOR of the medium behind a probe hit. A graph-driven IOR (KernelShader.nested_ior <= 0) is
++ * evaluated here like at a buried hit; the refractive closures record it and allocate nothing.
++ * A texture cache miss is reported through r_cache_miss (the caller commits nothing and retries). */
++ccl_device_forceinline float nested_probe_entry_ior(KernelGlobals kg,
++                                                    ConstIntegratorState state,
++                                                    ccl_private ShaderData *sd,
++                                                    ccl_private bool &r_cache_miss)
++{
++  const float c = kernel_data_fetch(shaders, (sd->shader & SHADER_MASK)).nested_ior;
++  if (c > 0.0f) {
++    return c;
++  }
++  sd->runtime_flag |= SR_NESTED_ACTIVE | SR_NESTED_MASKED;
++  sd->nested_opposite_ior = 1.0f;
++  sd->nested_ior_sum = 0.0f;
++  sd->nested_ior_weight = 0.0f;
++  surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
++      kg, state, sd, nullptr, PATH_RAY_VISIBILITY_SHADOW, PATH_RAY_FLAG_NONE);
++  if (sd->runtime_flag & SR_CACHE_MISS) {
++    r_cache_miss = true;
++    return 1.0f;
++  }
++  return nested_entry_ior(kg, sd);
++}
++
++/* Camera inside participating objects: shoot a +Z ray and keep parity per object. A front face
++ * means the probe entered the object (it cannot contain the camera); its back face then removes it
++ * again. A back face of an object that was not entered along the probe means the camera is inside.
++ * Entries are written outermost first (order of entry). The list of objects entered along the
++ * probe holds what the probe is currently inside, so it stays as small as the nesting depth; if it
++ * overflows, back faces of untracked objects are ignored (treated as not containing the camera). */
++ccl_device bool integrator_nested_stack_init(KernelGlobals kg, IntegratorState state)
++{
++  ShaderDataTinyStorage stack_sd_storage;
++  ccl_private ShaderData *stack_sd = AS_SHADER_DATA(&stack_sd_storage);
++
++  Ray ray ccl_optional_struct_init;
++  integrator_state_read_ray(state, &ray);
++  ray.D = make_float3(0.0f, 0.0f, 1.0f);
++  ray.tmin = 0.0f;
++  ray.tmax = FLT_MAX;
++  ray.self.object = OBJECT_NONE;
++  ray.self.prim = PRIM_NONE;
++  ray.self.light_object = OBJECT_NONE;
++  ray.self.light_prim = PRIM_NONE;
++
++  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
++  const uint visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag, PATH_RAY_VISIBILITY_CAMERA);
++  const int max_entries = kernel_data.integrator.nested_stack_size - 1;
++
++  int found_object[MAX_VOLUME_STACK_SIZE];
++  float found_ior[MAX_VOLUME_STACK_SIZE];
++  int num_found = 0;
++  int entered[MAX_VOLUME_STACK_SIZE];
++  int num_entered = 0;
++  bool entered_overflow = false;
++  bool found_overflow = false;
++  bool reached_end = false;
++
++  for (int step = 0; step < NESTED_PROBE_MAX_STEPS; step++) {
++    Intersection isect ccl_optional_struct_init;
++    if (!scene_intersect(kg, &ray, visibility, &isect)) {
++      reached_end = true;
++      break;
++    }
++    if (nested_probe_hit_participates(kg, &isect)) {
++      shader_setup_from_ray(kg, stack_sd, &ray, &isect);
++      int e = -1;
++      for (int i = 0; i < num_entered; i++) {
++        if (entered[i] == isect.object) {
++          e = i;
++        }
++      }
++      if (!(stack_sd->runtime_flag & SR_BACKFACING)) {
++        if (e < 0) {
++          if (num_entered < MAX_VOLUME_STACK_SIZE) {
++            entered[num_entered++] = isect.object;
++          }
++          else {
++            entered_overflow = true;
++          }
++        }
++      }
++      else if (e >= 0) {
++        entered[e] = entered[--num_entered];
++      }
++      else if (!entered_overflow) {
++        bool add = true;
++        for (int i = 0; i < num_found && add; i++) {
++          add = (found_object[i] != isect.object);
++        }
++        if (add && num_found < max_entries) {
++          bool cache_miss = false;
++          found_object[num_found] = isect.object;
++          found_ior[num_found] = nested_probe_entry_ior(kg, state, stack_sd, cache_miss);
++          if (cache_miss) {
++            /* Nothing written yet: the kernel is re-executed once the texture is loaded. */
++            return false;
++          }
++          num_found++;
++        }
++        else if (add) {
++          found_overflow = true;
++        }
++      }
++    }
++    ray.tmin = intersection_t_offset(isect.t);
++    ray.self.object = isect.object;
++    ray.self.prim = isect.prim;
++  }
++
++  if (!reached_end || entered_overflow || found_overflow) {
++    /* Unresolved probe: hit budget exhausted, entered list overflow, or the camera is inside more
++     * media than the stack holds. Counted for the host-side warning. */
++    nested_report_unresolved(kg);
++  }
++
++  for (int i = 0; i < num_found; i++) {
++    INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, i, object) = found_object[num_found - 1 - i];
++
++    INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, i, ior) = found_ior[num_found - 1 - i];
++  }
++  INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, num_found, object) = OBJECT_NONE;
++  INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, num_found, ior) = 0.0f;
++  return true;
++}
++
++/* Subsurface scattering moved the path from from_P to to_P (the SSS object itself never
++ * participates). The participating boundaries on the straight segment in between are replayed on a
++ * local copy of the nested stack, crossing by crossing with the same push/pop rules as the path, and
++ * the copy is committed only after the whole segment was replayed. There is no cap on crossings
++ * besides the NESTED_PROBE_MAX_STEPS hit budget:
++ * - texture cache miss while evaluating a graph-driven IOR: nothing is committed, the caller retries;
++ * - hit budget exhausted (more than NESTED_PROBE_MAX_STEPS surfaces on the segment): the replay is
++ *   discarded and the path keeps the complete stack it had at the SSS entry point (documented). */
++struct NestedLocalStack {
++  int object[MAX_VOLUME_STACK_SIZE];
++  float ior[MAX_VOLUME_STACK_SIZE];
++  int num;
++};
++
++#  define NESTED_SSS_REPLAY_DONE 0
++#  define NESTED_SSS_REPLAY_CACHE_MISS 1
++#  define NESTED_SSS_REPLAY_BUDGET 2
++
++ccl_device_inline int nested_local_stack_size(KernelGlobals kg)
++{
++  return min(kernel_data.integrator.nested_stack_size, MAX_VOLUME_STACK_SIZE);
++}
++
++/* Same rule as nested_stack_push(): when full, the lowest-priority entry (ties: the newest) is
++ * dropped, unless the new object is not higher than it. num counts entries; the path stack keeps one
++ * slot for the OBJECT_NONE terminator, so at most size - 1 entries are stored. */
++ccl_device_inline void nested_local_stack_push(KernelGlobals kg,
++                                               ccl_private NestedLocalStack *s,
++                                               const int object,
++                                               const float ior)
++{
++  const int size = nested_local_stack_size(kg);
++  for (int i = 0; i < s->num; i++) {
++    if (s->object[i] == object) {
++      return;
++    }
++  }
++  if (s->num >= size - 1) {
++    int min_i = -1;
++    int min_priority = 0;
++    for (int i = 0; i < s->num; i++) {
++      const int p = nested_object_priority(kg, s->object[i]);
++      if (min_i < 0 || p <= min_priority) {
++        min_i = i;
++        min_priority = p;
++      }
++    }
++    if (min_i < 0 || nested_object_priority(kg, object) <= min_priority) {
++      return;
++    }
++    for (int j = min_i; j + 1 < s->num; j++) {
++      s->object[j] = s->object[j + 1];
++      s->ior[j] = s->ior[j + 1];
++    }
++    s->num--;
++  }
++  s->object[s->num] = object;
++  s->ior[s->num] = ior;
++  s->num++;
++}
++
++/* Same rule as nested_stack_pop(): removes the last occurrence; absent objects are ignored. */
++ccl_device_inline void nested_local_stack_pop(ccl_private NestedLocalStack *s, const int object)
++{
++  int found = -1;
++  for (int i = 0; i < s->num; i++) {
++    if (s->object[i] == object) {
++      found = i;
++    }
++  }
++  if (found < 0) {
++    return;
++  }
++  for (int j = found; j + 1 < s->num; j++) {
++    s->object[j] = s->object[j + 1];
++    s->ior[j] = s->ior[j + 1];
++  }
++  s->num--;
++}
++
++ccl_device int integrator_nested_stack_replay_for_subsurface(KernelGlobals kg,
++                                                             IntegratorState state,
++                                                             const float3 from_P,
++                                                             const float3 to_P,
++                                                             ccl_private NestedLocalStack *local)
++{
++  const int size = nested_local_stack_size(kg);
++  local->num = 0;
++  for (int i = 0; i < size; i++) {
++    const int object = INTEGRATOR_STATE_ARRAY(state, nested_stack, i, object);
++    if (object == OBJECT_NONE) {
++      break;
++    }
++    local->object[local->num] = object;
++    local->ior[local->num] = INTEGRATOR_STATE_ARRAY(state, nested_stack, i, ior);
++    local->num++;
++  }
++
++  ShaderDataTinyStorage stack_sd_storage;
++  ccl_private ShaderData *stack_sd = AS_SHADER_DATA(&stack_sd_storage);
++
++  Ray ray ccl_optional_struct_init;
++  ray.P = from_P;
++  ray.D = safe_normalize_len(to_P - from_P, &ray.tmax);
++  ray.tmin = 0.0f;
++  ray.time = INTEGRATOR_STATE(state, ray, time);
++#  ifdef __RAY_DIFFERENTIALS__
++  ray.dP = differential_zero_compact();
++  ray.dD = differential_zero_compact();
++#  endif
++  ray.self.object = INTEGRATOR_STATE(state, isect, object);
++  ray.self.prim = INTEGRATOR_STATE(state, isect, prim);
++  ray.self.light_object = OBJECT_NONE;
++  ray.self.light_prim = PRIM_NONE;
++
++  /* Transmission visibility, as for the path itself. Not PATH_RAY_VISIBILITY_ALL: that includes
++   * PATH_RAY_VISIBILITY_SHADOW_OPAQUE, which makes the GPU traversals (OptiX
++   * OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT, CUDA BVH2 early exit) return the first hit found instead
++   * of the closest one, so crossings were skipped on the GPU. */
++  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
++  const uint visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag, PATH_RAY_VISIBILITY_TRANSMIT);
++
++  for (int step = 0; step < NESTED_PROBE_MAX_STEPS; step++) {
++
++    Intersection isect ccl_optional_struct_init;
++    if (!scene_intersect(kg, &ray, visibility, &isect)) {
++      return NESTED_SSS_REPLAY_DONE;
++    }
++    if (nested_probe_hit_participates(kg, &isect)) {
++      shader_setup_from_ray(kg, stack_sd, &ray, &isect);
++      if (stack_sd->runtime_flag & SR_BACKFACING) {
++        nested_local_stack_pop(local, isect.object);
++      }
++      else {
++        bool cache_miss = false;
++        const float ior = nested_probe_entry_ior(kg, state, stack_sd, cache_miss);
++        if (cache_miss) {
++          return NESTED_SSS_REPLAY_CACHE_MISS;
++        }
++        nested_local_stack_push(kg, local, isect.object, ior);
++      }
++    }
++    ray.tmin = intersection_t_offset(isect.t);
++    ray.self.object = isect.object;
++    ray.self.prim = isect.prim;
++  }
++  return NESTED_SSS_REPLAY_BUDGET;
++}
++
++/* Commit a completed replay to the path's nested stack. */
++ccl_device void integrator_nested_stack_commit_for_subsurface(
++    KernelGlobals kg, IntegratorState state, const ccl_private NestedLocalStack *local)
++{
++  for (int i = 0; i < local->num; i++) {
++    INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, i, object) = local->object[i];
++    INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, i, ior) = local->ior[i];
++  }
++  INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, local->num, object) = OBJECT_NONE;
++  INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, local->num, ior) = 0.0f;
++}
++#endif
++
+ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState state)
+ {
+   PROFILING_INIT(kg, PROFILING_INTERSECT_VOLUME_STACK);
+@@ -230,7 +539,24 @@ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState s
+ ccl_device void integrator_intersect_volume_stack(KernelGlobals kg, IntegratorState state)
+ {
+ #ifdef __VOLUME__
+-  integrator_volume_stack_init(kg, state);
++  {
++    const bool shadow_catcher_pass = (INTEGRATOR_STATE(state, path, flag) &
++                                      PATH_RAY_SHADOW_CATCHER_PASS) != 0;
++    /* This kernel also runs for the nested dielectrics camera probe alone. The nested probe runs
++     * first: on a texture cache miss it writes nothing and the kernel is re-executed. */
++    if (kernel_data.integrator.nested_dielectrics &&
++        (shadow_catcher_pass || kernel_data.integrator.nested_camera_probe))
++    {
++      if (!integrator_nested_stack_init(kg, state)) {
++        integrator_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK);
++        return;
++      }
++    }
++    if (shadow_catcher_pass || kernel_data.cam.is_inside_volume) {
++      integrator_volume_stack_init(kg, state);
++    }
++  }
++
+ 
+ #  ifdef __SHADOW_CATCHER__
+   if (INTEGRATOR_STATE(state, path, flag) & PATH_RAY_SHADOW_CATCHER_PASS) {
+diff --git a/src/kernel/integrator/mnee.h b/src/kernel/integrator/mnee.h
+index 141f3f80b80fc70cf64e222a4c732743776e802e..699567322760233b7303a257b8151285c1a00cd2 100644
+--- a/src/kernel/integrator/mnee.h
++++ b/src/kernel/integrator/mnee.h
+@@ -10,6 +10,9 @@
+ #include "kernel/geom/shader_data.h"
+ #include "kernel/geom/triangle.h"
+ 
++#include "kernel/integrator/nested_dielectric.h"
++
++
+ #include "kernel/light/sample.h"
+ 
+ /*
+@@ -788,6 +791,192 @@ ccl_device_inline bool mnee_compute_transfer_matrix(const ccl_private ShaderData
+ }
+ 
+ /* Calculate the path contribution. */
++#ifdef __VOLUME__
++/* Nested dielectrics: manifold walks assume every caster interface is against air. The solved chain
++ * (receiver -> vertices -> light) is classified with the integrator's rule, starting from the
++ * receiver's nested stack: if any crossing on it is buried or not against air, the chain is rejected
++ * here (MNEE contributes nothing) and the BSDF continuation that follows the same chain is not culled,
++ * because shade_surface.h sets PATH_MNEE_NESTED at the same crossings. So each specular chain is
++ * counted by exactly one estimator. Surfaces between the receiver and the vertices are already
++ * rejected by the visibility retrace below; the segment after the last vertex is walked here. */
++#  define MNEE_NESTED_LAST_SEGMENT_MAX 64
++#  define MNEE_NESTED_MAX \
++    (MAX_VOLUME_STACK_SIZE + MNEE_MAX_CAUSTIC_CASTERS + MNEE_NESTED_LAST_SEGMENT_MAX)
++
++/* Classify one crossing against the local media list. Returns true for a nested crossing. If the
++ * crossing is not nested, an object already in the list is removed (segments are straight, so every
++ * crossing enters or leaves) and *r_enter tells the caller to append the object with its IOR. */
++ccl_device_inline bool mnee_nested_cross(KernelGlobals kg,
++                                         ccl_private int *objects,
++                                         ccl_private float *iors,
++                                         ccl_private int &num,
++                                         const int object,
++                                         const int shader,
++                                         ccl_private bool *r_enter)
++{
++  *r_enter = false;
++  const int shader_flags = kernel_data_fetch(shaders, (shader & SHADER_MASK)).flags;
++  if (!nested_flags_participate(kernel_data_fetch(object_flag, object), shader_flags)) {
++    return false;
++  }
++  if (nested_list_is_nested_crossing(kg, objects, iors, num, object)) {
++    return true;
++  }
++  for (int i = 0; i < num; i++) {
++    if (objects[i] == object) {
++      for (int j = i; j + 1 < num; j++) {
++        objects[j] = objects[j + 1];
++        iors[j] = iors[j + 1];
++      }
++      num--;
++      return false;
++    }
++  }
++  *r_enter = true;
++  return false;
++}
++
++/* IOR of the medium entered at a chain crossing, as the BSDF side stores it: the shader's constant,
++ * or for a graph-driven IOR the value recorded by a recording-only evaluation at the crossing
++ * (nested_entry_ior), the same rule as buried hits, the camera probe and the SSS replay. */
++ccl_device_forceinline float mnee_nested_entry_ior(KernelGlobals kg,
++                                                   ConstIntegratorState state,
++                                                   ccl_private ShaderData *sd,
++                                                   ccl_private bool *r_cache_miss)
++{
++  const float c = kernel_data_fetch(shaders, (sd->shader & SHADER_MASK)).nested_ior;
++  if (c > 0.0f) {
++    return c;
++  }
++  sd->runtime_flag |= SR_NESTED_ACTIVE | SR_NESTED_MASKED;
++  sd->nested_opposite_ior = 1.0f;
++  sd->nested_ior_sum = 0.0f;
++  sd->nested_ior_weight = 0.0f;
++  surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
++      kg, state, sd, nullptr, PATH_RAY_VISIBILITY_SHADOW, PATH_RAY_FLAG_NONE);
++  if (sd->runtime_flag & SR_CACHE_MISS) {
++    *r_cache_miss = true;
++    return 1.0f;
++  }
++  return nested_entry_ior(kg, sd);
++}
++
++#  define MNEE_NESTED_ACCEPT 0
++#  define MNEE_NESTED_REJECT 1
++#  define MNEE_NESTED_CACHE_MISS 2
++
++/* The list is sized for the stack plus every possible crossing, so it cannot overflow. */
++ccl_device int mnee_nested_chain_check(KernelGlobals kg,
++                                       ConstIntegratorState state,
++                                       const ccl_private LightSample *ls,
++                                       const bool light_fixed_direction,
++                                       const int vertex_count,
++                                       const ccl_private ManifoldVertex *vertices,
++                                       const float time)
++{
++  if (!kernel_data.integrator.nested_dielectrics) {
++    return MNEE_NESTED_ACCEPT;
++  }
++  int objects[MNEE_NESTED_MAX];
++  float iors[MNEE_NESTED_MAX];
++  int num = 0;
++  for (int i = 0; i < kernel_data.integrator.nested_stack_size && i < MAX_VOLUME_STACK_SIZE; i++) {
++    const int object = INTEGRATOR_STATE_ARRAY(state, nested_stack, i, object);
++    if (object == OBJECT_NONE) {
++      break;
++    }
++    objects[num] = object;
++    iors[num] = INTEGRATOR_STATE_ARRAY(state, nested_stack, i, ior);
++    num++;
++  }
++
++  ShaderDataTinyStorage entry_sd_storage;
++  ccl_private ShaderData *entry_sd = AS_SHADER_DATA(&entry_sd_storage);
++  bool cache_miss = false;
++
++  for (int vi = 0; vi < vertex_count; vi++) {
++    const ccl_private ManifoldVertex &v = vertices[vi];
++    bool enter = false;
++    if (mnee_nested_cross(kg, objects, iors, num, v.object, v.shader, &enter)) {
++      return MNEE_NESTED_REJECT;
++    }
++    if (enter) {
++      /* Evaluated at the solved vertex, where the BSDF side would record it. */
++      shader_setup_from_sample(kg,
++                               entry_sd,
++                               v.p,
++                               v.n,
++                               v.n,
++                               v.shader,
++                               v.object,
++                               v.prim,
++                               v.uv.x,
++                               v.uv.y,
++                               0.0f,
++                               time,
++                               false,
++                               false);
++      iors[num] = mnee_nested_entry_ior(kg, state, entry_sd, &cache_miss);
++      if (cache_miss) {
++        return MNEE_NESTED_CACHE_MISS;
++      }
++      objects[num] = v.object;
++      num++;
++    }
++  }
++
++  /* Segment from the last vertex to the light. */
++  const ccl_private ManifoldVertex &last = vertices[vertex_count - 1];
++  Ray ray;
++  ray.P = last.p;
++  if (light_fixed_direction) {
++    ray.D = ls->D;
++    ray.tmax = FLT_MAX;
++  }
++  else {
++    ray.D = normalize_len(ls->P - last.p, &ray.tmax);
++  }
++  ray.tmin = 0.0f;
++  ray.time = time;
++  ray.dP = differential_zero_compact();
++  ray.dD = differential_zero_compact();
++  ray.self.object = last.object;
++  ray.self.prim = last.prim;
++  ray.self.light_object = ls->object;
++  ray.self.light_prim = ls->prim;
++  for (int step = 0; step < MNEE_NESTED_LAST_SEGMENT_MAX; step++) {
++    Intersection isect ccl_optional_struct_init;
++    if (!scene_intersect(kg, &ray, PATH_RAY_VISIBILITY_TRANSMIT, &isect)) {
++      return MNEE_NESTED_ACCEPT;
++    }
++    const int hit_object = (isect.object == OBJECT_NONE) ? kernel_data_fetch(prim_object, isect.prim) :
++                                                           isect.object;
++    if (isect.type & PRIMITIVE_TRIANGLE) {
++      bool enter = false;
++      if (mnee_nested_cross(
++              kg, objects, iors, num, hit_object, intersection_get_shader(kg, &isect), &enter))
++      {
++        return MNEE_NESTED_REJECT;
++      }
++      if (enter) {
++        shader_setup_from_ray(kg, entry_sd, &ray, &isect);
++        iors[num] = mnee_nested_entry_ior(kg, state, entry_sd, &cache_miss);
++        if (cache_miss) {
++          return MNEE_NESTED_CACHE_MISS;
++        }
++        objects[num] = hit_object;
++        num++;
++      }
++    }
++    ray.tmin = intersection_t_offset(isect.t);
++    ray.self.object = isect.object;
++    ray.self.prim = isect.prim;
++  }
++  /* Too many crossings to classify: leave the chain to the BSDF side. */
++  return MNEE_NESTED_REJECT;
++}
++#endif
++
+ ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
+                                                           IntegratorState state,
+                                                           ccl_private ShaderData *sd,
+@@ -811,6 +1000,19 @@ ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
+   light_sample_update(
+       kg, ls, vertices[vertex_count - 1].p, vertices[vertex_count - 1].n, path_flag);
+ 
++#ifdef __VOLUME__
++  {
++    const int nested = mnee_nested_chain_check(
++        kg, state, ls, light_fixed_direction, vertex_count, vertices, sd->time);
++    if (nested == MNEE_NESTED_REJECT) {
++      return SHADER_EVAL_EMPTY;
++    }
++    if (nested == MNEE_NESTED_CACHE_MISS) {
++      return SHADER_EVAL_CACHE_MISS;
++    }
++  }
++#endif
++
+   /* Save state path bounce info in case a light path node is used in the refractive interface or
+    * light shader graph. */
+   const int transmission_bounce = INTEGRATOR_STATE(state, path, transmission_bounce);
+@@ -994,6 +1196,7 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
+       break;
+     }
+ 
++
+     const uint object_flags = intersection_get_object_flags(kg, &probe_isect);
+     if (object_flags & SD_OBJECT_CAUSTICS_CASTER) {
+ 
+diff --git a/src/kernel/integrator/nested_dielectric.h b/src/kernel/integrator/nested_dielectric.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f3fba5fc58f42435dd0ba9ed383d0897015eebb
+--- /dev/null
++++ b/src/kernel/integrator/nested_dielectric.h
+@@ -0,0 +1,394 @@
++/* SPDX-FileCopyrightText: 2026 Cycles for Houdini contributors
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++/* Nested dielectrics (priority-based nested media, Schmidt and Budge 2002), Cycles Houdini
++ * patch 0074.
++ *
++ * Every path carries the participating objects it is inside, in order of entry, with the IOR read
++ * at entry (shadow paths: objects only). A participating hit on object X is "masked" (a buried
++ * boundary the ray passes straight through) when another entry has a higher priority. Otherwise
++ * the closures use the relative IOR against the "opposite" medium: the highest entry below X
++ * (ties: entered first), or air. See artifacts/feature-nested/DESIGN.md.
++ *
++ * Nothing here runs unless kernel_data.integrator.nested_dielectrics is set: the object flag
++ * SD_OBJECT_NESTED_DIELECTRIC and shader flag SD_NESTED_REFRACTIVE are only set by the host when
++ * the feature is on, and every entry point checks them or the integrator flag first. */
++
++#pragma once
++
++#include "util/atomic.h"
++
++CCL_NAMESPACE_BEGIN
++
++
++#ifdef __VOLUME__
++
++/* Tie modes (KernelIntegrator.nested_tie_mode). */
++#  define NESTED_TIE_INDEPENDENT 0
++#  define NESTED_TIE_FIRST_ENTERED 1
++
++ccl_device_forceinline bool nested_flags_participate(const uint object_flag, const int shader_flag)
++{
++  return (object_flag & SD_OBJECT_NESTED_DIELECTRIC) && (shader_flag & SD_NESTED_REFRACTIVE);
++}
++
++ccl_device_forceinline bool nested_sd_participates(const ccl_private ShaderData *sd)
++{
++  return nested_flags_participate(sd->object_flag, sd->shader_flag);
++}
++
++ccl_device_forceinline int nested_object_priority(KernelGlobals kg, const int object)
++{
++  return kernel_data_fetch(objects, object).dielectric_priority;
++}
++
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device_forceinline int nested_stack_read_object(const IntegratorGenericState state,
++                                                    const int i)
++{
++  if constexpr (shadow) {
++    return INTEGRATOR_STATE_ARRAY(state, shadow_nested_stack, i, object);
++  }
++  else {
++    return INTEGRATOR_STATE_ARRAY(state, nested_stack, i, object);
++  }
++}
++
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device_forceinline void nested_stack_write(IntegratorGenericState state,
++                                               const int i,
++                                               const int object,
++                                               const float ior)
++{
++  if constexpr (shadow) {
++    INTEGRATOR_STATE_ARRAY_WRITE(state, shadow_nested_stack, i, object) = object;
++    (void)ior;
++  }
++  else {
++    INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, i, object) = object;
++    INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, i, ior) = ior;
++  }
++}
++
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device_forceinline float nested_stack_read_ior(const IntegratorGenericState state,
++                                                   const int i)
++{
++  if constexpr (shadow) {
++    return 1.0f;
++  }
++  else {
++    return INTEGRATOR_STATE_ARRAY(state, nested_stack, i, ior);
++  }
++}
++
++/* Remove entry i, keeping the order of the others. `num` is the number of entries. */
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device_inline void nested_stack_remove(IntegratorGenericState state, const int i, const int num)
++{
++  for (int j = i; j + 1 < num; j++) {
++    nested_stack_write<shadow>(state,
++                               j,
++                               nested_stack_read_object<shadow>(state, j + 1),
++                               nested_stack_read_ior<shadow>(state, j + 1));
++  }
++  nested_stack_write<shadow>(state, num - 1, OBJECT_NONE, 0.0f);
++}
++
++/* Classify a hit on `object` (priority `priority`) against the stack.
++ * Returns true when the boundary is buried (masked). Otherwise writes the IOR of the medium on the
++ * other side of the boundary to *opposite_ior (1.0 = air). The object itself is ignored if it is in
++ * the stack; an object not in the stack counts as the newest entry. */
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device bool nested_classify(KernelGlobals kg,
++                                const IntegratorGenericState state,
++                                const int object,
++                                const int priority,
++                                ccl_private float *opposite_ior)
++{
++  const int tie_mode = kernel_data.integrator.nested_tie_mode;
++  const int size = kernel_data.integrator.nested_stack_size;
++
++  bool before_self = true;
++  bool found = false;
++  int best_priority = 0;
++  float best_ior = 1.0f;
++
++  for (int i = 0; i < size; i++) {
++    const int entry = nested_stack_read_object<shadow>(state, i);
++    if (entry == OBJECT_NONE) {
++      break;
++    }
++    if (entry == object) {
++      before_self = false;
++      continue;
++    }
++    const int p = nested_object_priority(kg, entry);
++    if (p > priority) {
++      return true;
++    }
++    if (p == priority) {
++      if (tie_mode == NESTED_TIE_FIRST_ENTERED) {
++        if (before_self) {
++          return true;
++        }
++      }
++      else {
++        /* Independent ties: equal priorities do not see each other. */
++        continue;
++      }
++    }
++    /* Candidate for the opposite medium; strict > keeps the first entered on ties. */
++    if (!found || p > best_priority) {
++      found = true;
++      best_priority = p;
++      best_ior = nested_stack_read_ior<shadow>(state, i);
++    }
++  }
++
++  if (opposite_ior) {
++    *opposite_ior = best_ior;
++  }
++  return false;
++}
++
++/* Same rule as nested_classify() on a local list (MNEE seed walk). Returns true when the crossing
++ * of `object` is a nested interaction: buried, or not against air (opposite IOR != 1). */
++ccl_device bool nested_list_is_nested_crossing(KernelGlobals kg,
++                                               const ccl_private int *objects,
++                                               const ccl_private float *iors,
++                                               const int num,
++                                               const int object)
++{
++  const int tie_mode = kernel_data.integrator.nested_tie_mode;
++  const int priority = nested_object_priority(kg, object);
++  bool before_self = true;
++  bool found = false;
++  int best_priority = 0;
++  float best_ior = 1.0f;
++  for (int i = 0; i < num; i++) {
++    if (objects[i] == object) {
++      before_self = false;
++      continue;
++    }
++    const int p = nested_object_priority(kg, objects[i]);
++    if (p > priority) {
++      return true;
++    }
++    if (p == priority) {
++      if (tie_mode == NESTED_TIE_FIRST_ENTERED) {
++        if (before_self) {
++          return true;
++        }
++      }
++      else {
++        continue;
++      }
++    }
++    if (!found || p > best_priority) {
++      found = true;
++      best_priority = p;
++      best_ior = iors[i];
++    }
++  }
++  return best_ior != 1.0f;
++}
++
++/* Main path: decide masking and the opposite IOR for a surface hit, before shader evaluation. */
++
++ccl_device_forceinline void nested_surface_prepare(KernelGlobals kg,
++                                                   ConstIntegratorState state,
++                                                   ccl_private ShaderData *sd)
++{
++  if (!nested_sd_participates(sd)) {
++    return;
++  }
++  float opposite_ior = 1.0f;
++  const bool masked = nested_classify<false>(
++      kg, state, sd->object, nested_object_priority(kg, sd->object), &opposite_ior);
++  sd->runtime_flag |= SR_NESTED_ACTIVE | (masked ? SR_NESTED_MASKED : 0);
++  sd->nested_opposite_ior = fmaxf(opposite_ior, 1e-5f);
++  sd->nested_ior_sum = 0.0f;
++  sd->nested_ior_weight = 0.0f;
++}
++
++/* Intersect kernel: is the closest hit a masked boundary? Used to skip Russian roulette. */
++ccl_device_forceinline bool nested_isect_is_masked(KernelGlobals kg,
++                                                   ConstIntegratorState state,
++                                                   const ccl_private Intersection *ccl_restrict
++                                                       isect,
++                                                   const int shader_flags)
++{
++  if (!kernel_data.integrator.nested_dielectrics || !(shader_flags & SD_NESTED_REFRACTIVE) ||
++      isect->object == OBJECT_NONE)
++  {
++    return false;
++  }
++  if (!(kernel_data_fetch(object_flag, isect->object) & SD_OBJECT_NESTED_DIELECTRIC)) {
++    return false;
++  }
++  return nested_classify<false>(
++      kg, state, isect->object, nested_object_priority(kg, isect->object), nullptr);
++}
++
++/* IOR of the entered medium: evaluated value if the shader recorded one, else the shader's
++ * constant (or its fallback when the IOR is varying), else 1. */
++ccl_device_forceinline float nested_entry_ior(KernelGlobals kg, const ccl_private ShaderData *sd)
++{
++  if ((sd->runtime_flag & SR_NESTED_ACTIVE) && sd->nested_ior_weight > 0.0f) {
++    return sd->nested_ior_sum / sd->nested_ior_weight;
++  }
++  const float c = fabsf(kernel_data_fetch(shaders, (sd->shader & SHADER_MASK)).nested_ior);
++  return (c > 0.0f) ? c : 1.0f;
++}
++
++/* Does a masked hit need shader evaluation to know the IOR of the entered medium? */
++ccl_device_forceinline bool nested_masked_needs_eval(KernelGlobals kg,
++                                                     const ccl_private ShaderData *sd)
++{
++  return !(sd->runtime_flag & SR_BACKFACING) &&
++         !(kernel_data_fetch(shaders, (sd->shader & SHADER_MASK)).nested_ior > 0.0f);
++}
++
++/* Add an object to the stack (if not present). When full, the lowest-priority entry (ties: the
++ * newest) is dropped, unless the new object is not higher than it. */
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device void nested_stack_push(KernelGlobals kg,
++                                  IntegratorGenericState state,
++                                  const int object,
++                                  const float ior)
++{
++  const int size = kernel_data.integrator.nested_stack_size;
++  int num = 0;
++  for (; num < size; num++) {
++    const int entry = nested_stack_read_object<shadow>(state, num);
++    if (entry == OBJECT_NONE) {
++      break;
++    }
++    if (entry == object) {
++      return;
++    }
++  }
++
++  if (num >= size - 1) {
++    int min_i = -1;
++    int min_priority = 0;
++    for (int i = 0; i < num; i++) {
++      const int p = nested_object_priority(kg, nested_stack_read_object<shadow>(state, i));
++      if (min_i < 0 || p <= min_priority) {
++        min_i = i;
++        min_priority = p;
++      }
++    }
++    if (min_i < 0 || nested_object_priority(kg, object) <= min_priority) {
++      return;
++    }
++    nested_stack_remove<shadow>(state, min_i, num);
++    num--;
++  }
++
++  nested_stack_write<shadow>(state, num, object, ior);
++  nested_stack_write<shadow>(state, num + 1, OBJECT_NONE, 0.0f);
++}
++
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device void nested_stack_pop(KernelGlobals kg, IntegratorGenericState state, const int object)
++{
++  const int size = kernel_data.integrator.nested_stack_size;
++  int found = -1;
++  int num = 0;
++  for (; num < size; num++) {
++    const int entry = nested_stack_read_object<shadow>(state, num);
++    if (entry == OBJECT_NONE) {
++      break;
++    }
++    if (entry == object) {
++      found = num;
++    }
++  }
++  if (found >= 0) {
++    nested_stack_remove<shadow>(state, found, num);
++  }
++}
++
++/* Update the stack for a transmission through a participating surface (real or masked). */
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device void nested_stack_enter_exit(KernelGlobals kg,
++                                        IntegratorGenericState state,
++                                        const ccl_private ShaderData *sd)
++{
++  if (!nested_sd_participates(sd)) {
++    return;
++  }
++  if (sd->runtime_flag & SR_BACKFACING) {
++    nested_stack_pop<shadow>(kg, state, sd->object);
++  }
++  else {
++    nested_stack_push<shadow>(kg, state, sd->object, shadow ? 0.0f : nested_entry_ior(kg, sd));
++  }
++}
++
++/* Volume of a participating object only contributes where that object is not buried. */
++template<const bool shadow, typename IntegratorGenericState>
++ccl_device_forceinline bool nested_volume_entry_suppressed(KernelGlobals kg,
++                                                           const IntegratorGenericState state,
++                                                           const int object,
++                                                           const int shader)
++{
++  if (!kernel_data.integrator.nested_dielectrics || object == OBJECT_NONE) {
++    return false;
++  }
++  if (!nested_flags_participate(kernel_data_fetch(object_flag, object),
++                                kernel_data_fetch(shaders, (shader & SHADER_MASK)).flags))
++  {
++    return false;
++  }
++  return nested_classify<shadow>(kg, state, object, nested_object_priority(kg, object), nullptr);
++}
++
++/* Shadow paths start with a copy of the main stack (objects only). */
++ccl_device_forceinline void nested_stack_copy_to_shadow(KernelGlobals kg,
++                                                        IntegratorShadowState shadow_state,
++                                                        ConstIntegratorState state)
++{
++  if (!kernel_data.integrator.nested_dielectrics) {
++    return;
++  }
++  const int size = kernel_data.integrator.nested_stack_size;
++  for (int i = 0; i < size; i++) {
++    const int object = INTEGRATOR_STATE_ARRAY(state, nested_stack, i, object);
++    INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_nested_stack, i, object) = object;
++    if (object == OBJECT_NONE) {
++      break;
++    }
++  }
++}
++
++/* A media probe (camera +Z probe, SSS replay) ended unresolved: count it for the host-side warning
++ * (Scene::nested_probe_unresolved_count). The counter only exists while the toggle is on. */
++ccl_device_inline void nested_report_unresolved(KernelGlobals kg)
++{
++  atomic_fetch_and_add_uint32(&kernel_data_array(nested_probe_unresolved)[0], 1);
++}
++
++ccl_device_forceinline void nested_stack_init(KernelGlobals kg, IntegratorState state)
++
++{
++  if (!kernel_data.integrator.nested_dielectrics) {
++    return;
++  }
++  INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, 0, object) = OBJECT_NONE;
++  INTEGRATOR_STATE_ARRAY_WRITE(state, nested_stack, 0, ior) = 0.0f;
++  INTEGRATOR_STATE_WRITE(state, path, nested_masked) = 0;
++}
++
++ccl_device_forceinline bool nested_stack_is_empty(KernelGlobals kg, ConstIntegratorState state)
++{
++  return !kernel_data.integrator.nested_dielectrics ||
++         INTEGRATOR_STATE_ARRAY(state, nested_stack, 0, object) == OBJECT_NONE;
++}
++
++#endif /* __VOLUME__ */
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/integrator/path_state.h b/src/kernel/integrator/path_state.h
+index c9d07286769c22caf67de70b102fb68ed0034cb3..ea2fd92dc30ca29d6416f52aa06a51885be7e3a9 100644
+--- a/src/kernel/integrator/path_state.h
++++ b/src/kernel/integrator/path_state.h
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include "kernel/integrator/state.h"
++#include "kernel/integrator/nested_dielectric.h"
+ 
+ #include "kernel/sample/pattern.h"
+ 
+@@ -101,6 +102,10 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
+     INTEGRATOR_STATE_ARRAY_WRITE(state, volume_stack, 1, object) = OBJECT_NONE;
+     INTEGRATOR_STATE_ARRAY_WRITE(state, volume_stack, 1, shader) = SHADER_NONE;
+   }
++#ifdef __VOLUME__
++  nested_stack_init(kg, state);
++#endif
++
+ 
+ #ifdef __DENOISING_FEATURES__
+   if (kernel_data.kernel_features & KERNEL_FEATURE_DENOISING) {
+diff --git a/src/kernel/integrator/shade_shadow.h b/src/kernel/integrator/shade_shadow.h
+index 28d16e570ecaea8a1a7352754f19b59b82987093..f2a7f93f7912b0b6fd89ac7bc09e17dd55d48196 100644
+--- a/src/kernel/integrator/shade_shadow.h
++++ b/src/kernel/integrator/shade_shadow.h
+@@ -106,8 +106,25 @@ ccl_device_inline TransparentShadowEvalResult integrate_transparent_surface_shad
+ 
+   shader_setup_from_ray(kg, shadow_sd, &ray, &isect);
+ 
++#  ifdef __VOLUME__
++  /* Nested dielectrics: a buried boundary is fully transparent to shadow rays; only the stacks
++   * change. A real (unmasked) dielectric boundary is evaluated as before and blocks. */
++  if (kernel_data.integrator.nested_dielectrics && nested_sd_participates(shadow_sd) &&
++      nested_classify<true>(kg,
++                            state,
++                            shadow_sd->object,
++                            nested_object_priority(kg, shadow_sd->object),
++                            nullptr))
++  {
++    volume_stack_enter_exit<true>(kg, state, shadow_sd);
++    result = SHADER_EVAL_OK;
++    return one_spectrum();
++  }
++#  endif
++
+   /* Evaluate shader. */
+   if (!(shadow_sd->shader_flag & SD_HAS_ONLY_VOLUME)) {
++
+     surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
+         kg, state, shadow_sd, nullptr, PATH_RAY_VISIBILITY_SHADOW, PATH_RAY_FLAG_NONE);
+     if (shadow_sd->runtime_flag & SR_CACHE_MISS) {
+diff --git a/src/kernel/integrator/shade_surface.h b/src/kernel/integrator/shade_surface.h
+index c3b378553b72575fac4ed9e7d791875c951151fd..47f4ffd726ed0850012db5df182e8c93b700e1f6 100644
+--- a/src/kernel/integrator/shade_surface.h
++++ b/src/kernel/integrator/shade_surface.h
+@@ -782,6 +782,49 @@ ccl_device_forceinline void integrate_surface_ao(KernelGlobals kg,
+ }
+ #endif /* defined(__AO__) */
+ 
++#ifdef __VOLUME__
++/* Nested dielectrics: pass straight through a buried boundary. The ray keeps its origin and
++ * direction, throughput, bounce counters and random numbers; only the nested and volume stacks
++ * change. Termination is by progress, not by a small count: every buried crossing must advance
++ * along the ray (the continuation starts past this hit, tmin = offset(t), and intersect_closest
++ * skips this primitive as the ray's self), so a crossing that does not move forward means broken
++ * geometry or precision trouble and ends the path. A high absolute cap on consecutive buried
++ * crossings (KernelIntegrator.nested_max_masked = 1024) is only a safety net. */
++template<uint64_t node_feature_mask>
++ccl_device_forceinline int integrate_surface_nested_masked(KernelGlobals kg,
++                                                           IntegratorState state,
++                                                           ccl_private ShaderData *sd,
++                                                           const PathRayVisibility path_visibility,
++                                                           const uint32_t path_flag)
++{
++  const int masked_count = INTEGRATOR_STATE(state, path, nested_masked) + 1;
++  if (masked_count > kernel_data.integrator.nested_max_masked) {
++    return LABEL_NONE;
++  }
++  if (masked_count > 1 && sd->ray_length < INTEGRATOR_STATE(state, ray, tmin)) {
++
++    /* No progress along the ray since the previous buried crossing. */
++    return LABEL_NONE;
++  }
++
++
++  if (nested_masked_needs_eval(kg, sd)) {
++    /* IOR is driven by the shader graph: evaluate it to record the IOR of the entered medium.
++     * Closure setup of the refractive closures returns right after recording it. */
++    surface_shader_eval<node_feature_mask>(kg, state, sd, nullptr, path_visibility, path_flag);
++
++    if (sd->runtime_flag & SR_CACHE_MISS) {
++      return LABEL_CACHE_MISS;
++    }
++  }
++
++  INTEGRATOR_STATE_WRITE(state, path, nested_masked) = masked_count;
++  INTEGRATOR_STATE_WRITE(state, ray, tmin) = intersection_t_offset(sd->ray_length);
++  volume_stack_enter_exit<false>(kg, state, sd);
++  return LABEL_TRANSMIT | LABEL_TRANSPARENT;
++}
++#endif
++
+ template<uint64_t node_feature_mask>
+ ccl_device int integrate_surface(KernelGlobals kg,
+                                  IntegratorState state,
+@@ -800,6 +843,28 @@ ccl_device int integrate_surface(KernelGlobals kg,
+   const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
+   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+ 
++#ifdef __VOLUME__
++  if (kernel_data.integrator.nested_dielectrics) {
++    nested_surface_prepare(kg, state, &sd);
++#  ifdef __MNEE__
++    if ((sd.runtime_flag & SR_NESTED_ACTIVE) &&
++        ((sd.runtime_flag & SR_NESTED_MASKED) || sd.nested_opposite_ior != 1.0f))
++
++    {
++      /* Interaction with nested media: MNEE does not handle it, see PATH_MNEE_NESTED. */
++      INTEGRATOR_STATE_WRITE(state, path, mnee) |= PATH_MNEE_NESTED;
++    }
++#  endif
++
++    if (sd.runtime_flag & SR_NESTED_MASKED) {
++      return integrate_surface_nested_masked<node_feature_mask>(
++          kg, state, &sd, path_visibility, path_flag);
++    }
++    INTEGRATOR_STATE_WRITE(state, path, nested_masked) = 0;
++  }
++#endif
++
++
+   /* Skip most work for volume bounding surface. */
+ #ifdef __VOLUME__
+   if (!(sd.shader_flag & SD_HAS_ONLY_VOLUME)) {
+diff --git a/src/kernel/integrator/shadow_state_template.h b/src/kernel/integrator/shadow_state_template.h
+index aa1a434d3c206cfab86d6e732620069a71ab7d40..d1e2e648c7db87b8750f749b827dea7340b4e069 100644
+--- a/src/kernel/integrator/shadow_state_template.h
++++ b/src/kernel/integrator/shadow_state_template.h
+@@ -121,3 +121,21 @@ KERNEL_STRUCT_ARRAY_MEMBER(shadow_volume_stack, int, shader, KERNEL_FEATURE_VOLU
+ KERNEL_STRUCT_END_ARRAY(shadow_volume_stack,
+                         KERNEL_STRUCT_VOLUME_STACK_SIZE,
+                         KERNEL_STRUCT_VOLUME_STACK_SIZE)
++
++/************************* Shadow Nested Dielectric Stack *********************/
++
++/* Copy of the main nested stack without IOR (shadow rays never refract). */
++#ifndef KERNEL_STRUCT_NESTED_STACK_SIZE
++#  define KERNEL_STRUCT_NESTED_STACK_SIZE KERNEL_STRUCT_VOLUME_STACK_SIZE
++#  define KERNEL_STRUCT_NESTED_STACK_SIZE_DEFAULTED
++#endif
++KERNEL_STRUCT_BEGIN(shadow_nested_stack)
++KERNEL_STRUCT_ARRAY_MEMBER(shadow_nested_stack, int, object, KERNEL_FEATURE_VOLUME)
++KERNEL_STRUCT_END_ARRAY(shadow_nested_stack,
++                        KERNEL_STRUCT_NESTED_STACK_SIZE,
++                        KERNEL_STRUCT_NESTED_STACK_SIZE)
++#ifdef KERNEL_STRUCT_NESTED_STACK_SIZE_DEFAULTED
++#  undef KERNEL_STRUCT_NESTED_STACK_SIZE
++#  undef KERNEL_STRUCT_NESTED_STACK_SIZE_DEFAULTED
++#endif
++
+diff --git a/src/kernel/integrator/state_template.h b/src/kernel/integrator/state_template.h
+index 0f1532892e66531ddcab2c8594140b1e2207ad0c..9a178e322d67002d4636db72a220a485511f790a 100644
+--- a/src/kernel/integrator/state_template.h
++++ b/src/kernel/integrator/state_template.h
+@@ -17,6 +17,8 @@ KERNEL_STRUCT_MEMBER(path, uint32_t, sample, KERNEL_FEATURE_PATH_TRACING)
+ KERNEL_STRUCT_MEMBER(path, uint16_t, bounce, KERNEL_FEATURE_PATH_TRACING)
+ /* Current transparent ray bounce depth. */
+ KERNEL_STRUCT_MEMBER(path, uint16_t, transparent_bounce, KERNEL_FEATURE_PATH_TRACING)
++/* Nested dielectrics: consecutive masked (buried) boundary crossings. */
++KERNEL_STRUCT_MEMBER(path, uint16_t, nested_masked, KERNEL_FEATURE_VOLUME)
+ /* Current diffuse ray bounce depth. */
+ KERNEL_STRUCT_MEMBER(path, uint16_t, diffuse_bounce, KERNEL_FEATURE_PATH_TRACING)
+ /* Current glossy ray bounce depth. */
+@@ -139,6 +141,26 @@ KERNEL_STRUCT_END_ARRAY(volume_stack,
+                         KERNEL_STRUCT_VOLUME_STACK_SIZE,
+                         KERNEL_STRUCT_VOLUME_STACK_SIZE)
+ 
++/***************************** Nested Dielectric Stack ************************/
++
++/* Participating objects the path is inside, in order of entry, with the IOR read at entry.
++ * Only used when kernel_data.integrator.nested_dielectrics is set. */
++#ifndef KERNEL_STRUCT_NESTED_STACK_SIZE
++#  define KERNEL_STRUCT_NESTED_STACK_SIZE KERNEL_STRUCT_VOLUME_STACK_SIZE
++#  define KERNEL_STRUCT_NESTED_STACK_SIZE_DEFAULTED
++#endif
++KERNEL_STRUCT_BEGIN(nested_stack)
++KERNEL_STRUCT_ARRAY_MEMBER(nested_stack, int, object, KERNEL_FEATURE_VOLUME)
++KERNEL_STRUCT_ARRAY_MEMBER(nested_stack, float, ior, KERNEL_FEATURE_VOLUME)
++KERNEL_STRUCT_END_ARRAY(nested_stack,
++                        KERNEL_STRUCT_NESTED_STACK_SIZE,
++                        KERNEL_STRUCT_NESTED_STACK_SIZE)
++#ifdef KERNEL_STRUCT_NESTED_STACK_SIZE_DEFAULTED
++#  undef KERNEL_STRUCT_NESTED_STACK_SIZE
++#  undef KERNEL_STRUCT_NESTED_STACK_SIZE_DEFAULTED
++#endif
++
++
+ /************************************ Path Guiding *****************************/
+ KERNEL_STRUCT_BEGIN(guiding)
+ #if defined(__PATH_GUIDING__)
+diff --git a/src/kernel/integrator/state_util.h b/src/kernel/integrator/state_util.h
+index d46f032a6116383f3c3030a25cb3ec7ffbc77e70..efa86c883f461c73c4635564792b36abf95eaa35 100644
+--- a/src/kernel/integrator/state_util.h
++++ b/src/kernel/integrator/state_util.h
+@@ -232,8 +232,20 @@ ccl_device_forceinline void integrator_state_copy_volume_stack_to_shadow(
+       ++index;
+     } while (shader != SHADER_NONE);
+   }
++
++  if (kernel_data.integrator.nested_dielectrics) {
++    /* Nested dielectrics: shadow paths start inside the same media (objects only, no IOR). */
++    for (int i = 0; i < kernel_data.integrator.nested_stack_size; i++) {
++      const int object = INTEGRATOR_STATE_ARRAY(state, nested_stack, i, object);
++      INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_nested_stack, i, object) = object;
++      if (object == OBJECT_NONE) {
++        break;
++      }
++    }
++  }
+ }
+ 
++
+ ccl_device_forceinline void integrator_state_copy_volume_stack(KernelGlobals kg,
+                                                                IntegratorState to_state,
+                                                                ConstIntegratorState state)
+@@ -521,6 +533,7 @@ ccl_device_inline void integrator_state_copy_only(KernelGlobals kg,
+       ;
+ 
+ #  define KERNEL_STRUCT_VOLUME_STACK_SIZE kernel_data.volume_stack_size
++#  define KERNEL_STRUCT_NESTED_STACK_SIZE kernel_data.integrator.nested_stack_size
+ 
+ #  include "kernel/integrator/state_template.h"
+ 
+@@ -532,6 +545,7 @@ ccl_device_inline void integrator_state_copy_only(KernelGlobals kg,
+ #  undef KERNEL_STRUCT_END
+ #  undef KERNEL_STRUCT_END_ARRAY
+ #  undef KERNEL_STRUCT_VOLUME_STACK_SIZE
++#  undef KERNEL_STRUCT_NESTED_STACK_SIZE
+ }
+ 
+ ccl_device_inline void integrator_state_move(KernelGlobals kg,
+@@ -596,6 +610,7 @@ ccl_device_inline void integrator_shadow_state_copy_only(KernelGlobals kg,
+       ;
+ 
+ #  define KERNEL_STRUCT_VOLUME_STACK_SIZE kernel_data.volume_stack_size
++#  define KERNEL_STRUCT_NESTED_STACK_SIZE kernel_data.integrator.nested_stack_size
+ 
+ #  include "kernel/integrator/shadow_state_template.h"
+ 
+@@ -607,6 +622,7 @@ ccl_device_inline void integrator_shadow_state_copy_only(KernelGlobals kg,
+ #  undef KERNEL_STRUCT_END
+ #  undef KERNEL_STRUCT_END_ARRAY
+ #  undef KERNEL_STRUCT_VOLUME_STACK_SIZE
++#  undef KERNEL_STRUCT_NESTED_STACK_SIZE
+ }
+ 
+ ccl_device_inline void integrator_shadow_state_move(KernelGlobals kg,
+@@ -648,6 +664,16 @@ ccl_device_inline IntegratorState integrator_state_shadow_catcher_split(KernelGl
+   to_state->isect = state->isect;
+ #  ifdef __VOLUME__
+   integrator_state_copy_volume_stack(kg, to_state, state);
++  if (kernel_data.integrator.nested_dielectrics) {
++    /* Nested dielectrics: the split path keeps the media it is inside. */
++    for (int i = 0; i < kernel_data.integrator.nested_stack_size; i++) {
++      to_state->nested_stack[i] = state->nested_stack[i];
++      if (state->nested_stack[i].object == OBJECT_NONE) {
++        break;
++      }
++    }
++    to_state->path.nested_masked = state->path.nested_masked;
++  }
+ #  endif
+ #endif
+ 
+diff --git a/src/kernel/integrator/subsurface.h b/src/kernel/integrator/subsurface.h
+index 0a92c279fb96cb9612da8ad6a06b39eed56394f3..43d8104086172355f4248cd13528823d26fa3f96 100644
+--- a/src/kernel/integrator/subsurface.h
++++ b/src/kernel/integrator/subsurface.h
+@@ -169,7 +169,9 @@ ccl_device void subsurface_shader_data_setup(KernelGlobals kg, ccl_private Shade
+   bsdf_diffuse_setup(sd, N, weight);
+ }
+ 
+-ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState state)
++ccl_device_inline bool subsurface_scatter(KernelGlobals kg,
++                                          IntegratorState state,
++                                          ccl_private bool &r_cache_miss)
+ {
+   RNGState rng_state;
+   path_state_rng_load(state, &rng_state);
+@@ -177,6 +179,12 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
+   Ray ray ccl_optional_struct_init;
+   LocalIntersection ss_isect ccl_optional_struct_init;
+ 
++#  ifdef __VOLUME__
++  /* Nested dielectrics: the walks below update the throughput; keep it so a texture cache miss in
++   * the nested replay can restore it before the kernel is re-executed. */
++  const Spectrum throughput_before = INTEGRATOR_STATE(state, path, throughput);
++#  endif
++
+   if (INTEGRATOR_STATE(state, path, flag) & PATH_RAY_SUBSURFACE_RANDOM_WALK) {
+     if (!subsurface_random_walk(kg, state, rng_state, ray, ss_isect)) {
+       return false;
+@@ -189,6 +197,26 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
+   }
+ 
+ #  ifdef __VOLUME__
++  /* Nested dielectrics: replay the participating boundaries between the walk's entry and exit
++   * points on a local copy of the stack before any stack is modified; it is committed after the
++   * volume replay. A texture cache miss restores the throughput and retries the kernel. */
++
++  NestedLocalStack nested_local;
++  int nested_replay = NESTED_SSS_REPLAY_BUDGET;
++  if (kernel_data.integrator.nested_dielectrics) {
++    nested_replay = integrator_nested_stack_replay_for_subsurface(
++        kg, state, INTEGRATOR_STATE(state, ray, P), ray.P, &nested_local);
++    if (nested_replay == NESTED_SSS_REPLAY_CACHE_MISS) {
++      INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput_before;
++      r_cache_miss = true;
++      return false;
++    }
++    if (nested_replay == NESTED_SSS_REPLAY_BUDGET) {
++      /* Documented: keep the complete entry stack and report the unresolved replay. */
++      nested_report_unresolved(kg);
++    }
++  }
++
+   /* Update volume stack if needed. */
+   if (kernel_data.integrator.use_volumes) {
+     const int object = ss_isect.hits[0].object;
+@@ -200,8 +228,14 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
+       integrator_volume_stack_update_for_subsurface(kg, state, P, ray.P);
+     }
+   }
++  if (kernel_data.integrator.nested_dielectrics && nested_replay == NESTED_SSS_REPLAY_DONE) {
++    integrator_nested_stack_commit_for_subsurface(kg, state, &nested_local);
++  }
++
++
+ #  endif /* __VOLUME__ */
+ 
++
+   /* Pretend ray is coming from the outside towards the exit point. This ensures
+    * correct front/back facing normals.
+    * TODO: find a more elegant solution? */
+diff --git a/src/kernel/integrator/volume_shader.h b/src/kernel/integrator/volume_shader.h
+index f5bb360fab4460c70720f6cbfceda69d49648f3f..a64a0b1af31b93917357f5e22ab5f36adcc7f6b4 100644
+--- a/src/kernel/integrator/volume_shader.h
++++ b/src/kernel/integrator/volume_shader.h
+@@ -21,6 +21,7 @@
+ #include "kernel/film/light_passes.h"
+ 
+ #include "kernel/integrator/guiding.h"
++#include "kernel/integrator/nested_dielectric.h"
+ #include "kernel/integrator/volume_stack.h"
+ 
+ CCL_NAMESPACE_BEGIN
+@@ -526,6 +527,12 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
+ 
+   for (int i = 0;; i++) {
+     const VolumeStack entry = volume_stack_read<shadow>(state, i);
++    if (kernel_data.integrator.nested_dielectrics && entry.shader != SHADER_NONE &&
++        nested_volume_entry_suppressed<shadow>(kg, state, entry.object, entry.shader))
++    {
++      /* Nested dielectrics: the volume of a buried participating object does not contribute. */
++      continue;
++    }
+     if (!volume_shader_eval_entry<shadow, KERNEL_FEATURE_NODE_MASK_VOLUME>(
+             kg, state, sd, entry, path_visibility, path_flag))
+     {
+@@ -533,6 +540,7 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
+       return;
+     }
+ 
++
+     /* Merge closures to avoid exceeding number of closures limit. */
+     if (!shadow) {
+       if (i > 0) {
+diff --git a/src/kernel/integrator/volume_stack.h b/src/kernel/integrator/volume_stack.h
+index cb0c5efbad9521e9e56274fc311a4941df37d7d1..472d9740d904ab910e6c2ecdb18a1b4634d325cc 100644
+--- a/src/kernel/integrator/volume_stack.h
++++ b/src/kernel/integrator/volume_stack.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/integrator/nested_dielectric.h"
++
+ CCL_NAMESPACE_BEGIN
+ 
+ #ifdef __VOLUME__
+@@ -65,7 +67,7 @@ ccl_device_inline void volume_stack_exit(IntegratorGenericState state, const int
+   volume_stack_write<shadow>(state, i, {OBJECT_NONE, SHADER_NONE});
+ }
+ 
+-template<const bool shadow, typename IntegratorGenericState>
++template<const bool shadow, bool update_nested = true, typename IntegratorGenericState>
+ ccl_device void volume_stack_enter_exit(KernelGlobals kg,
+                                         IntegratorGenericState state,
+                                         const ccl_private ShaderData *sd)
+@@ -79,10 +81,17 @@ ccl_device void volume_stack_enter_exit(KernelGlobals kg,
+   }
+ #  endif
+ 
++  /* Nested dielectrics: every transmission through a participating surface (refraction, masked
++   * boundary, transparency) also updates the nested stack. No-op unless the hit participates. */
++  if constexpr (update_nested) {
++    nested_stack_enter_exit<shadow>(kg, state, sd);
++  }
++
+   /* todo: we should have some way for objects to indicate if they want the
+    * world shader to work inside them. excluding it by default is problematic
+    * because non-volume objects can't be assumed to be closed manifolds */
+   if (!(sd->shader_flag & SD_HAS_VOLUME)) {
++
+     return;
+   }
+ 
+diff --git a/src/kernel/svm/closure.h b/src/kernel/svm/closure.h
+index 81d7283c845e279dbd379c38c8a89deb58b0b0d6..4c59c5c39bc79c9454a0a21430abc6c5125b8ead 100644
+--- a/src/kernel/svm/closure.h
++++ b/src/kernel/svm/closure.h
+@@ -90,6 +90,20 @@ ccl_device_inline int svm_node_closure_bsdf_skip(int offset, const uint type)
+   return offset;
+ }
+ 
++/* Nested dielectrics: record the IOR of a refractive closure (weighted by its closure weight) so the
++ * integrator can store the medium IOR in the nested stack. Only with SR_NESTED_ACTIVE. Returns true
++ * for a masked (buried) boundary, where no closure is needed. */
++ccl_device_forceinline bool svm_nested_record_ior(ccl_private ShaderData *sd,
++                                                  const float ior,
++                                                  const float weight)
++{
++  if (weight > 0.0f) {
++    sd->nested_ior_sum += ior * weight;
++    sd->nested_ior_weight += weight;
++  }
++  return (sd->runtime_flag & SR_NESTED_MASKED) != 0;
++}
++
+ /* Compute emission attenuated by coat and sheen for Principled BSDF, and return the weight of the
+  * layers after emission. */
+ ccl_device_inline Spectrum
+@@ -295,6 +309,9 @@ ccl_device
+ 
+       /* Transmission component */
+       const float transmission_weight = saturatef(stack_load(stack, data.transmission_weight));
++      if ((sd->runtime_flag & SR_NESTED_ACTIVE) && !thin_wall) {
++        svm_nested_record_ior(sd, ior, transmission_weight * mix_weight);
++      }
+       if (transmission_weight > CLOSURE_WEIGHT_CUTOFF) {
+         if (reflective_caustics || refractive_caustics) {
+           FresnelThinFilm thinfilm = {thinfilm_thickness, thinfilm_ior};
+@@ -327,19 +344,28 @@ ccl_device
+               bsdf->alpha_x = alpha_x;
+               bsdf->alpha_y = alpha_y;
+ 
++              const bool nested = (sd->runtime_flag & SR_NESTED_ACTIVE) != 0;
++              const float eta = nested ? ior / sd->nested_opposite_ior : ior;
+               const float dispersion_scale = saturatef(
+                   stack_load(stack, data.transmission_dispersion_scale));
+               const float abbe_number = fmaxf(
+                   stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
+               const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
+-              bsdf->ior = backfacing ? 1.0f / ior : ior;
++              bsdf->ior = backfacing ? 1.0f / eta : eta;
+               bsdf->ior = bsdf_glass_ior(sd, bsdf->ior, inv_abbe);
+-
+               if (backfacing) {
+                 adjust_thin_film_ior_at_backface(thinfilm.ior, bsdf->ior);
+               }
++              if (nested) {
++                /* Film between the two media, normalised by the medium the light comes from.
++                 * Back face written as film * (1 / ior), the same float operations as the
++                 * native adjustment above, so an opposite IOR of 1 stays bit-identical. */
++                thinfilm.ior = backfacing ? thinfilm_ior * (1.0f / ior) :
++                                            thinfilm_ior / sd->nested_opposite_ior;
+ 
+-              *fresnel = generalized_schlick_setup(ior,
++              }
++
++              *fresnel = generalized_schlick_setup(eta,
+                                                    reflective_caustics,
+                                                    refractive_caustics,
+                                                    specular_tint,
+@@ -672,6 +698,14 @@ ccl_device
+       const ccl_global SVMNodeRefractionBsdfData &bsdf_data =
+           svm_node_get<SVMNodeRefractionBsdfData>(kg, &offset);
+ 
++      if (sd->runtime_flag & SR_NESTED_ACTIVE) {
++        if (svm_nested_record_ior(
++                sd, fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f), reduce_max(closure_weight) * mix_weight))
++        {
++          break;
++        }
++      }
++
+ #ifdef __CAUSTICS_TRICKS__
+       if (!kernel_data.integrator.caustics_refractive &&
+           (ray_visibility & PATH_RAY_VISIBILITY_DIFFUSE))
+@@ -691,6 +725,10 @@ ccl_device
+         bsdf->T = zero_float3();
+ 
+         float eta = fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f);
++        if (sd->runtime_flag & SR_NESTED_ACTIVE) {
++          /* Nested dielectrics: IOR relative to the medium on the other side. */
++          eta /= sd->nested_opposite_ior;
++        }
+         eta = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / eta : eta;
+ 
+         /* setup bsdf */
+@@ -715,6 +753,13 @@ ccl_device
+       const ccl_global SVMNodeGlassBsdfData &bsdf_data = svm_node_get<SVMNodeGlassBsdfData>(
+           kg, &offset);
+ 
++      if (sd->runtime_flag & SR_NESTED_ACTIVE) {
++        if (svm_nested_record_ior(sd, fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f), mix_weight))
++        {
++          break;
++        }
++      }
++
+ #ifdef __CAUSTICS_TRICKS__
+       const bool reflective_caustics = (kernel_data.integrator.caustics_reflective ||
+                                         (ray_visibility & PATH_RAY_VISIBILITY_DIFFUSE) == 0);
+@@ -780,6 +825,18 @@ ccl_device
+         fresnel->thin_film.thickness = thinfilm_thickness;
+         fresnel->thin_film.ior = (sd->runtime_flag & SR_BACKFACING) ? thinfilm_ior / ior :
+                                                                       thinfilm_ior;
++        if (sd->runtime_flag & SR_NESTED_ACTIVE) {
++          /* Nested dielectrics: IOR relative to the medium on the other side; Fresnel f0 and
++           * exponent from the relative IOR like the native code does from the raw IOR. */
++          const float eta = ior / sd->nested_opposite_ior;
++          bsdf->ior = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / eta : eta;
++          fresnel->f0 = make_float3(F0_from_ior(eta));
++          fresnel->exponent = -eta;
++          if (!(sd->runtime_flag & SR_BACKFACING)) {
++            fresnel->thin_film.ior = thinfilm_ior / sd->nested_opposite_ior;
++          }
++        }
++
+         /* setup bsdf */
+         if (type == CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID) {
+           sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf);
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index f27c922d13bbb695cf42912d3614674a61332dd1..90c9b1bc025e436d400d5e780b2ac013d5852bb8 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -313,8 +313,14 @@ enum PathRayMNEE {
+ 
+   /* MNEE path was successfully sampled in intersect_mnee. */
+   PATH_MNEE_SAMPLED = (1U << 3U),
++
++  /* Nested dielectrics: since the last caustics receiver the path crossed a participating boundary
++   * that was buried or not against air. MNEE falls back for such chains, so the light connection
++   * of the path must not be culled. */
++  PATH_MNEE_NESTED = (1U << 4U),
+ };
+ 
++
+ /* Configure ray visibility bits for rays and objects respectively,
+  * to make shadow catchers work.
+  *
+@@ -978,12 +984,18 @@ enum ShaderRuntimeFlag {
+                      SR_BSDF_HAS_TRANSMISSION | SR_RAY_PORTAL | SR_BSDF_HAS_DISPERSION),
+   /* True displacement can hold an individual unsupported object field. */
+   SR_OBJECT_ATTRIBUTE_DISPLACEMENT = (1 << 14),
++  /* Nested dielectrics: hit on a participating surface, closures use the relative IOR. */
++  SR_NESTED_ACTIVE = (1 << 15),
++  /* Nested dielectrics: buried boundary, only the IOR is recorded, no closures are needed. */
++  SR_NESTED_MASKED = (1 << 16),
+ };
+ 
+ /* Shader flags that are set after compiling the shaders. */
+ enum ShaderDataFlag {
+   /* If the shader is wavelength-dependent. */
+   SD_REQUIRES_WAVELENGTH = (1 << 12),
++  /* Nested dielectrics: surface has a refractive closure that takes part in nesting. */
++  SD_NESTED_REFRACTIVE = (1 << 0),
+   /* If Light Path Node is present in the shader graph. */
+   SD_HAS_LIGHT_PATH_NODE = (1 << 13),
+   /* Has bump mapping from BSDF connected to surface socket. */
+@@ -1055,6 +1067,8 @@ enum ShaderDataObjectFlag : uint {
+   SD_OBJECT_HAS_CORNER_NORMALS = (1u << 12),
+   /* Point intersections are clipped to a per-point shutter interval. */
+   SD_OBJECT_HAS_POINT_LIFETIME = (1u << 13),
++  /* Nested dielectrics: object takes part in priority-based nesting. */
++  SD_OBJECT_NESTED_DIELECTRIC = (1u << 14),
+ 
+   /* object is using caustics */
+   SD_OBJECT_CAUSTICS = (SD_OBJECT_CAUSTICS_CASTER | SD_OBJECT_CAUSTICS_RECEIVER),
+@@ -1064,7 +1078,7 @@ enum ShaderDataObjectFlag : uint {
+                      SD_OBJECT_INTERSECTS_VOLUME | SD_OBJECT_SHADOW_CATCHER |
+                      SD_OBJECT_HAS_VOLUME_ATTRIBUTES | SD_OBJECT_CAUSTICS |
+                      SD_OBJECT_HAS_VOLUME_MOTION | SD_OBJECT_HAS_CORNER_NORMALS |
+-                     SD_OBJECT_HAS_POINT_LIFETIME)
++                     SD_OBJECT_HAS_POINT_LIFETIME | SD_OBJECT_NESTED_DIELECTRIC)
+ };
+ 
+ struct ccl_align(SHADER_DATA_ALIGNMENT) ShaderData {
+@@ -1143,6 +1157,14 @@ struct ccl_align(SHADER_DATA_ALIGNMENT) ShaderData {
+   float rand_wavelength;
+ #endif
+ 
++  /* Nested dielectrics: IOR of the medium on the other side of the surface (valid with
++   * SR_NESTED_ACTIVE), and the weighted IOR of the refractive closures recorded during shader
++   * evaluation (sum and weight). */
++  float nested_opposite_ior;
++  float nested_ior_sum;
++  float nested_ior_weight;
++
++
+   /* Closure weights summed directly, so we can evaluate
+    * emission and shadow transparency with MAX_CLOSURE 0. */
+   Spectrum closure_emission_background;
+@@ -1556,6 +1578,8 @@ struct KernelObject {
+   /* Optional per-object material slots for shared triangle geometry. */
+   int shader_palette_offset;
+   int shader_palette_size;
++  /* Nested dielectrics: higher wins. Fills the former tail padding, size stays 256 bytes. */
++  int dielectric_priority;
+ };
+ static_assert_align(KernelObject, 16);
+ 
+@@ -1767,7 +1791,10 @@ struct KernelShader {
+   float cryptomatte_id;
+   int flags;
+   int pass_id;
+-  int pad2, pad3;
++  /* Nested dielectrics: constant IOR of the refractive closures (> 0), or minus the fallback
++   * value when the IOR is driven by the graph (evaluate the shader to get it). */
++  float nested_ior;
++  int pad3;
+ };
+ static_assert_align(KernelShader, 16);
+ 
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index 5e70e8b6b7ead7704973759d8c7d579a6e5c6a58..b245ae6027ff2dd6e89c51b13fcbdb20f27c47ee 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -7,7 +7,9 @@
+ #include <cstring>
+ 
+ #include "scene/camera.h"
++#include "scene/integrator.h"
+ #include "scene/mesh.h"
++
+ #include "scene/object.h"
+ #include "scene/osl.h"
+ #include "scene/scene.h"
+@@ -761,7 +763,27 @@ void Camera::device_update_volume(Device * /*device*/, DeviceScene *dscene, Scen
+ 
+   dscene->data.cam.is_inside_volume = kernel_camera.is_inside_volume;
+ 
++  /* Nested dielectrics: separate camera-inside probe for participating objects. */
++  int nested_camera_probe = 0;
++  if (scene->integrator->get_nested_dielectrics()) {
++    const bool conservative = camera_type == CAMERA_CUSTOM || !kernel_camera_motion.empty() ||
++                              !kernel_camera_intrinsic_motion.empty();
++    BoundBox viewplane_boundbox = viewplane_bounds_get();
++    for (const Object *object : scene->objects) {
++
++      if (object->is_nested_dielectric(scene) &&
++          (conservative || viewplane_boundbox.intersects(object->bounds)))
++      {
++        nested_camera_probe = 1;
++        LOG_INFO << "Camera may be inside a nested dielectric, probing per camera ray.";
++        break;
++      }
++    }
++  }
++  dscene->data.integrator.nested_camera_probe = nested_camera_probe;
++
+   need_device_update = false;
++
+   need_flags_update = false;
+ }
+ 
+diff --git a/src/scene/devicescene.cpp b/src/scene/devicescene.cpp
+index 29cad761cc5d80a6e84f716bb0364146c175e3cd..ff68c4a06a7acdcc3ab21e461e835416c36b91a5 100644
+--- a/src/scene/devicescene.cpp
++++ b/src/scene/devicescene.cpp
+@@ -76,7 +76,8 @@ DeviceScene::DeviceScene(Device *device)
+                                       "image_texture_tile_access_state",
+                                       MEM_GLOBAL,
+                                       MEM_FLAG_PER_DEVICE | MEM_FLAG_NO_HOST_FALLBACK),
+-      image_texture_udims(device, "image_texture_udims", MEM_GLOBAL)
++      image_texture_udims(device, "image_texture_udims", MEM_GLOBAL),
++      nested_probe_unresolved(device, "nested_probe_unresolved", MEM_GLOBAL)
+ {
+   memset((void *)&data, 0, sizeof(data));
+ }
+diff --git a/src/scene/devicescene.h b/src/scene/devicescene.h
+index 27f1f98e050122c92db64f628c77f48d6a4f6dbf..764eda71270a94787a5755d305204ddaa05fa155 100644
+--- a/src/scene/devicescene.h
++++ b/src/scene/devicescene.h
+@@ -104,6 +104,10 @@ class DeviceScene {
+   device_vector<uint8_t> image_texture_tile_access_state;
+   device_vector<KernelImageUDIM> image_texture_udims;
+ 
++  /* Nested dielectrics: unresolved media probe counter (one uint, only while the toggle is on). */
++  device_vector<uint> nested_probe_unresolved;
++
++
+   KernelData data;
+ 
+   DeviceScene(Device *device);
+diff --git a/src/scene/integrator.cpp b/src/scene/integrator.cpp
+index 8088ee2d627494541c8822d444ee8cb22a3d46cb..f0f360ab93868fb0007724f33f654dfd72403d30 100644
+--- a/src/scene/integrator.cpp
++++ b/src/scene/integrator.cpp
+@@ -197,6 +197,9 @@ NODE_DEFINE(Integrator)
+   SOCKET_INT(pt_ris_light_candidates, "Resampled Light Candidates", 4);
+   SOCKET_INT(pt_ris_bsdf_candidates, "Resampled BSDF Candidates", 2);
+ 
++  SOCKET_BOOLEAN(nested_dielectrics, "Nested Dielectrics", false);
++  SOCKET_INT(nested_tie_mode, "Nested Dielectrics Tie Mode", 0);
++
+   return type;
+ }
+ 
+@@ -319,6 +322,20 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
+     kintegrator->pt_ris_mb = (mb < 0) ? 0 : (mb > 16) ? 16 : mb;
+     kintegrator->pt_ris_pad = 0;
+   }
++  /* Nested dielectrics. Masked (buried) boundary crossings do not consume transparent bounces and
++   * end only on lack of progress along the ray (shade_surface.h); 1024 consecutive crossings is
++   * an absolute safety cap. nested_stack_size and nested_camera_probe are written by the scene and
++   * the camera. */
++
++  kintegrator->nested_dielectrics = get_nested_dielectrics() ? 1 : 0;
++  kintegrator->nested_max_masked = 1024;
++
++  kintegrator->nested_tie_mode = (get_nested_tie_mode() == 1) ? 1 : 0;
++  kintegrator->nested_pad0 = 0;
++  kintegrator->nested_pad1 = 0;
++  kintegrator->nested_pad2 = 0;
++
++
+   kintegrator->train_guiding = kintegrator->use_guiding;
+   kintegrator->use_surface_guiding = guiding_params.use_surface_guiding;
+   kintegrator->use_volume_guiding = guiding_params.use_volume_guiding;
+diff --git a/src/scene/integrator.h b/src/scene/integrator.h
+index a73b22bbecba4682ad0866827a8c802e8b1f0fb9..ac27284752e2e3c83228628898c7d7e2f86c9c08 100644
+--- a/src/scene/integrator.h
++++ b/src/scene/integrator.h
+@@ -136,6 +136,14 @@ class Integrator : public Node {
+ #define CYCLES_HOUDINI_HAS_PT_RIS_NEE 1
+ #define CYCLES_HOUDINI_HAS_PT_RIS_CANDIDATES 1
+ 
++  /* Nested dielectrics (priority-based nested media), Cycles Houdini integration. */
++  NODE_SOCKET_API(bool, nested_dielectrics)
++  /* Internal: 0 = equal priorities ignore each other (default, shipped), 1 = first entered wins. */
++  NODE_SOCKET_API(int, nested_tie_mode)
++
++#define CYCLES_HOUDINI_HAS_NESTED_DIELECTRICS 1
++
++
+   enum : uint32_t {
+     AO_PASS_MODIFIED = (1 << 0),
+     OBJECT_MANAGER = (1 << 1),
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index eb3e537e9a901613c53b28094dbfc86e7a21d751..4c5af5ac51fc95180269e077eba8ecfc732e2986 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -85,6 +85,7 @@ NODE_DEFINE(Object)
+   SOCKET_FLOAT(alpha, "Alpha", 0.0f);
+   SOCKET_UINT(random_id, "Random ID", 0);
+   SOCKET_INT(pass_id, "Pass ID", 0);
++  SOCKET_INT(dielectric_priority, "Dielectric Priority", 0);
+   SOCKET_BOOLEAN(use_holdout, "Use Holdout", false);
+   SOCKET_BOOLEAN(hide_on_missing_motion, "Hide on Missing Motion", false);
+   SOCKET_POINT(dupli_generated, "Dupli Generated", zero_float3());
+@@ -237,6 +238,27 @@ void Object::apply_transform(bool apply_to_motion)
+    * transform_applied boolean */
+ }
+ 
++bool Object::is_nested_dielectric(const Scene *scene) const
++{
++  if (!scene->integrator->get_nested_dielectrics()) {
++    return false;
++  }
++  if (geometry == nullptr || !geometry->is_mesh() || geometry->is_volume() || geometry->is_light())
++  {
++    return false;
++  }
++  if (use_holdout || is_shadow_catcher) {
++    return false;
++  }
++  for (Node *node : effective_shader_palette()) {
++    const Shader *shader = static_cast<const Shader *>(node);
++    if (shader && shader->has_surface_nested_refraction) {
++      return true;
++    }
++  }
++  return false;
++}
++
+ void Object::tag_update(Scene *scene)
+ {
+   uint32_t flag = ObjectManager::UPDATE_NONE;
+@@ -757,6 +779,7 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+   kobject.attribute_map_offset = 0;
+   kobject.shader_palette_offset = ob->shader_palette_device_offset;
+   kobject.shader_palette_size = int(ob->get_shader_palette().size());
++  kobject.dielectric_priority = ob->dielectric_priority;
+ 
+   if (ob->asset_name_is_modified() || update_all) {
+     const uint32_t hash_name = util_murmur_hash3(ob->name.c_str(), ob->name.length(), 0);
+@@ -1181,6 +1204,14 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
+       object_flag[object->index] &= ~SD_OBJECT_SHADOW_CATCHER;
+     }
+ 
++    /* Nested dielectrics. */
++    if (object->is_nested_dielectric(scene)) {
++      object_flag[object->index] |= SD_OBJECT_NESTED_DIELECTRIC;
++    }
++    else {
++      object_flag[object->index] &= ~SD_OBJECT_NESTED_DIELECTRIC;
++    }
++
+     /* Corner normals might get removed by subdivision and displacement. */
+     if (object->geometry->attributes.find(ATTR_STD_CORNER_NORMAL)) {
+       object_flag[object->index] |= SD_OBJECT_HAS_CORNER_NORMALS;
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 862ea8c6d50e1afd1037b0f767fa19fbeb44c40f..5b4474b8a88635b9e707e3cb9986d1c02c09db37 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -49,6 +49,8 @@ class Object : public Node {
+   BoundBox bounds;
+   NODE_SOCKET_API(uint, random_id)
+   NODE_SOCKET_API(int, pass_id)
++  NODE_SOCKET_API(int, dielectric_priority)
++
+   NODE_SOCKET_API(float3, color)
+   NODE_SOCKET_API(float, alpha)
+   NODE_SOCKET_API(ustring, asset_name)
+@@ -96,6 +98,11 @@ class Object : public Node {
+ 
+   void tag_update(Scene *scene);
+ 
++  /* Nested dielectrics: object takes part in priority nesting (toggle on, mesh, not holdout or
++   * shadow catcher, at least one nested-refractive shader in its palette). */
++  bool is_nested_dielectric(const Scene *scene) const;
++
++
+   void compute_bounds(bool motion_blur);
+   void apply_transform(bool apply_to_motion);
+ 
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index ebffcb162aebee1d171b7e5aea6ab785a5918d7c..728becc02da137e99390ac16f69518f74ed69475 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -2,7 +2,10 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <algorithm>
++#include <cmath>
+ #include <cstdlib>
++#include <cstring>
+ 
+ #include "bvh/bvh.h"
+ 
+@@ -35,6 +38,7 @@
+ #include "util/guarded_allocator.h"
+ #include "util/log.h"
+ #include "util/progress.h"
++#include "util/time.h"
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -113,6 +117,8 @@ void Scene::free_memory(bool final)
+     film->device_free(device, &dscene, this);
+     background->device_free(device, &dscene);
+     integrator->device_free(device, &dscene, true);
++    dscene.nested_probe_unresolved.free();
++
+     scene_attribute->device_free(device, &dscene, true);
+   }
+ 
+@@ -214,6 +220,20 @@ void Scene::device_update(Device *device_, Progress &progress)
+       integrator->tag_modified();
+     }
+ 
++    /* Nested dielectrics: the toggle changes shader flags, object flags, kernel features and the
++     * camera-inside probe. Shader edits can change which objects participate. */
++    if (integrator->nested_dielectrics_is_modified() || integrator->nested_tie_mode_is_modified())
++    {
++      shader_manager->tag_update(this, ShaderManager::UPDATE_ALL);
++      object_manager->tag_update(this, ObjectManager::OBJECT_MODIFIED);
++      object_manager->need_flags_update = true;
++      camera->need_flags_update = true;
++    }
++    else if (integrator->get_nested_dielectrics() && shader_manager->need_update()) {
++      object_manager->need_flags_update = true;
++      camera->need_flags_update = true;
++    }
++
+     /* Compile shaders and get information about features they used. */
+     const bool update_object_palettes = shader_manager->need_update() && object_manager->have_shader_palettes;
+     progress.set_status("Updating Shaders");
+@@ -413,6 +433,19 @@ void Scene::device_update(Device *device_, Progress &progress)
+ 
+   if (device->have_error() == false) {
+     dscene.data.volume_stack_size = get_volume_stack_size();
++    dscene.data.integrator.nested_stack_size = get_nested_stack_size();
++
++    /* Nested dielectrics: unresolved media probe counter, only while the toggle is on. */
++    if (integrator->get_nested_dielectrics()) {
++      if (dscene.nested_probe_unresolved.size() == 0) {
++        dscene.nested_probe_unresolved.alloc(1)[0] = 0;
++        dscene.nested_probe_unresolved.copy_to_device();
++      }
++    }
++    else if (dscene.nested_probe_unresolved.size() != 0) {
++      dscene.nested_probe_unresolved.free();
++      nested_probe_unresolved_ = 0;
++    }
+ 
+     progress.set_status("Updating Device", "Writing constant memory");
+     device->const_copy_to("data", &dscene.data, sizeof(dscene.data));
+@@ -582,8 +615,15 @@ void Scene::update_kernel_features()
+   bool has_caustics_caster = false;
+   bool has_caustics_light = false;
+ 
++  if (integrator->get_nested_dielectrics()) {
++    /* Nested dielectrics keep their stacks in state gated on the volume feature. The kernel reads
++     * them whenever the toggle is on, so the state must exist even if nothing participates. */
++    kernel_features |= KERNEL_FEATURE_VOLUME;
++  }
++
+   for (Object *object : objects) {
+     if (object->get_is_caustics_caster()) {
++
+       has_caustics_caster = true;
+     }
+     else if (object->get_is_caustics_receiver()) {
+@@ -788,8 +828,260 @@ int Scene::get_max_closure_count()
+   return max_closure_global;
+ }
+ 
++/* Nested dielectrics: exact maximum number of axis-aligned boxes sharing a common point. Boxes have
++ * the Helly property, so a point of a k-clique lies at the largest min of the clique on every axis.
++ * The outer sweep runs along the axis with the least total pairwise overlap (so boxes separated
++ * along any one axis cost almost nothing); for each distinct outer min the active boxes' 2D maximum
++ * coverage comes from a sweep over the middle axis with a segment tree over the compressed inner axis
++ * (range add, global max): O(n^2 log n) worst case, with an early exit at `limit`. Returns -1 when
++ * `budget` operations are exceeded (the caller then assumes the conservative maximum). */
++namespace {
++struct NestedDepthBox {
++  float mn[3], mx[3];
++};
++struct NestedDepthTree {
++  vector<int> mx, lz;
++  int n = 0;
++  void init(const int n_)
++  {
++    n = n_;
++    mx.assign(4 * n, 0);
++    lz.assign(4 * n, 0);
++  }
++  void add(const int node, const int l, const int r, const int a, const int b, const int v)
++  {
++    if (b < l || r < a) {
++      return;
++    }
++    if (a <= l && r <= b) {
++      mx[node] += v;
++      lz[node] += v;
++      return;
++    }
++    const int m = (l + r) / 2;
++    add(2 * node, l, m, a, b, v);
++    add(2 * node + 1, m + 1, r, a, b, v);
++    mx[node] = lz[node] + max(mx[2 * node], mx[2 * node + 1]);
++  }
++  void add(const int a, const int b, const int v)
++  {
++    add(1, 0, n - 1, a, b, v);
++  }
++  int top() const
++  {
++    return mx[1];
++  }
++};
++}  // namespace
++
++static int nested_box_depth(const vector<NestedDepthBox> &boxes, const int limit, const double budget)
++{
++  const int n = int(boxes.size());
++  if (n <= 1) {
++    return n;
++  }
++  double overlap[3];
++  for (int axis = 0; axis < 3; axis++) {
++    vector<std::pair<float, int>> events;
++    events.reserve(2 * n);
++    for (const NestedDepthBox &b : boxes) {
++      events.push_back({b.mn[axis], -1});
++      events.push_back({b.mx[axis], +1});
++    }
++    std::sort(events.begin(), events.end());
++    double sum = 0.0;
++    int open = 0;
++    for (const auto &e : events) {
++      if (e.second < 0) {
++        sum += open;
++        open++;
++      }
++      else {
++        open--;
++      }
++    }
++    overlap[axis] = sum;
++  }
++  int order[3] = {0, 1, 2};
++  std::sort(order, order + 3, [&overlap](const int a, const int b) {
++    return overlap[a] < overlap[b];
++  });
++  const int A = order[0], B = order[1], C = order[2];
++
++  vector<float> zs;
++  zs.reserve(2 * n);
++  for (const NestedDepthBox &b : boxes) {
++    zs.push_back(b.mn[C]);
++    zs.push_back(b.mx[C]);
++  }
++  std::sort(zs.begin(), zs.end());
++  zs.erase(std::unique(zs.begin(), zs.end()), zs.end());
++  auto z_index = [&zs](const float v) {
++    return int(std::lower_bound(zs.begin(), zs.end(), v) - zs.begin());
++  };
++  NestedDepthTree tree;
++  tree.init(int(zs.size()));
++  const double log_z = std::log2(double(zs.size()) + 1.0);
++
++  vector<int> by_a(n);
++  for (int i = 0; i < n; i++) {
++    by_a[i] = i;
++  }
++  std::sort(by_a.begin(), by_a.end(), [&boxes, A](const int a, const int b) {
++    return boxes[a].mn[A] < boxes[b].mn[A];
++  });
++  vector<int> active;
++  vector<std::pair<float, int>> y_events; /* Starts (negative) before ends at equal y. */
++  double ops = 0.0;
++  int depth = 1;
++  size_t next = 0;
++  while (next < by_a.size() && depth < limit) {
++    const float x = boxes[by_a[next]].mn[A];
++    while (next < by_a.size() && boxes[by_a[next]].mn[A] <= x) {
++      active.push_back(by_a[next++]);
++    }
++    active.erase(std::remove_if(active.begin(),
++                                active.end(),
++                                [&boxes, A, x](const int b) { return boxes[b].mx[A] < x; }),
++                 active.end());
++    if (int(active.size()) <= depth) {
++      continue;
++    }
++    y_events.clear();
++    for (const int b : active) {
++      y_events.push_back({boxes[b].mn[B], -(b + 1)});
++      y_events.push_back({boxes[b].mx[B], b + 1});
++    }
++    std::sort(y_events.begin(),
++              y_events.end(),
++              [](const std::pair<float, int> &p, const std::pair<float, int> &q) {
++                return p.first < q.first || (p.first == q.first && p.second < 0 && q.second > 0);
++              });
++    ops += double(y_events.size()) * (2.0 + log_z);
++    if (ops > budget) {
++      return -1;
++    }
++    for (const auto &e : y_events) {
++      const int b = (e.second < 0 ? -e.second : e.second) - 1;
++      const int z0 = z_index(boxes[b].mn[C]);
++      const int z1 = z_index(boxes[b].mx[C]);
++      if (e.second < 0) {
++        tree.add(z0, z1, +1);
++        depth = max(depth, tree.top());
++      }
++      else {
++        tree.add(z0, z1, -1);
++      }
++    }
++  }
++  return min(depth, limit);
++}
++
++/* Nested dielectrics: unresolved media probes. Both run on the session thread, which owns the device
++ * memory: reset when the render buffers are reset, polled after each render pass. */
++void Scene::nested_probe_reset()
++{
++  nested_probe_unresolved_ = 0;
++  nested_probe_warned_ = false;
++  nested_probe_final_logged_ = false;
++  if (dscene.nested_probe_unresolved.size() != 0) {
++    dscene.nested_probe_unresolved.data()[0] = 0;
++    dscene.nested_probe_unresolved.copy_to_device();
++  }
++}
++
++void Scene::nested_probe_poll(const bool render_finished)
++{
++  if (dscene.nested_probe_unresolved.size() == 0) {
++    return;
++  }
++  if (!render_finished) {
++    nested_probe_unresolved_ = device->mem_read_uint32_counter(dscene.nested_probe_unresolved);
++  }
++  const uint64_t count = nested_probe_unresolved_.load();
++  if (count == 0) {
++    return;
++  }
++  if (!nested_probe_warned_) {
++    nested_probe_warned_ = true;
++    LOG_WARNING << "Nested dielectrics: " << count
++                << " media probes ended unresolved (camera probe hit budget or list overflow, or "
++                   "SSS replay hit budget); the media of those paths may be wrong.";
++  }
++  if (render_finished && !nested_probe_final_logged_) {
++    nested_probe_final_logged_ = true;
++    LOG_WARNING << "Nested dielectrics: " << count << " unresolved media probes in this render.";
++  }
++}
++
++int Scene::get_nested_stack_size() const
++{
++  if (!integrator->get_nested_dielectrics()) {
++    nested_stack_depth = 0;
++    nested_stack_depth_clamped = false;
++    nested_stack_size_cache_valid = false;
++    return 1;
++  }
++
++  /* Participating bounding boxes, and a cache key over them: camera-only or shader-only updates
++   * that leave participation and bounds unchanged reuse the previous result. */
++  vector<NestedDepthBox> boxes;
++  uint64_t key = 1469598103934665603ull;
++  auto mix = [&key](const uint32_t v) { key = (key ^ v) * 1099511628211ull; };
++  for (const Object *object : objects) {
++    if (object->is_nested_dielectric(this) && object->bounds.valid()) {
++      boxes.push_back({{object->bounds.min.x, object->bounds.min.y, object->bounds.min.z},
++                       {object->bounds.max.x, object->bounds.max.y, object->bounds.max.z}});
++      const float v[6] = {object->bounds.min.x,
++                          object->bounds.min.y,
++                          object->bounds.min.z,
++                          object->bounds.max.x,
++                          object->bounds.max.y,
++                          object->bounds.max.z};
++      for (const float f : v) {
++        uint32_t u;
++        memcpy(&u, &f, sizeof(u));
++        mix(u);
++      }
++    }
++  }
++  mix(uint32_t(boxes.size()));
++  if (nested_stack_size_cache_valid && nested_stack_size_cache_key == key) {
++    return nested_stack_size_cache_value;
++  }
++
++  const double t0 = time_dt();
++  /* Exact depth, scanned one past what a path can track so overflow can be reported; a budget of
++   * about 1e8 operations bounds pathological layouts (conservative maximum, with the warning). */
++  bool clamped = false;
++  int depth = nested_box_depth(boxes, MAX_VOLUME_STACK_SIZE, 1e8);
++  if (depth < 0) {
++    depth = MAX_VOLUME_STACK_SIZE - 1;
++    clamped = true;
++  }
++
++  /* One slot for the terminator, at least two in total. */
++  const int size = boxes.empty() ? 1 : clamp(depth + 1, 2, MAX_VOLUME_STACK_SIZE);
++  nested_stack_depth = depth;
++  nested_stack_depth_clamped = clamped || depth + 1 > MAX_VOLUME_STACK_SIZE;
++  if (nested_stack_depth_clamped) {
++    LOG_WARNING << "Nested dielectrics: participating objects overlap deeper than the "
++                << MAX_VOLUME_STACK_SIZE - 1
++                << " media a path can track"
++                << (clamped ? " (or the bound exceeded its operation budget)" : "")
++                << ". Paths inside more media drop the lowest-priority one.";
++  }
++  LOG_INFO << "Nested dielectrics stack size " << size << " (overlap depth " << depth << ", "
++           << boxes.size() << " participating objects, " << (time_dt() - t0) * 1000.0 << " ms)";
++  nested_stack_size_cache_key = key;
++  nested_stack_size_cache_value = size;
++  nested_stack_size_cache_valid = true;
++  return size;
++}
++
+ int Scene::get_volume_stack_size() const
+ {
++
+   int volume_stack_size = 0;
+ 
+   /* Space for background volume and terminator.
+diff --git a/src/scene/scene.h b/src/scene/scene.h
+index d20846843f37738ad60c5d056ffeeadad0b2f9fd..3bbd77d3fabe6881736e419173db927a67307976 100644
+--- a/src/scene/scene.h
++++ b/src/scene/scene.h
+@@ -4,8 +4,11 @@
+ 
+ #pragma once
+ 
++#include <atomic>
++
+ #include "bvh/params.h"
+ 
++
+ #include "scene/devicescene.h"
+ #include "scene/film.h"
+ #include "scene/image.h"
+@@ -130,6 +133,9 @@ class SceneParams {
+ 
+ /* Scene */
+ 
++/* Integrations can query the nested-dielectrics diagnostics below. */
++#define CYCLES_HOUDINI_HAS_NESTED_WARNINGS 1
++
+ class Scene : public NodeOwner {
+  public:
+   /* Optional name. Is used for logging and reporting. */
+@@ -261,6 +267,27 @@ class Scene : public NodeOwner {
+ 
+   template<class T> T *create_light_node();
+ 
++  /* Nested dielectrics diagnostics for integrations (public, read-only). */
++  int nested_stack_depth_value() const
++  {
++    return nested_stack_depth;
++  }
++  bool nested_stack_depth_was_clamped() const
++  {
++    return nested_stack_depth_clamped;
++  }
++  /* Nested dielectrics: media probes (camera +Z probe, SSS replay) that ended unresolved since the
++   * last render reset (hit budget exhausted or list overflow). Updated by the session thread after
++   * each render pass; reading it needs no device access. 0 while the toggle is off. */
++  uint64_t nested_probe_unresolved_count() const
++  {
++    return nested_probe_unresolved_.load();
++  }
++  void nested_probe_reset();
++  void nested_probe_poll(bool render_finished);
++  std::atomic<uint64_t> nested_probe_unresolved_{0};
++  bool nested_probe_warned_ = false;
++  bool nested_probe_final_logged_ = false;
+  protected:
+   /* Check if some heavy data worth logging was updated.
+    * Mainly used to suppress extra annoying logging.
+@@ -286,6 +313,21 @@ class Scene : public NodeOwner {
+ 
+   /* Get size of a volume stack needed to render this scene. */
+   int get_volume_stack_size() const;
++  /* Nested dielectrics: slots for the nested stack incl. terminator (1 when unused). */
++  int get_nested_stack_size() const;
++  /* Nested dielectrics diagnostics of the last stack sizing: maximum overlap depth of participating
++   * bounding boxes, and whether it had to be clamped to the kernel limit (then a path inside more
++   * media than fit drops the lowest-priority medium; a warning is logged). */
++  mutable int nested_stack_depth = 0;
++  mutable bool nested_stack_depth_clamped = false;
++
++  /* Cache of get_nested_stack_size(), keyed on the participating objects' bounds. */
++  mutable uint64_t nested_stack_size_cache_key = 0;
++  mutable int nested_stack_size_cache_value = 1;
++  mutable bool nested_stack_size_cache_valid = false;
++
++
++
+ 
+   bool load_kernels(Progress &progress);
+ };
+diff --git a/src/scene/shader.cpp b/src/scene/shader.cpp
+index d1b66577fb3d4b5c1b1f8405ecfee7861398afce..3c3ee7a81da6b24f0b77ff8e86a3bffc8bb5e2db 100644
+--- a/src/scene/shader.cpp
++++ b/src/scene/shader.cpp
+@@ -585,6 +585,61 @@ void ShaderManager::device_update_pre(Device * /*device*/,
+           shader->has_time_dependency = true;
+         }
+       }
++
++      /* Nested dielectrics: find the refractive closure(s) of the finalized graph. Independent
++       * of the integrator toggle; the toggle only decides whether the kernel flag is set. */
++      shader->has_surface_nested_refraction = false;
++      shader->nested_ior_varying = false;
++      shader->nested_ior = 1.0f;
++      if (shader->has_surface) {
++        bool disqualified = false;
++        bool found = false;
++        for (ShaderNode *node : shader->graph->nodes) {
++          if (node->has_surface_bssrdf()) {
++            disqualified = true;
++          }
++          const NodeType *type = node->type;
++          const bool is_glass = (type == GlassBsdfNode::get_node_type() ||
++                                 type == RefractionBsdfNode::get_node_type());
++          bool is_principled_transmission = false;
++          if (type == PrincipledBsdfNode::get_node_type()) {
++            ShaderInput *transmission = node->input("Transmission Weight");
++            ShaderInput *thin_wall = node->input("Thin Wall");
++            const bool transmits = transmission &&
++                                   (transmission->link ||
++                                    node->get_float(transmission->socket_type) > 0.0f);
++            if (transmits) {
++              if (thin_wall && (thin_wall->link || node->get_int(thin_wall->socket_type) != 0)) {
++                disqualified = true;
++              }
++              else {
++                is_principled_transmission = true;
++              }
++            }
++          }
++          if (is_glass || is_principled_transmission) {
++            ShaderInput *ior = node->input("IOR");
++            if (ior) {
++              const float value = node->get_float(ior->socket_type);
++              if (!found) {
++                shader->nested_ior = value;
++              }
++              else if (value != shader->nested_ior) {
++                shader->nested_ior_varying = true;
++              }
++              if (ior->link) {
++                shader->nested_ior_varying = true;
++              }
++            }
++            found = true;
++          }
++        }
++        shader->has_surface_nested_refraction = found && !disqualified;
++        if (!(shader->nested_ior > 0.0f)) {
++          shader->nested_ior = 1.0f;
++        }
++      }
++
+     }
+ 
+     if (shader->reference_count()) {
+@@ -708,6 +763,14 @@ void ShaderManager::device_update_common(Device * /*device*/,
+       flag |= SD_REQUIRES_WAVELENGTH;
+     }
+ 
++    /* Nested dielectrics (OSL closures do not support the relative IOR). Shadow rays have to
++     * record hits on these shaders so a buried boundary can be passed. */
++    const bool nested = scene->integrator->get_nested_dielectrics() && !use_osl() &&
++                        shader->has_surface_nested_refraction;
++    if (nested) {
++      flag |= SD_NESTED_REFRACTIVE | SD_HAS_TRANSPARENT_SHADOW;
++    }
++
+     const uint32_t cryptomatte_id = util_murmur_hash3(
+         shader->name.c_str(), shader->name.length(), 0);
+ 
+@@ -718,8 +781,13 @@ void ShaderManager::device_update_common(Device * /*device*/,
+     kshader->constant_emission[1] = shader->emission_estimate.y;
+     kshader->constant_emission[2] = shader->emission_estimate.z;
+     kshader->cryptomatte_id = util_hash_to_float(cryptomatte_id);
++    kshader->nested_ior = nested ? (shader->nested_ior_varying ? -shader->nested_ior :
++                                                                 shader->nested_ior) :
++                                   0.0f;
++    kshader->pad3 = 0;
+     kshader++;
+ 
++
+     has_transparent_shadow |= (flag & SD_HAS_TRANSPARENT_SHADOW) != 0;
+   }
+ 
+diff --git a/src/scene/shader.h b/src/scene/shader.h
+index 6c13f3baaaab0dd9b721599c9b182791325d5680..ca580c81a9e89b3583354c1d2d8b0956d7721f58 100644
+--- a/src/scene/shader.h
++++ b/src/scene/shader.h
+@@ -124,6 +124,13 @@ class Shader : public Node {
+   bool has_aov_output_node;
+   bool has_time_dependency;
+   bool has_dispersion;
++  /* Nested dielectrics: graph has a Glass, Refraction or transmitting Principled BSDF that can
++   * take part in priority nesting (no BSSRDF, no thin wall), and the IOR to use when the medium
++   * is entered without shader evaluation (camera-inside probe, masked hits). */
++  bool has_surface_nested_refraction = false;
++  bool nested_ior_varying = false;
++  float nested_ior = 1.0f;
++
+ 
+   float3 emission_estimate;
+   EmissionSampling emission_sampling;
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index f3e8e07594b52a33f93a68adeac121f40c172ab7..8d161d973739dde7858a56412da813d6ab3c98c4 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -248,7 +248,11 @@ void Session::run_main_render_loop()
+     const bool did_cancel = progress.get_cancel();
+ 
+     if (!render_work) {
++      if (!did_cancel) {
++        scene->nested_probe_poll(true);
++      }
+       if (LOG_IS_ON(LOG_LEVEL_INFO)) {
++
+         if (did_cancel) {
+           LOG_INFO << "Rendering was canceled.";
+         }
+@@ -297,6 +301,9 @@ void Session::run_main_render_loop()
+       /* render */
+       path_trace_->render(render_work);
+ 
++      /* Nested dielectrics: read back the unresolved media probe counter (no-op when off). */
++      scene->nested_probe_poll(false);
++
+       /* update status and timing */
+       update_status_time();
+ 
+@@ -414,6 +421,9 @@ RenderWork Session::run_update_for_next_iteration()
+   if (reset_buffers) {
+     update_buffers_for_params();
+ 
++    /* Nested dielectrics: unresolved media probes are counted per render. */
++    scene->nested_probe_reset();
++
+     /* After reset make sure the tile manager is at the first big tile. */
+     have_tiles = tile_manager_.next();
+     switched_to_new_tile = true;

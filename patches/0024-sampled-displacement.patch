@@ -1,0 +1,342 @@
+From 40e7c0a5c2fc474d960932ddb86d70448b92c48c Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:32 +0100
+Subject: [PATCH] sampled displacement
+
+Locked-Patch: patches/0024-sampled-displacement.patch
+Locked-Patch-SHA256: 2f9f0963c6c521015b5d4138cff650064c88aef8f886d27dbd5d1d949955f102
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_sampled_displacement_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: c16ad6b030fd475fa29e1c153c54088f52a63e2d
+Previous-Patch: patches/0024-sampled-displacement.patch
+Previous-Patch-SHA256: 2f9f0963c6c521015b5d4138cff650064c88aef8f886d27dbd5d1d949955f102
+Rationale: Sampled true displacement carries authored shutter poses through shader setup and geometry interpolation, extending both host and kernel contracts.
+Contract: sampled displacement
+Tests: tests/houdini_sampled_displacement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/bake/bake.h b/src/kernel/bake/bake.h
+index b47cf7959d3c816a8b01728c08ef3e97adc9bcd9..13347be699dc2e67b703902fa8728ab522ff29c1 100644
+--- a/src/kernel/bake/bake.h
++++ b/src/kernel/bake/bake.h
+@@ -31,7 +31,7 @@ ccl_device void kernel_displace_evaluate(KernelGlobals kg,
+   const KernelShaderEvalInput in = input[offset];
+ 
+   ShaderData sd;
+-  shader_setup_from_displace(kg, &sd, in.object, in.prim, in.u, in.v);
++  shader_setup_from_displace(kg, &sd, in.object, in.prim, in.u, in.v, in.time);
+ 
+   /* Evaluate displacement shader. */
+   ConstIntegratorBakeState state;
+diff --git a/src/kernel/geom/motion_triangle_shader.h b/src/kernel/geom/motion_triangle_shader.h
+index c1a9ea9046d6bb96586697d22866d348c1aae867..218998354e35ccfd8b3f69931e1a2a803c799eb2 100644
+--- a/src/kernel/geom/motion_triangle_shader.h
++++ b/src/kernel/geom/motion_triangle_shader.h
+@@ -29,7 +29,9 @@ CCL_NAMESPACE_BEGIN
+  * normals */
+ 
+ /* return 3 triangle vertex normals */
+-ccl_device_noinline void motion_triangle_shader_setup(KernelGlobals kg, ccl_private ShaderData *sd)
++ccl_device_noinline void motion_triangle_shader_setup(KernelGlobals kg,
++                                                       ccl_private ShaderData *sd,
++                                                       const bool force_smooth = false)
+ {
+   /* Get shader. */
+   sd->shader = kernel_data_fetch(tri_shader, sd->prim);
+@@ -64,7 +66,7 @@ ccl_device_noinline void motion_triangle_shader_setup(KernelGlobals kg, ccl_priv
+   sd->dPdv = (verts[2] - verts[0]);
+ #endif
+   /* Compute smooth normal. */
+-  if (sd->shader & SHADER_SMOOTH_NORMAL) {
++  if ((sd->shader & SHADER_SMOOTH_NORMAL) || force_smooth) {
+     sd->N = motion_triangle_smooth_normal(
+         kg, Ng, sd->object, sd->prim, tri_vindex, numsteps, step, t, sd->u, sd->v);
+   }
+diff --git a/src/kernel/geom/shader_data.h b/src/kernel/geom/shader_data.h
+index ed9525fd13430607aeea71494ab689edd41ce82b..ff81d0e4c715ec1e1e2589db7d1bca427949d588 100644
+--- a/src/kernel/geom/shader_data.h
++++ b/src/kernel/geom/shader_data.h
+@@ -260,7 +260,8 @@ ccl_device void shader_setup_from_displace(KernelGlobals kg,
+                                            const int object,
+                                            const int prim,
+                                            const float u,
+-                                           const float v)
++                                           const float v,
++                                           const float time)
+ {
+   float3 P;
+   float3 Ng;
+@@ -283,10 +284,29 @@ ccl_device void shader_setup_from_displace(KernelGlobals kg,
+                            u,
+                            v,
+                            0.0f,
+-                           0.5f,
++                           time,
+                            !(kernel_data_fetch(object_flag, object) & SD_OBJECT_TRANSFORM_APPLIED),
+                            false);
+ 
++#ifdef __OBJECT_MOTION__
++  if (sd->object_flag & SD_OBJECT_HAS_VERTEX_MOTION) {
++    /* Device attributes still contain the original, undisplaced shutter poses.
++     * Use the same interpolation as path tracing, before world transformation. */
++    sd->type = PRIMITIVE_MOTION_TRIANGLE;
++    motion_triangle_shader_setup(kg, sd, true);
++    sd->shader |= SHADER_SMOOTH_NORMAL;
++    if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
++      object_position_transform(kg, sd, &sd->P);
++      object_normal_transform(kg, sd, &sd->Ng);
++      object_normal_transform(kg, sd, &sd->N);
++#  ifdef __DPDU__
++      object_dir_transform(kg, sd, &sd->dPdu);
++      object_dir_transform(kg, sd, &sd->dPdv);
++#  endif
++    }
++  }
++#endif
++
+   /* Assign some incoming direction to avoid division by zero. */
+   sd->wi = sd->N;
+ 
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index 7079b9104e3fb0c69b66408e90493fb885031868..d200d155a2fabcc5d4df4a4066a6de36e8ba2990 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1780,6 +1780,8 @@ struct KernelShaderEvalInput {
+   int object;
+   int prim;
+   float u, v;
++  float time;
++  float pad[3];
+ };
+ static_assert_align(KernelShaderEvalInput, 16);
+ 
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index b62f314302433f0a9fb54f0676f54f91ae4ffe0b..435bfd7f284a6a1838de79237eedaf4954c2124a 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -264,6 +264,7 @@ NODE_DEFINE(Mesh)
+   SOCKET_INT_ARRAY(triangles, "Triangles", array<int>());
+   SOCKET_INT_ARRAY(shader, "Shader", array<int>());
+   SOCKET_BOOLEAN_ARRAY(smooth, "Smooth", array<bool>());
++  SOCKET_BOOLEAN(motion_displacement, "Motion Displacement", false);
+ 
+   static NodeEnum subdivision_type_enum;
+   subdivision_type_enum.insert("none", SUBDIVISION_NONE);
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index 3f02b43333843590ba3b0a5c0703c395f1cec336..8427668821cd8bdeefd7bc659e31fd8623e436df 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -145,6 +145,7 @@ class Mesh : public Geometry {
+   NODE_SOCKET_API_ARRAY(array<int>, triangles)
+   NODE_SOCKET_API_ARRAY(array<int>, shader)
+   NODE_SOCKET_API_ARRAY(array<bool>, smooth)
++  NODE_SOCKET_API(bool, motion_displacement)
+ 
+   /* SubdFaces */
+   NODE_SOCKET_API_ARRAY(array<int>, subd_start_corner)
+diff --git a/src/scene/mesh_displace.cpp b/src/scene/mesh_displace.cpp
+index 5d1536d4c8797679c7a991921e43ae9b50ce744c..3bf8a4f18bf9d352d8e929de6d1185bacb412f74 100644
+--- a/src/scene/mesh_displace.cpp
++++ b/src/scene/mesh_displace.cpp
+@@ -12,6 +12,7 @@
+ #include "scene/shader.h"
+ 
+ #include "util/progress.h"
++#include <limits>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -31,52 +32,57 @@ static int fill_shader_input(const Scene *scene,
+   vector<bool> done(num_verts, false);
+ 
+   const int num_triangles = mesh->num_triangles();
+-  for (int i = 0; i < num_triangles; i++) {
+-    const Mesh::Triangle t = mesh->get_triangle(i);
+-    const int shader_index = mesh_shaders[i];
+-    Shader *shader = (shader_index < mesh_used_shaders.size()) ?
+-                         static_cast<Shader *>(mesh_used_shaders[shader_index]) :
+-                         scene->default_surface;
+-
+-    if (!shader->has_displacement || shader->get_displacement_method() == DISPLACE_BUMP) {
+-      continue;
+-    }
+-
+-    for (int j = 0; j < 3; j++) {
+-      if (done[t.v[j]]) {
++  const int steps = mesh->get_motion_displacement() ? std::max(1u, mesh->get_motion_steps()) : 1;
++  for (int step = 0; step < steps; step++) {
++    std::fill(done.begin(), done.end(), false);
++    for (int i = 0; i < num_triangles; i++) {
++      const Mesh::Triangle t = mesh->get_triangle(i);
++      const int shader_index = mesh_shaders[i];
++      Shader *shader = (shader_index < mesh_used_shaders.size()) ?
++                           static_cast<Shader *>(mesh_used_shaders[shader_index]) :
++                           scene->default_surface;
++
++      if (!shader->has_displacement || shader->get_displacement_method() == DISPLACE_BUMP) {
+         continue;
+       }
+ 
+-      done[t.v[j]] = true;
+-
+-      /* set up object, primitive and barycentric coordinates */
+-      const int object = object_index;
+-      const int prim = mesh->prim_offset + i;
+-      float u;
+-      float v;
+-
+-      switch (j) {
+-        case 0:
+-          u = 0.0f;
+-          v = 0.0f;
+-          break;
+-        case 1:
+-          u = 1.0f;
+-          v = 0.0f;
+-          break;
+-        default:
+-          u = 0.0f;
+-          v = 1.0f;
+-          break;
+-      }
++      for (int j = 0; j < 3; j++) {
++        if (done[t.v[j]]) {
++          continue;
++        }
++
++        done[t.v[j]] = true;
++
++        /* set up object, primitive and barycentric coordinates */
++        const int object = object_index;
++        const int prim = mesh->prim_offset + i;
++        float u;
++        float v;
++
++        switch (j) {
++          case 0:
++            u = 0.0f;
++            v = 0.0f;
++            break;
++          case 1:
++            u = 1.0f;
++            v = 0.0f;
++            break;
++          default:
++            u = 0.0f;
++            v = 1.0f;
++            break;
++        }
+ 
+-      /* back */
+-      KernelShaderEvalInput in;
+-      in.object = object;
+-      in.prim = prim;
+-      in.u = u;
+-      in.v = v;
+-      d_input_data[d_input_size++] = in;
++        /* back */
++        KernelShaderEvalInput in{};
++        in.object = object;
++        in.prim = prim;
++        in.u = u;
++        in.v = v;
++        in.time = steps == 1 ? 0.5f : float(step) / float(steps - 1);
++        d_input_data[d_input_size++] = in;
++      }
+     }
+   }
+ 
+@@ -93,6 +99,7 @@ static void read_shader_output(const Scene *scene,
+   packed_float3 *mesh_verts = mesh->get_position_for_write();
+   const int num_verts = mesh->num_verts();
+   const int num_motion_steps = mesh->get_motion_steps();
++  const int steps = mesh->get_motion_displacement() ? std::max(1, num_motion_steps) : 1;
+   vector<bool> done(num_verts, false);
+ 
+   const float *d_output_data = d_output.data();
+@@ -103,33 +110,43 @@ static void read_shader_output(const Scene *scene,
+     attr_P = nullptr;
+   }
+   const int num_triangles = mesh->num_triangles();
+-  for (int i = 0; i < num_triangles; i++) {
+-    const Mesh::Triangle t = mesh->get_triangle(i);
+-    const int shader_index = mesh_shaders[i];
+-    Shader *shader = (shader_index < mesh_used_shaders.size()) ?
+-                         static_cast<Shader *>(mesh_used_shaders[shader_index]) :
+-                         scene->default_surface;
+-
+-    if (!shader->has_displacement || shader->get_displacement_method() == DISPLACE_BUMP) {
+-      continue;
+-    }
++  for (int sample = 0; sample < steps; sample++) {
++    std::fill(done.begin(), done.end(), false);
++    for (int i = 0; i < num_triangles; i++) {
++      const Mesh::Triangle t = mesh->get_triangle(i);
++      const int shader_index = mesh_shaders[i];
++      Shader *shader = (shader_index < mesh_used_shaders.size()) ?
++                           static_cast<Shader *>(mesh_used_shaders[shader_index]) :
++                           scene->default_surface;
++
++      if (!shader->has_displacement || shader->get_displacement_method() == DISPLACE_BUMP) {
++        continue;
++      }
+ 
+-    for (int j = 0; j < 3; j++) {
+-      if (!done[t.v[j]]) {
+-        done[t.v[j]] = true;
+-        float3 off = make_float3(d_output_data[d_output_index + 0],
+-                                 d_output_data[d_output_index + 1],
+-                                 d_output_data[d_output_index + 2]);
+-        d_output_index += 3;
+-
+-        /* Avoid illegal vertex coordinates. */
+-        off = ensure_finite(off);
+-        mesh_verts[t.v[j]] = float3(mesh_verts[t.v[j]]) + off;
+-        if (attr_P != nullptr) {
+-          for (int step = 1; step < num_motion_steps; step++) {
+-            packed_float3 *mP = attr_P->data_for_write<packed_float3>(step);
++      for (int j = 0; j < 3; j++) {
++        if (!done[t.v[j]]) {
++          done[t.v[j]] = true;
++          float3 off = make_float3(d_output_data[d_output_index + 0],
++                                   d_output_data[d_output_index + 1],
++                                   d_output_data[d_output_index + 2]);
++          d_output_index += 3;
++
++          /* Avoid illegal vertex coordinates. */
++          off = ensure_finite(off);
++          if (steps == 1 || sample == steps / 2) {
++            mesh_verts[t.v[j]] = float3(mesh_verts[t.v[j]]) + off;
++          }
++          else if (attr_P != nullptr) {
++            const int storage_step = sample < steps / 2 ? sample + 1 : sample;
++            packed_float3 *mP = attr_P->data_for_write<packed_float3>(storage_step);
+             mP[t.v[j]] = float3(mP[t.v[j]]) + off;
+           }
++          if (steps == 1 && attr_P != nullptr) {
++            for (int step = 1; step < num_motion_steps; step++) {
++              packed_float3 *mP = attr_P->data_for_write<packed_float3>(step);
++              mP[t.v[j]] = float3(mP[t.v[j]]) + off;
++            }
++          }
+         }
+       }
+     }
+@@ -396,10 +413,15 @@ bool GeometryManager::displace(Device *device, Scene *scene, Mesh *mesh, Progres
+   }
+ 
+   /* Evaluate shader on device. */
++  const size_t steps = mesh->get_motion_displacement() ? std::max(1u, mesh->get_motion_steps()) : 1;
++  if (num_verts > size_t(std::numeric_limits<int>::max()) / steps) {
++    progress.set_error("Motion displacement exceeds the shader evaluation index limit");
++    return false;
++  }
+   ShaderEval shader_eval(device, progress);
+   if (!shader_eval.eval(
+           SHADER_EVAL_DISPLACE,
+-          num_verts,
++          num_verts * steps,
+           3,
+           [scene, mesh, object_index](device_vector<KernelShaderEvalInput> &d_input) {
+             return fill_shader_input(scene, mesh, object_index, d_input);

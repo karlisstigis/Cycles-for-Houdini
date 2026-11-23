@@ -1,0 +1,14 @@
+Operator:     cycles_ipr
+Label:        Cycles Render
+Path:         oplib:/Driver/cycles_ipr?Driver/cycles_ipr
+Icon:         cycles_render_rop
+Table:        Driver
+License:
+Extra:
+User:
+Inputs:       0 to 9999
+Subnet:       false
+Python:       false
+Empty:        false
+Modified:     Sat Oct 10 00:00:00 2026
+

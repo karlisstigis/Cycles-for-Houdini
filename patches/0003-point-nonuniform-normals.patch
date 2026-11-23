@@ -1,0 +1,50 @@
+From aba2beea452e7e3e40785f0d25e525d97798f4fd Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:29 +0100
+Subject: [PATCH] Correct transformed point-sphere normals. Nonuniform object
+ scale creates an ellipsoid, whose world-space normal requires the inverse
+ transpose of its object-space normal.
+
+Locked-Patch: patches/0003-point-nonuniform-normals.patch
+Locked-Patch-SHA256: 3445bf84e54bfdd16e680a7d053a00b90f1f15a41e23c04e775bd71f1f3e784b
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_points_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: d1c9cddf32f619dfd79b838b24bbc2134b41e467
+Previous-Patch: patches/0003-point-nonuniform-normals.patch
+Previous-Patch-SHA256: 3445bf84e54bfdd16e680a7d053a00b90f1f15a41e23c04e775bd71f1f3e784b
+Rationale: Nonuniform point transforms require inverse-transpose sphere normals; the geometry defect also affects non-Houdini consumers.
+Contract: Correct transformed point-sphere normals. Nonuniform object scale creates an ellipsoid, whose world-space normal requires the inverse transpose of its object-space normal.
+Tests: tests/houdini_points_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/geom/point_intersect.h b/src/kernel/geom/point_intersect.h
+index 08704ca939eac7bb8000464e642d5bff3689970a..a05a06334dc1d7724e0e805e28214faf37c9739e 100644
+--- a/src/kernel/geom/point_intersect.h
++++ b/src/kernel/geom/point_intersect.h
+@@ -111,16 +111,19 @@ ccl_device_inline void point_shader_setup(KernelGlobals kg,
+   float3 center = make_float3((isect->type & PRIMITIVE_MOTION) ?
+                                   motion_point(kg, sd->object, sd->prim, sd->time) :
+                                   kernel_data_fetch(points, position_offset + sd->prim));
+-  if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
+-    object_position_transform(kg, sd, &center);
+-  }
+-
+-  /* Normal */
+ #  if defined(__GSPLATS__)
+   if (isect->type & PRIMITIVE_POINT)
+ #  endif
+   {
+-    sd->Ng = normalize(sd->P - center);
++    /* The ellipsoid normal is the inverse transpose of the object-space sphere normal. */
++    float3 P = sd->P;
++    if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
++      object_inverse_position_transform(kg, sd, &P);
++    }
++    sd->Ng = normalize(P - center);
++    if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
++      object_normal_transform(kg, sd, &sd->Ng);
++    }
+   }
+ #  if defined(__GSPLATS__)
+   else {

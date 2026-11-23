@@ -1,0 +1,998 @@
+From 415ab2205534603a4f4b8704b951a73dbdc075ce Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:38 +0100
+Subject: [PATCH] object material slots and shared mesh lights
+
+Locked-Patch: patches/0057-object-material-slots-and-shared-mesh-lights.patch
+Locked-Patch-SHA256: 9f49cfcdd202990997ba6fcb81d0cae57c8fdd367c3e28b9af73655e3a520b63
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/core_mesh_sharing_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 90be37a66b5bbc67ce12f5e937090907f442e5d9
+Previous-Patch: patches/0057-object-material-slots-and-shared-mesh-lights.patch
+Previous-Patch-SHA256: 9f49cfcdd202990997ba6fcb81d0cae57c8fdd367c3e28b9af73655e3a520b63
+Rationale: Per-object material slots over shared geometry extend shader palette selection and shared mesh-light semantics across host/kernel APIs.
+Contract: object material slots and shared mesh lights
+Tests: tests/core_mesh_sharing_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/bvh/intersect_filter.h b/src/kernel/bvh/intersect_filter.h
+index 7473f37d93ceda117dc1d6f0c76a7d86c18c6b0a..47ba47cfcf493d9bc06c44feb93991d9412705e9 100644
+--- a/src/kernel/bvh/intersect_filter.h
++++ b/src/kernel/bvh/intersect_filter.h
+@@ -20,6 +20,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/bvh/util.h"
+ #include "kernel/globals.h"
+ #include "kernel/integrator/state.h"
+@@ -167,7 +169,7 @@ ccl_device_forceinline bool bvh_shadow_all_anyhit_filter(
+   /* Detect if this surface has a shader with transparent shadows. */
+   /* TODO: optimize so primitive visibility flag indicates if the primitive has a transparent
+    * shadow shader? */
+-  const int shader_flags = intersection_get_shader_flags(kg, isect.prim, isect.type);
++  const int shader_flags = intersection_get_shader_flags(kg, isect.prim, isect.type, isect.object);
+   if ((shader_flags & SD_HAS_TRANSPARENT_SHADOW) == 0) {
+     /* No transparent shadows for the shader, all light is blocked, and we can stop immediately. */
+     payload.throughput = zero_float3();
+@@ -299,7 +301,7 @@ ccl_device_forceinline bool bvh_volume_anyhit_triangle_filter(
+     return true;
+   }
+ 
+-  const int shader = kernel_data_fetch(tri_shader, prim);
++  const int shader = triangle_shader(kg, prim, object);
+   const int shader_flag = kernel_data_fetch(shaders, (shader & SHADER_MASK)).flags;
+   if (!(shader_flag & SD_HAS_VOLUME)) {
+     return true;
+diff --git a/src/kernel/bvh/util.h b/src/kernel/bvh/util.h
+index f9bb8aa113527fae3b3b4c4cb9615cbc566aede5..12bc66376ed6719b0101a3257b1e56e4df6d4352 100644
+--- a/src/kernel/bvh/util.h
++++ b/src/kernel/bvh/util.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/globals.h"
+ #include "kernel/integrator/state.h"
+ #include "kernel/types.h"
+@@ -129,12 +131,13 @@ ccl_device_inline void sort_intersections_and_normals(ccl_private Intersection *
+ 
+ ccl_device_forceinline int intersection_get_shader_flags(KernelGlobals kg,
+                                                          const int prim,
+-                                                         const int type)
++                                                         const int type,
++                                                         const int object)
+ {
+   int shader = 0;
+ 
+   if (type & PRIMITIVE_TRIANGLE) {
+-    shader = kernel_data_fetch(tri_shader, prim);
++    shader = triangle_shader(kg, prim, object);
+   }
+ #ifdef __POINTCLOUD__
+   else if (type & PRIMITIVE_ANY_POINT) {
+@@ -152,12 +155,13 @@ ccl_device_forceinline int intersection_get_shader_flags(KernelGlobals kg,
+ 
+ ccl_device_forceinline int intersection_get_shader_from_isect_prim(KernelGlobals kg,
+                                                                    const int prim,
+-                                                                   const int isect_type)
++                                                                   const int isect_type,
++                                                                   const int object)
+ {
+   int shader = 0;
+ 
+   if (isect_type & PRIMITIVE_TRIANGLE) {
+-    shader = kernel_data_fetch(tri_shader, prim);
++    shader = triangle_shader(kg, prim, object);
+   }
+ #ifdef __POINTCLOUD__
+   else if (isect_type & PRIMITIVE_ANY_POINT) {
+@@ -176,7 +180,7 @@ ccl_device_forceinline int intersection_get_shader_from_isect_prim(KernelGlobals
+ ccl_device_forceinline int intersection_get_shader(
+     KernelGlobals kg, const ccl_private Intersection *ccl_restrict isect)
+ {
+-  return intersection_get_shader_from_isect_prim(kg, isect->prim, isect->type);
++  return intersection_get_shader_from_isect_prim(kg, isect->prim, isect->type, isect->object);
+ }
+ 
+ ccl_device_forceinline uint
+diff --git a/src/kernel/data_arrays.h b/src/kernel/data_arrays.h
+index 82587f153078aac99ef38c15f94f8222e684e984..9a46d955da599d904c6fd8dd98b36cc9002365e2 100644
+--- a/src/kernel/data_arrays.h
++++ b/src/kernel/data_arrays.h
+@@ -33,6 +33,8 @@ KERNEL_DATA_ARRAY(DecomposedTransform, camera_motion)
+ 
+ /* triangles */
+ KERNEL_DATA_ARRAY(uint, tri_shader)
++KERNEL_DATA_ARRAY(int, tri_shader_slot)
++KERNEL_DATA_ARRAY(int, object_shader_palette)
+ KERNEL_DATA_ARRAY(packed_uint3, tri_vindex)
+ KERNEL_DATA_ARRAY(packed_float3, tri_verts)
+ 
+diff --git a/src/kernel/geom/motion_triangle_shader.h b/src/kernel/geom/motion_triangle_shader.h
+index 218998354e35ccfd8b3f69931e1a2a803c799eb2..86d372311f5f8f292617803d836f92fdda529086 100644
+--- a/src/kernel/geom/motion_triangle_shader.h
++++ b/src/kernel/geom/motion_triangle_shader.h
+@@ -15,6 +15,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/globals.h"
+ #include "kernel/types.h"
+ 
+@@ -34,7 +36,7 @@ ccl_device_noinline void motion_triangle_shader_setup(KernelGlobals kg,
+                                                        const bool force_smooth = false)
+ {
+   /* Get shader. */
+-  sd->shader = kernel_data_fetch(tri_shader, sd->prim);
++  sd->shader = triangle_shader(kg, sd->prim, sd->object);
+ 
+   /* Compute motion info. */
+   int numsteps;
+diff --git a/src/kernel/geom/shader_palette.h b/src/kernel/geom/shader_palette.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f7517ae122d5fca8689f1b2e77a87ebea4ca02a
+--- /dev/null
++++ b/src/kernel/geom/shader_palette.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++#include "kernel/globals.h"
++
++CCL_NAMESPACE_BEGIN
++
++/* Triangle slots, rather than the primary shader ID, distinguish two faces
++ * whose base material happens to be the same but whose instance bindings differ. */
++ccl_device_inline int triangle_shader(KernelGlobals kg, const int prim, const int object)
++{
++  const int base = kernel_data_fetch(tri_shader, prim);
++  if (object == OBJECT_NONE) return base;
++  const ccl_global KernelObject &data = kernel_data_fetch(objects, object);
++  if (data.shader_palette_offset < 0) return base;
++  const int slot = kernel_data_fetch(tri_shader_slot, prim);
++  kernel_assert(slot >= 0 && slot < data.shader_palette_size);
++  return kernel_data_fetch(object_shader_palette, data.shader_palette_offset + slot) |
++         (base & SHADER_SMOOTH_NORMAL);
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/geom/triangle.h b/src/kernel/geom/triangle.h
+index 25f857f2994a9fdd1389b9ec833205ccf47cd681..32d228ddc8a72a0a05ff0ac13e119b0903f3652a 100644
+--- a/src/kernel/geom/triangle.h
++++ b/src/kernel/geom/triangle.h
+@@ -10,6 +10,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/globals.h"
+ 
+ #include "kernel/geom/attribute.h"
+@@ -92,7 +94,7 @@ ccl_device_inline void triangle_point_normal(KernelGlobals kg,
+     *Ng = normalize(cross(v1 - v0, v2 - v0));
+   }
+   /* shader */
+-  *shader = kernel_data_fetch(tri_shader, prim);
++  *shader = triangle_shader(kg, prim, object);
+ }
+ 
+ /* Triangle vertex locations */
+diff --git a/src/kernel/geom/triangle_intersect.h b/src/kernel/geom/triangle_intersect.h
+index fe30fc8399b3415f480131a8a2f32abda77b99b8..b1d6f46d2376773f7c576f7597f06ff9823bb74f 100644
+--- a/src/kernel/geom/triangle_intersect.h
++++ b/src/kernel/geom/triangle_intersect.h
+@@ -10,6 +10,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/globals.h"
+ 
+ #include "kernel/geom/geom_intersect.h"
+@@ -167,7 +169,7 @@ ccl_device_inline float3 triangle_point_from_uv_and_verts(KernelGlobals kg,
+ 
+ ccl_device_inline void triangle_shader_setup(KernelGlobals kg, ccl_private ShaderData *sd)
+ {
+-  sd->shader = kernel_data_fetch(tri_shader, sd->prim);
++  sd->shader = triangle_shader(kg, sd->prim, sd->object);
+ 
+   sd->P = triangle_point_from_uv(kg, sd, sd->prim, sd->u, sd->v);
+ 
+diff --git a/src/kernel/integrator/mnee.h b/src/kernel/integrator/mnee.h
+index 61b79abe8cf8ab00ca77932d870ebb9331eabbb7..141f3f80b80fc70cf64e222a4c732743776e802e 100644
+--- a/src/kernel/integrator/mnee.h
++++ b/src/kernel/integrator/mnee.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/geom/motion_triangle.h"
+ #include "kernel/geom/shader_data.h"
+ #include "kernel/geom/triangle.h"
+@@ -144,7 +146,7 @@ ccl_device_inline void mnee_setup_manifold_vertex(KernelGlobals kg,
+   sd_vtx->u = isect->u;
+   sd_vtx->v = isect->v;
+ 
+-  sd_vtx->shader = kernel_data_fetch(tri_shader, sd_vtx->prim);
++  sd_vtx->shader = triangle_shader(kg, sd_vtx->prim, sd_vtx->object);
+ 
+   float3 verts[3];
+   float3 normals[3];
+diff --git a/src/kernel/light/triangle.h b/src/kernel/light/triangle.h
+index 89da4886f779a83b8293e7a56189a91161611a98..a30a61f85c58180840ef01535e37c618764a9964 100644
+--- a/src/kernel/light/triangle.h
++++ b/src/kernel/light/triangle.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/globals.h"
+ 
+ #include "kernel/light/common.h"
+@@ -152,7 +154,7 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
+   }
+ 
+   /* Do not draw samples from the side without MIS. */
+-  ls->shader = kernel_data_fetch(tri_shader, prim);
++  ls->shader = triangle_shader(kg, prim, object);
+   const float distance_to_plane = dot(N0, V[0] - P) / dot(N0, N0);
+   const int ls_shader_flag = kernel_data_fetch(shaders, ls->shader & SHADER_MASK).flags;
+   if (!in_volume_segment &&
+diff --git a/src/kernel/svm/bevel.h b/src/kernel/svm/bevel.h
+index 0e4989dad532765577312b7de57784a5bfaf72c8..80c87546eb05598bde14f0501f1b1b8cce7f3368 100644
+--- a/src/kernel/svm/bevel.h
++++ b/src/kernel/svm/bevel.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/geom/shader_palette.h"
++
+ #include "kernel/bvh/bvh.h"
+ 
+ #include "kernel/geom/motion_triangle.h"
+@@ -236,7 +238,7 @@ ccl_device float3 svm_bevel(
+       /* Compute smooth normal. */
+       float3 N = hit_Ng;
+       const int prim = isect.hits[hit].prim;
+-      const int shader = kernel_data_fetch(tri_shader, prim);
++      const int shader = triangle_shader(kg, prim, object);
+ 
+       if (shader & SHADER_SMOOTH_NORMAL) {
+         const float u = isect.hits[hit].u;
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index d03fdf94cbd0d885b4ce4f3ee05a3743baf4a136..d3de0ade8d92103522a2b2c21cf79a7d4ad762c1 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1529,6 +1529,9 @@ struct KernelObject {
+   uint receiver_light_set;
+   uint64_t shadow_set_membership;
+   uint blocker_shadow_set;
++  /* Optional per-object material slots for shared triangle geometry. */
++  int shader_palette_offset;
++  int shader_palette_size;
+ };
+ static_assert_align(KernelObject, 16);
+ 
+diff --git a/src/scene/devicescene.cpp b/src/scene/devicescene.cpp
+index 56a0956b7ba8e8b0907aa73436f9050a8b2ed7a1..9b5eb0ff242f7c50b5c8dac2470405dd9f8cba2d 100644
+--- a/src/scene/devicescene.cpp
++++ b/src/scene/devicescene.cpp
+@@ -18,6 +18,7 @@ DeviceScene::DeviceScene(Device *device)
+       prim_object(device, "prim_object", MEM_GLOBAL),
+       prim_time(device, "prim_time", MEM_GLOBAL),
+       tri_shader(device, "tri_shader", MEM_GLOBAL),
++      tri_shader_slot(device, "tri_shader_slot", MEM_GLOBAL),
+       tri_vindex(device, "tri_vindex", MEM_GLOBAL),
+       tri_verts(device, "tri_verts", MEM_GLOBAL),
+       curves(device, "curves", MEM_GLOBAL),
+@@ -26,6 +27,7 @@ DeviceScene::DeviceScene(Device *device)
+       points(device, "points", MEM_GLOBAL),
+       points_shader(device, "points_shader", MEM_GLOBAL),
+       objects(device, "objects", MEM_GLOBAL),
++      object_shader_palette(device, "object_shader_palette", MEM_GLOBAL),
+       object_motion_pass(device, "object_motion_pass", MEM_GLOBAL),
+       object_motion(device, "object_motion", MEM_GLOBAL),
+       object_flag(device, "object_flag", MEM_GLOBAL),
+diff --git a/src/scene/devicescene.h b/src/scene/devicescene.h
+index 0979d0280b9d70281a862574aeef166e2e8c8fe6..b34eb2cc4ba8472e1803aa0fd302f3d73bde70fb 100644
+--- a/src/scene/devicescene.h
++++ b/src/scene/devicescene.h
+@@ -27,6 +27,7 @@ class DeviceScene {
+ 
+   /* mesh */
+   device_vector<uint> tri_shader;
++  device_vector<int> tri_shader_slot;
+   device_vector<packed_uint3> tri_vindex;
+   device_vector<packed_float3> tri_verts;
+ 
+@@ -40,6 +41,7 @@ class DeviceScene {
+ 
+   /* objects */
+   device_vector<KernelObject> objects;
++  device_vector<int> object_shader_palette;
+   device_vector<Transform> object_motion_pass;
+   device_vector<DecomposedTransform> object_motion;
+   device_vector<uint> object_flag;
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 7fb2e6b7c52caf5c289248d3f9f5563f31492c9c..fb65c9b1592e1ad5379bf928637b280b760702f1 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -654,6 +654,7 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
+       dscene->tri_verts.tag_realloc();
+       dscene->tri_vindex.tag_realloc();
+       dscene->tri_shader.tag_realloc();
++      dscene->tri_shader_slot.tag_realloc();
+     }
+ 
+     if (device_update_flags & CURVE_DATA_NEED_REALLOC) {
+@@ -740,6 +741,7 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
+     /* if anything else than vertices or shaders are modified, we would need to reallocate, so
+      * these are the only arrays that can be updated */
+     dscene->tri_shader.tag_modified();
++    dscene->tri_shader_slot.tag_modified();
+   }
+ 
+   if (device_update_flags & DEVICE_CURVE_DATA_MODIFIED) {
+@@ -1289,6 +1291,7 @@ void GeometryManager::device_update(Device *device,
+   dscene->prim_object.clear_modified();
+   dscene->prim_time.clear_modified();
+   dscene->tri_shader.clear_modified();
++  dscene->tri_shader_slot.clear_modified();
+   dscene->tri_vindex.clear_modified();
+   dscene->tri_verts.clear_modified();
+   dscene->curves.clear_modified();
+@@ -1324,6 +1327,7 @@ void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool forc
+   dscene->prim_object.free_if_need_realloc(force_free);
+   dscene->prim_time.free_if_need_realloc(force_free);
+   dscene->tri_shader.free_if_need_realloc(force_free);
++  dscene->tri_shader_slot.free_if_need_realloc(force_free);
+   dscene->tri_vindex.free_if_need_realloc(force_free);
+   dscene->tri_verts.free_if_need_realloc(force_free);
+   dscene->curves.free_if_need_realloc(force_free);
+diff --git a/src/scene/geometry_mesh.cpp b/src/scene/geometry_mesh.cpp
+index a5620b627511472c1bbe828f789555803c06dc26..78bf9fcc5802fd59c6396594fcfbc931740b4b40 100644
+--- a/src/scene/geometry_mesh.cpp
++++ b/src/scene/geometry_mesh.cpp
+@@ -59,10 +59,13 @@ void GeometryManager::device_update_mesh(Device * /*unused*/,
+     progress.set_status("Updating Mesh", "Computing normals");
+ 
+     uint *tri_shader = dscene->tri_shader.alloc(tri_size);
++    int *tri_slots = scene->object_manager->have_shader_palettes ? dscene->tri_shader_slot.alloc(tri_size) : nullptr;
++    if (!tri_slots) dscene->tri_shader_slot.free();
+     packed_uint3 *tri_vindex = dscene->tri_vindex.alloc(tri_size);
+ 
+     const bool copy_all_data = dscene->tri_shader.need_realloc() ||
+-                               dscene->tri_vindex.need_realloc();
++                               dscene->tri_vindex.need_realloc() ||
++                               (tri_slots && dscene->tri_shader_slot.need_realloc());
+ 
+     for (Geometry *geom : scene->geometry) {
+       if (geom->is_mesh() || geom->is_volume()) {
+@@ -71,7 +74,7 @@ void GeometryManager::device_update_mesh(Device * /*unused*/,
+         if (mesh->shader_is_modified() || mesh->smooth_is_modified() ||
+             mesh->triangles_is_modified() || copy_all_data)
+         {
+-          mesh->pack_shaders(scene, &tri_shader[mesh->prim_offset]);
++          mesh->pack_shaders(scene, &tri_shader[mesh->prim_offset], tri_slots ? &tri_slots[mesh->prim_offset] : nullptr);
+         }
+ 
+         if (mesh->triangles_is_modified() || copy_all_data) {
+@@ -88,6 +91,7 @@ void GeometryManager::device_update_mesh(Device * /*unused*/,
+     progress.set_status("Updating Mesh", "Copying Mesh to device");
+ 
+     dscene->tri_shader.copy_to_device_if_modified();
++    if (tri_slots) dscene->tri_shader_slot.copy_to_device_if_modified();
+     dscene->tri_vindex.copy_to_device_if_modified();
+   }
+ 
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index 441b75633a3cd79c9d088f2d18ea48f615e98d1f..47cabf7cc0b759102a7b8e7ad35cfdc1c0e972ad 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -613,9 +613,8 @@ void LightManager::device_update_distribution(Device * /*unused*/,
+ 
+     for (int i = 0; i < mesh_num_triangles; i++) {
+       const int shader_index = mesh->get_shader()[i];
+-      Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
+-                           static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
+-                           scene->default_surface;
++      Shader *shader = object->effective_shader(shader_index);
++      if (!shader) shader = scene->default_surface;
+ 
+       if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
+         num_triangles++;
+@@ -661,9 +660,8 @@ void LightManager::device_update_distribution(Device * /*unused*/,
+     const packed_float3 *mesh_positions = mesh->get_position();
+     for (size_t i = 0; i < mesh_num_triangles; i++) {
+       const int shader_index = mesh->get_shader()[i];
+-      Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
+-                           static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
+-                           scene->default_surface;
++      Shader *shader = object->effective_shader(shader_index);
++      if (!shader) shader = scene->default_surface;
+ 
+       if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
+         distribution[offset].totarea = totarea;
+@@ -869,8 +867,8 @@ static void light_tree_triangle_emitter_copy_to_device(const LightTreeFlatten &f
+   assert(emitter.is_triangle());
+   Object *object = flatten.scene->objects[emitter.object_id];
+   Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+-  Shader *shader = static_cast<Shader *>(
+-      mesh->get_used_shaders()[mesh->get_shader()[emitter.prim_id]]);
++  Shader *shader = object->effective_shader(mesh->get_shader()[emitter.prim_id]);
++  if (!shader) shader = flatten.scene->default_surface;
+ 
+   kemitter.energy = emitter.measure.energy;
+   kemitter.theta_o = emitter.measure.bcone.theta_o;
+diff --git a/src/scene/light_tree.cpp b/src/scene/light_tree.cpp
+index 4c5deb70b1f27087f9ed66b2405082b8eae00050..86355303b4fb260ad75996428ad56d26716b88c0 100644
+--- a/src/scene/light_tree.cpp
++++ b/src/scene/light_tree.cpp
+@@ -9,9 +9,16 @@
+ 
+ #include "util/math_fast.h"
+ #include "util/progress.h"
++#include <unordered_set>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++static LightTreeMeshKey light_tree_mesh_key(Object *object)
++{
++  return {static_cast<Mesh *>(object->get_geometry()), object->shader_palette_device_offset,
++          object->get_light_set_membership()};
++}
++
+ float OrientationBounds::calculate_measure() const
+ {
+   if (this->is_empty()) {
+@@ -95,7 +102,8 @@ LightTreeEmitter::LightTreeEmitter(Scene *scene,
+     float3 vertices[3];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+     const Mesh::Triangle triangle = mesh->get_triangle(prim_id);
+-    Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
++    Shader *shader = object->effective_shader(mesh->get_shader()[prim_id]);
++    if (!shader) shader = scene->default_surface;
+ 
+     const packed_float3 *mesh_positions = mesh->get_position();
+     for (int i = 0; i < 3; i++) {
+@@ -255,23 +263,19 @@ static void sort_leaf(const int start, const int end, LightTreeEmitter *emitters
+   }
+ }
+ 
+-bool LightTree::triangle_usable_as_light(Mesh *mesh, const int prim_id)
++bool LightTree::triangle_usable_as_light(Object *object, const int prim_id)
+ {
++  Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+   const int shader_index = mesh->get_shader()[prim_id];
+-  if (shader_index < mesh->get_used_shaders().size()) {
+-    Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[shader_index]);
+-    if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
+-      return true;
+-    }
+-  }
+-  return false;
++  const Shader *shader = object->effective_shader(shader_index);
++  return shader && shader->emission_sampling != EMISSION_SAMPLING_NONE;
+ }
+ 
+ void LightTree::add_mesh(Scene *scene, Mesh *mesh, const int object_id)
+ {
+   const size_t mesh_num_triangles = mesh->num_triangles();
+   for (size_t i = 0; i < mesh_num_triangles; i++) {
+-    if (triangle_usable_as_light(mesh, i)) {
++    if (triangle_usable_as_light(scene->objects[object_id], i)) {
+       emitters_.emplace_back(scene, i, object_id);
+     }
+   }
+@@ -324,9 +328,10 @@ LightTree::LightTree(Scene *scene,
+ 
+       /* Only count unique meshes. */
+       Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+-      auto map_it = offset_map_.find(mesh);
++      const auto key = light_tree_mesh_key(object);
++      auto map_it = offset_map_.find(key);
+       if (map_it == offset_map_.end()) {
+-        offset_map_[mesh] = num_triangles;
++        offset_map_[key] = num_triangles;
+         num_triangles += mesh->num_triangles();
+       }
+     }
+@@ -350,15 +355,18 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   const int num_distant_lights = distant_lights_.size();
+ 
+   /* Create a node for each mesh light, and keep track of unique mesh lights. */
+-  std::unordered_map<Mesh *, std::tuple<LightTreeNode *, int, int, bool>> unique_mesh;
++  std::unordered_map<LightTreeMeshKey, std::tuple<LightTreeNode *, int, int, bool>, LightTreeMeshKeyHash> unique_mesh;
++  std::unordered_set<Mesh *> live_meshes;
+   uint *object_offsets = dscene->object_lookup_offset.alloc(scene->objects.size());
+   emitters_.reserve(num_triangles + num_local_lights + num_distant_lights);
+   for (LightTreeEmitter &emitter : mesh_lights_) {
+     Object *object = scene->objects[emitter.object_id];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
++    const auto key = light_tree_mesh_key(object);
++    live_meshes.insert(mesh);
+     emitter.root = create_node(LightTreeMeasure::empty, 0);
+ 
+-    auto map_it = unique_mesh.find(mesh);
++    auto map_it = unique_mesh.find(key);
+     if (map_it == unique_mesh.end()) {
+       const int start = emitters_.size();
+       const auto *cached = mesh_cache_ ? mesh_cache_->find(scene, mesh, emitter.object_id) : nullptr;
+@@ -370,17 +378,17 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+       }
+       const int end = emitters_.size();
+ 
+-      unique_mesh[mesh] = std::make_tuple(emitter.root.get(), start, end, cached != nullptr);
++      unique_mesh[key] = std::make_tuple(emitter.root.get(), start, end, cached != nullptr);
+       emitter.root->object_id = emitter.object_id;
+     }
+     else {
+       emitter.root->make_instance(std::get<0>(map_it->second), emitter.object_id);
+     }
+-    object_offsets[emitter.object_id] = offset_map_[mesh];
++    object_offsets[emitter.object_id] = offset_map_.at(key);
+   }
+ 
+   if (mesh_cache_) {
+-    mesh_cache_->prune([&](Mesh *mesh) { return unique_mesh.find(mesh) != unique_mesh.end(); });
++    mesh_cache_->prune([&](Mesh *mesh) { return live_meshes.find(mesh) != live_meshes.end(); });
+   }
+ 
+   /* Build a subtree for each unique mesh light. */
+@@ -404,7 +412,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+     for (const auto &item : unique_mesh) {
+       if (!std::get<3>(item.second)) {
+         const auto *node = std::get<0>(item.second);
+-        mesh_cache_->store(scene, item.first, node->object_id, node, emitters_,
++        mesh_cache_->store(scene, item.first.mesh, node->object_id, node, emitters_,
+                            std::get<1>(item.second), std::get<2>(item.second), progress_);
+       }
+       if (progress_.get_cancel()) {
+@@ -418,7 +426,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+     Object *object = scene->objects[emitter.object_id];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+ 
+-    LightTreeNode *reference = std::get<0>(unique_mesh.find(mesh)->second);
++    LightTreeNode *reference = std::get<0>(unique_mesh.at(light_tree_mesh_key(object)));
+     /* Keep the shared reference local until every parallel instance measure is
+      * calculated. Root measures are assigned in the serial loop below. */
+     emitter.measure = reference->measure;
+@@ -434,7 +442,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+       emitter.measure.reset();
+       size_t const mesh_num_triangles = mesh->num_triangles();
+       for (size_t i = 0; i < mesh_num_triangles; i++) {
+-        if (triangle_usable_as_light(mesh, i)) {
++        if (triangle_usable_as_light(object, i)) {
+           emitter.measure.add(LightTreeEmitter(scene, i, emitter.object_id, true).measure);
+         }
+       }
+diff --git a/src/scene/light_tree.h b/src/scene/light_tree.h
+index 82ba44bde814b2d3925c22fd2496108bc74197a7..1443247b38138a0ea8c913e279e1eb0a7a4d93c2 100644
+--- a/src/scene/light_tree.h
++++ b/src/scene/light_tree.h
+@@ -400,6 +400,20 @@ struct LightTreeNode {
+  * and considers additional orientation and energy information */
+ class LightTreeMeshCache;
+ 
++/* The triangle shape can be shared while its emission and linking differ. */
++struct LightTreeMeshKey {
++  Mesh *mesh;
++  int palette;
++  uint64_t membership;
++  bool operator==(const LightTreeMeshKey &b) const
++  { return mesh == b.mesh && palette == b.palette && membership == b.membership; }
++};
++struct LightTreeMeshKeyHash {
++  size_t operator()(const LightTreeMeshKey &key) const
++  { return std::hash<Mesh *>{}(key.mesh) ^ (std::hash<uint64_t>{}(key.membership) << 1) ^
++           (std::hash<int>{}(key.palette) << 2); }
++};
++
+ class LightTree {
+   unique_ptr<LightTreeNode> root_;
+ 
+@@ -410,7 +424,7 @@ class LightTree {
+   vector<LightTreeEmitter> distant_lights_;
+   vector<LightTreeEmitter> mesh_lights_;
+ 
+-  std::unordered_map<Mesh *, int> offset_map_;
++  std::unordered_map<LightTreeMeshKey, int, LightTreeMeshKeyHash> offset_map_;
+ 
+   Progress &progress_;
+ 
+@@ -480,7 +494,7 @@ class LightTree {
+                     int &split_dim);
+ 
+   /* Check whether the light tree can use this triangle as light-emissive. */
+-  bool triangle_usable_as_light(Mesh *mesh, const int prim_id);
++  bool triangle_usable_as_light(Object *object, const int prim_id);
+ 
+   /* Add all the emissive triangles of a mesh to the light tree. */
+   void add_mesh(Scene *scene, Mesh *mesh, const int object_id);
+diff --git a/src/scene/light_tree_cache.cpp b/src/scene/light_tree_cache.cpp
+index dbbaa760e91225b7262861adab35b18a7088c0cf..72fcedf0dd5188f80f1f9c3817f6d3533bfa1d09 100644
+--- a/src/scene/light_tree_cache.cpp
++++ b/src/scene/light_tree_cache.cpp
+@@ -217,8 +217,8 @@ MeshKey mesh_key(Scene *scene, Mesh *mesh, int object_id)
+   key.triangles = mesh->num_triangles();
+   key.transformed = mesh->transform_applied;
+   key.negative = key.transformed && transform_negative_scale(object->get_tfm());
+-  key.shaders.reserve(mesh->get_used_shaders().size());
+-  for (Node *node : mesh->get_used_shaders()) {
++  key.shaders.reserve(object->effective_shader_palette().size());
++  for (Node *node : object->effective_shader_palette()) {
+     const Shader *shader = static_cast<const Shader *>(node);
+     key.shaders.push_back({int(shader->emission_sampling), shader->emission_estimate.x,
+                            shader->emission_estimate.y, shader->emission_estimate.z});
+@@ -256,7 +256,7 @@ struct LightTreeMeshCache::Entry {
+ };
+ 
+ struct LightTreeMeshCache::Impl {
+-  std::unordered_map<Mesh *, Entry> entries;
++  std::unordered_multimap<Mesh *, Entry> entries;
+   size_t bytes = 0, hits = 0, misses = 0, evictions = 0;
+   size_t admission_skips = 0, view_nodes = 0;
+   size_t layout_invalidations = 0;
+@@ -268,7 +268,7 @@ struct LightTreeMeshCache::Impl {
+   size_t budget = configured_budget();
+   bool compact = false;
+ 
+-  void erase(std::unordered_map<Mesh *, Entry>::iterator it)
++  void erase(std::unordered_multimap<Mesh *, Entry>::iterator it)
+   {
+     bytes -= it->second.bytes();
+     entries.erase(it);
+@@ -340,9 +340,9 @@ const LightTreeMeshCache::Entry *LightTreeMeshCache::find(Scene *scene, Mesh *me
+   if (!i.enabled) {
+     return nullptr;
+   }
+-  auto found = i.entries.find(mesh);
+-  if (found != i.entries.end()) {
+-    const MeshKey current = mesh_key(scene, mesh, object_id);
++  const MeshKey current = mesh_key(scene, mesh, object_id);
++  auto range = i.entries.equal_range(mesh);
++  for (auto found = range.first; found != range.second;) {
+     if (found->second.key == current) {
+       found->second.stamp = ++i.stamp;
+       found->second.borrowed_build = i.build;
+@@ -361,7 +361,14 @@ const LightTreeMeshCache::Entry *LightTreeMeshCache::find(Scene *scene, Mesh *me
+                    old.membership != current.membership ? "true" : "false",
+                    old.transformed != current.transformed || old.negative != current.negative ? "true" : "false");
+     }
+-    i.erase(found);
++    // A shape revision cannot be restored by a palette edit. Remove obsolete
++    // unborrowed shape entries while retaining other live emission palettes.
++    if ((found->second.key.revision != current.revision ||
++         found->second.key.vertices != current.vertices || found->second.key.triangles != current.triangles) &&
++        found->second.borrowed_build != i.build) {
++      auto stale = found++;i.erase(stale);
++    }
++    else ++found;
+   }
+   ++i.misses;
+   return nullptr;
+@@ -443,6 +450,12 @@ void LightTreeMeshCache::store(Scene *scene,
+   }
+   Entry entry;
+   entry.key = mesh_key(scene, mesh, object_id);
++  /* Different objects can resolve to the same emission distribution. A
++   * borrowed entry is immutable until its builder and flattening finish. */
++  const auto range = i.entries.equal_range(mesh);
++  for (auto it = range.first; it != range.second; ++it) {
++    if (it->second.key == entry.key) return;
++  }
+   const size_t fixed_bytes = sizeof(Entry) + entry.key.shaders.capacity() * sizeof(ShaderKey) +
+                              primitives * sizeof(CachedTriangle);
+   if (fixed_bytes >= cache_budget) {
+@@ -554,10 +567,8 @@ void LightTreeMeshCache::store(Scene *scene,
+   if (!i.make_room(entry.bytes() + cache_scratch)) return;
+   entry.stamp = ++i.stamp;
+   const size_t bytes = entry.bytes();
+-  const auto inserted = i.entries.emplace(mesh, std::move(entry));
+-  if (inserted.second) {
+-    i.bytes += bytes;
+-  }
++  i.entries.emplace(mesh, std::move(entry));
++  i.bytes += bytes;
+ }
+ 
+ void LightTreeMeshCache::prune(const std::function<bool(Mesh *)> &is_live)
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index efe0c51db52989e505c877f39543aa238dfd6ff3..d64a008d812ba93053aedc44f0772f08e72e7a55 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -944,7 +944,7 @@ void Mesh::update_tangents(Scene *scene, bool undisplaced, Progress *progress)
+   }
+ }
+ 
+-void Mesh::pack_shaders(Scene *scene, uint *tri_shader)
++void Mesh::pack_shaders(Scene *scene, uint *tri_shader, int *slots)
+ {
+   uint shader_id = 0;
+   uint last_shader = -1;
+@@ -973,6 +973,7 @@ void Mesh::pack_shaders(Scene *scene, uint *tri_shader)
+     }
+ 
+     tri_shader[i] = shader_id;
++    if (slots) slots[i] = new_shader;
+   }
+ }
+ 
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index b2c2c70f309b4a7e401f70ce321985995e043746..5df0b3ea112b4ec74b6b5bdb9c030b123339034b 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -244,7 +244,7 @@ class Mesh : public Geometry {
+ 
+   void get_uv_tiles(ustring map, unordered_set<int> &tiles) override;
+ 
+-  void pack_shaders(Scene *scene, uint *shader);
++  void pack_shaders(Scene *scene, uint *shader, int *slots);
+   void pack_triangles(packed_uint3 *tri_vindex);
+ 
+   bool has_motion_blur() const override;
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index d16464b7bae808bc69546dfac3be18e2536a069b..eb3e537e9a901613c53b28094dbfc86e7a21d751 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -29,6 +29,7 @@
+ #include "util/vector.h"
+ 
+ #include "kernel/geom/attribute.h"
++#include <stdexcept>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -77,6 +78,7 @@ NODE_DEFINE(Object)
+   NodeType *type = NodeType::add("object", create);
+ 
+   SOCKET_NODE(geometry, "Geometry", Geometry::get_node_base_type());
++  SOCKET_NODE_ARRAY(shader_palette, "Material Slots", Shader::get_node_type());
+   SOCKET_TRANSFORM(tfm, "Transform", transform_identity());
+   SOCKET_UINT(visibility, "Visibility", PATH_RAY_VISIBILITY_OBJECT_ALL);
+   SOCKET_COLOR(color, "Color", zero_float3());
+@@ -122,6 +124,21 @@ Object::Object() : Node(get_node_type())
+   intersects_volume = false;
+ }
+ 
++const array<Node *> &Object::effective_shader_palette() const
++{
++  return shader_palette.empty() ? geometry->get_used_shaders() : shader_palette;
++}
++
++Shader *Object::effective_shader(const int slot) const
++{
++  const auto &palette = effective_shader_palette();
++  if (slot < 0 || size_t(slot) >= palette.size()) {
++    if (shader_palette.empty()) return nullptr;
++    throw std::runtime_error("Internal object material slot exceeds its shader palette");
++  }
++  return static_cast<Shader *>(palette[slot]);
++}
++
+ Object::~Object() = default;
+ 
+ void Object::update_motion(const Scene::MotionType need_motion)
+@@ -238,6 +255,10 @@ void Object::tag_update(Scene *scene)
+   }
+ 
+   if (geometry) {
++    if (shader_palette_is_modified()) {
++      scene->geometry_manager->tag_update(scene, GeometryManager::GEOMETRY_MODIFIED);
++      scene->light_manager->tag_update(scene, LightManager::EMISSIVE_MESH_MODIFIED);
++    }
+     if (tfm_is_modified() || motion_is_modified()) {
+       flag |= ObjectManager::TRANSFORM_MODIFIED;
+       if (geometry->has_volume) {
+@@ -249,7 +270,7 @@ void Object::tag_update(Scene *scene)
+       flag |= ObjectManager::VISIBILITY_MODIFIED;
+     }
+ 
+-    for (Node *node : geometry->get_used_shaders()) {
++    for (Node *node : effective_shader_palette()) {
+       Shader *shader = static_cast<Shader *>(node);
+       if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
+         scene->light_manager->tag_update(scene, LightManager::EMISSIVE_MESH_MODIFIED);
+@@ -421,7 +442,7 @@ bool Object::usable_as_light() const
+    * iterate all geometry shaders twice (when counting and when calculating
+    * triangle area.
+    */
+-  for (Node *node : geom->get_used_shaders()) {
++  for (Node *node : effective_shader_palette()) {
+     Shader *shader = static_cast<Shader *>(node);
+     if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
+       return true;
+@@ -734,6 +755,8 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+                          static_cast<Mesh *>(geom)->num_triangles() :
+                          geom->is_hair() ? static_cast<Hair *>(geom)->num_curves() : 0;
+   kobject.attribute_map_offset = 0;
++  kobject.shader_palette_offset = ob->shader_palette_device_offset;
++  kobject.shader_palette_size = int(ob->get_shader_palette().size());
+ 
+   if (ob->asset_name_is_modified() || update_all) {
+     const uint32_t hash_name = util_murmur_hash3(ob->name.c_str(), ob->name.length(), 0);
+@@ -825,8 +848,89 @@ void ObjectManager::device_update_prim_offsets(Device * /*device*/,
+   dscene->object_prim_offset.clear_modified();
+ }
+ 
++bool ObjectManager::device_update_shader_palettes(DeviceScene *dscene, Scene *scene,
++                                                 const bool update_packed_objects)
++{
++  map<vector<int>, int> palettes;
++  map<Mesh *, int> required_slots;
++  vector<int> desired;
++  bool offsets_changed = false;
++  have_shader_palettes = false;
++  for (Object *object : scene->objects) {
++    const auto &source = object->get_shader_palette();
++    int offset = -1;
++    if (!source.empty()) {
++      if (!object->get_geometry()->is_mesh()) {
++        throw std::runtime_error("Object material slots require triangle geometry");
++      }
++      auto *mesh = static_cast<Mesh *>(object->get_geometry());
++      auto [required, inserted] = required_slots.emplace(mesh, 0);
++      if (inserted) {
++        const auto include_slot = [&](int slot) {
++          if (slot < 0 || slot == INT_MAX) throw std::runtime_error("Invalid owned mesh shader slot");
++          required->second = std::max(required->second, slot + 1);
++        };
++        for (int slot : mesh->get_shader()) include_slot(slot);
++        for (int slot : mesh->get_subd_shader()) include_slot(slot);
++      }
++      if (source.size() < size_t(required->second)) {
++        throw std::runtime_error("Object material slots do not cover the shared mesh");
++      }
++      vector<int> ids;
++      ids.reserve(source.size());
++      for (Node *node : source) {
++        if (!node || node->type != Shader::get_node_type()) {
++          throw std::runtime_error("Invalid owned object shader palette");
++        }
++        ids.push_back(scene->shader_manager->get_shader_id(static_cast<Shader *>(node)));
++      }
++      auto [entry, added] = palettes.emplace(ids, int(desired.size()));
++      if (added) desired.insert(desired.end(), ids.begin(), ids.end());
++      offset = entry->second;
++      have_shader_palettes = true;
++    }
++    offsets_changed |= object->shader_palette_device_offset != offset;
++    object->shader_palette_device_offset = offset;
++  }
++  if (desired.empty()) {
++    dscene->object_shader_palette.free();
++  }
++  else {
++    const bool changed = dscene->object_shader_palette.size() != desired.size() ||
++                         dscene->object_shader_palette.need_realloc() ||
++                         !std::equal(desired.begin(), desired.end(), dscene->object_shader_palette.data());
++    if (changed) {
++      int *data = dscene->object_shader_palette.alloc(desired.size());
++      std::copy(desired.begin(), desired.end(), data);
++      dscene->object_shader_palette.tag_modified();
++      dscene->object_shader_palette.copy_to_device();
++      dscene->object_shader_palette.clear_modified();
++    }
++  }
++  if (offsets_changed) {
++    dscene->objects.tag_modified();
++    if (update_packed_objects) {
++      if (dscene->objects.size() != scene->objects.size() || dscene->objects.need_realloc()) {
++        throw std::runtime_error("Shader-only palette update has no complete object buffer");
++      }
++      KernelObject *packed = dscene->objects.data();
++      for (Object *object : scene->objects) {
++        if (object->index < 0 || size_t(object->index) >= dscene->objects.size()) {
++          throw std::runtime_error("Shader-only palette update has an invalid object index");
++        }
++        packed[object->index].shader_palette_offset = object->shader_palette_device_offset;
++        packed[object->index].shader_palette_size = int(object->get_shader_palette().size());
++      }
++      dscene->objects.copy_to_device();
++      dscene->objects.clear_modified();
++    }
++  }
++  return offsets_changed;
++}
++
+ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, Progress &progress)
+ {
++  const bool palette_offsets_changed = device_update_shader_palettes(dscene, scene, false);
+   const size_t previous_motion_size = dscene->object_motion.size();
+   UpdateObjectTransformState state;
+   state.need_motion = scene->need_motion();
+@@ -879,7 +983,7 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+    * Rebuild every decomposition when storage changes; unchanged-size layouts
+    * are handled by checking each object's previous motion offset above. */
+   const bool update_all = dscene->objects.need_realloc() || dscene->object_motion.need_realloc() ||
+-                          previous_motion_size != dscene->object_motion.size();
++                          previous_motion_size != dscene->object_motion.size() || palette_offsets_changed;
+ 
+   /* Parallel object update, with grain size to avoid too much threading overhead
+    * for individual objects. */
+@@ -950,6 +1054,8 @@ void ObjectManager::device_update(Device *device,
+   device_free(device, dscene, false);
+ 
+   if (scene->objects.empty()) {
++    have_shader_palettes = false;
++    dscene->object_shader_palette.free();
+     return;
+   }
+ 
+@@ -1284,6 +1390,7 @@ void ObjectManager::device_free(Device * /*unused*/, DeviceScene *dscene, bool f
+   dscene->object_motion.free_if_need_realloc(force_free);
+   dscene->object_flag.free_if_need_realloc(force_free);
+   dscene->object_prim_offset.free_if_need_realloc(force_free);
++  dscene->object_shader_palette.free_if_need_realloc(force_free);
+ }
+ 
+ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, Progress &progress)
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 62e4776d9a0ad272fe73baa955bf0005b98b44e0..0919608e986c42b6dca44c6560cbed633d4e9f74 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -39,6 +39,11 @@ class Object : public Node {
+   NODE_DECLARE
+ 
+   NODE_SOCKET_API(Geometry *, geometry)
++  NODE_SOCKET_API_ARRAY(array<Node *>, shader_palette)
++  /* Updated with the deduplicated device palette before light construction. */
++  int shader_palette_device_offset = -1;
++  const array<Node *> &effective_shader_palette() const;
++  Shader *effective_shader(int slot) const;
+   /* Use base API because we need custom setter for tfm. */
+   NODE_SOCKET_API_BASE(Transform, tfm, "tfm")
+   BoundBox bounds;
+@@ -163,6 +168,7 @@ class ObjectManager {
+   };
+ 
+   bool need_flags_update;
++  bool have_shader_palettes = false;
+ 
+   ObjectManager();
+   ~ObjectManager();
+@@ -171,6 +177,7 @@ class ObjectManager {
+ 
+   void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress &progress);
+   void device_update_transforms(DeviceScene *dscene, Scene *scene, Progress &progress);
++  bool device_update_shader_palettes(DeviceScene *dscene, Scene *scene, bool update_packed_objects);
+   void device_update_prim_offsets(Device *device, DeviceScene *dscene, Scene *scene);
+ 
+   void device_update_flags(Device *device,
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index b5d5d08f764d7c7cf1af16c0f895cc7b61a93f03..ebffcb162aebee1d171b7e5aea6ab785a5918d7c 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -215,10 +215,18 @@ void Scene::device_update(Device *device_, Progress &progress)
+     }
+ 
+     /* Compile shaders and get information about features they used. */
++    const bool update_object_palettes = shader_manager->need_update() && object_manager->have_shader_palettes;
+     progress.set_status("Updating Shaders");
+     osl_manager->device_update_pre(device, this);
+     shader_manager->device_update_pre(device, &dscene, this, progress);
+ 
++    /* Shader IDs can change without an object or geometry edit. Refresh only
++     * material slots here. Repacking transforms would clear cached attribute,
++     * position and normal offsets without a geometry update to restore them. */
++    if (update_object_palettes && !object_manager->need_update()) {
++      object_manager->device_update_shader_palettes(&dscene, this, true);
++    }
++
+     if (progress.get_cancel() || device->have_error()) {
+       return;
+     }

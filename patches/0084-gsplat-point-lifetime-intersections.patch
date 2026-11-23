@@ -1,0 +1,43 @@
+From 854a13da5b07b878bd31195c9eecfcf343e01b58 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:44 +0100
+Subject: [PATCH] Apply the existing per-point shutter lifetime contract to
+ native Gaussian splat primary and shadow intersections before stochastic
+ opacity evaluation; keep the native 5.3 traversal and independent
+ geometry-union packing unchanged.
+
+Locked-Patch: patches/0084-gsplat-point-lifetime-intersections.patch
+Locked-Patch-SHA256: 0070317c88d86c5794d442863519681b9b9ea5465d36a2214a6114eb65291d33
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/core_point_lifetime_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 94eb18efaff89ef5a34b4e1c78f1f9f8c2c8fee0
+Previous-Patch: patches/0084-gsplat-point-lifetime-intersections.patch
+Previous-Patch-SHA256: 0070317c88d86c5794d442863519681b9b9ea5465d36a2214a6114eb65291d33
+Rationale: Native 5.3 Gaussian primary/shadow intersections need the same existence intervals as point geometry before stochastic opacity; this extends 0005 to a new traversal path.
+Contract: Apply the existing per-point shutter lifetime contract to native Gaussian splat primary and shadow intersections before stochastic opacity evaluation; keep the native 5.3 traversal and independent geometry-union packing unchanged.
+Tests: tests/core_point_lifetime_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/geom/gsplat_intersect.h b/src/kernel/geom/gsplat_intersect.h
+index ebfdc9092b6da0df2a3dbd38b0d58b71f56de9de..c9726baf20e7c6fc40e454aef1d2b08936878667 100644
+--- a/src/kernel/geom/gsplat_intersect.h
++++ b/src/kernel/geom/gsplat_intersect.h
+@@ -10,6 +10,7 @@
+ #include "kernel/geom/motion_gsplat.h"
+ #include "kernel/geom/object.h"
+ #include "kernel/geom/point_intersect.h"
++#include "kernel/geom/point_lifetime.h"
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -90,6 +91,9 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
+                                                   const int primitive_type,
+                                                   ccl_private float &r_t)
+ {
++  if (!point_is_alive(kg, object, prim, time)) {
++    return false;
++  }
+   const int position_offset = kernel_data_fetch(objects, object).position_offset;
+   const float4 point = (primitive_type & PRIMITIVE_MOTION) ?
+                            motion_gsplat_point(kg, object, prim, time) :

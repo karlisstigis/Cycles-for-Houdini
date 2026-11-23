@@ -1,0 +1,61 @@
+From f00045d7b58b1b1d0952caf5b2a8c1127f18106b Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:42 +0100
+Subject: [PATCH] selective resampled light sampling
+
+Locked-Patch: patches/0076-selective-resampled-light-sampling.patch
+Locked-Patch-SHA256: b901dfee9b390146987665bd5dd97eb5daf5e375b524ddb2e2a439fd5971006e
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_selective_rls_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: f24c0f232fdfe2c8ba5df1bc7853175f514b9a1a
+Previous-Patch: patches/0076-selective-resampled-light-sampling.patch
+Previous-Patch-SHA256: b901dfee9b390146987665bd5dd97eb5daf5e375b524ddb2e2a439fd5971006e
+Rationale: Selective RLS limits extra work for eligible primary sharp reflections and requires material closure classification; it is a heuristic estimator policy layered over 0073.
+Contract: selective resampled light sampling
+Tests: tests/houdini_selective_rls_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/integrator/pt_ris_nee.h b/src/kernel/integrator/pt_ris_nee.h
+index 068a57fd9ddd98dea93751eb3948aaac057e5b27..4dc6d7b026d52d19be565d3e3b93eb13def79471 100644
+--- a/src/kernel/integrator/pt_ris_nee.h
++++ b/src/kernel/integrator/pt_ris_nee.h
+@@ -34,10 +34,37 @@ ccl_device_inline int pt_ris_vertex_mode(KernelGlobals kg,
+    * It cannot participate in the RIS candidate mixture. Keep the entire vertex native,
+    * including the forward lamp-hit partition written by integrate_surface_bsdf_bssrdf_bounce.
+    * A mixed material must also fall back: every closure contributes to the candidate PDF. */
++  bool sharp_reflection_only = (INTEGRATOR_STATE(state, path, bounce) == 0);
++  bool has_scattering = false;
+   for (int i = 0; i < sd->num_closure; i++) {
+-    if (sd->closure[i].type == CLOSURE_BSDF_HAIR_HUANG_ID) {
++    const ccl_private ShaderClosure *sc = &sd->closure[i];
++    if (sc->type == CLOSURE_BSDF_HAIR_HUANG_ID) {
+       return 0;
+     }
++    if (sharp_reflection_only && CLOSURE_IS_BSDF_OR_BSSRDF(sc->type) &&
++        sc->sample_weight > 0.0f)
++    {
++      has_scattering = true;
++      if (CLOSURE_IS_BSDF_GLOSSY(sc->type) && CLOSURE_IS_BSDF_MICROFACET(sc->type)) {
++        const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
++        /* Alpha is squared artist roughness. Bound both axes: an anisotropic
++         * lobe with one broad axis must not be classified by its average. */
++        sharp_reflection_only = (bsdf->alpha_x <= 0.01f && bsdf->alpha_y <= 0.01f);
++      }
++      else {
++        sharp_reflection_only = false;
++      }
++    }
++  }
++  if (sharp_reflection_only && has_scattering) {
++    /* At a primary, entirely sharp reflective vertex, native BSDF sampling is
++     * already well matched to a small highlight. Replacing its low-discrepancy
++     * forward light hit with the small RIS candidate set can increase variance,
++     * particularly in defocus. Keep the whole vertex native (NEE and forward
++     * MIS agree), rather than dropping a closure or testing a random candidate.
++     * This decision depends only on the shaded closures, including textures;
++     * diffuse/SSS, transmission, broad lobes and later vertices keep RIS. */
++    return 0;
+   }
+ #ifdef __MNEE__
+   /* MNEE already sampled the light at this vertex: native NEE, native forward weights. */

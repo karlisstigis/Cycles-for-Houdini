@@ -1,0 +1,87 @@
+From d0b7a00d597886558d02dab95fbe48b1bec977f1 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:40 +0100
+Subject: [PATCH] preserve shader socket float bits
+
+Locked-Patch: patches/0063-preserve-shader-socket-float-bits.patch
+Locked-Patch-SHA256: c49b8868e26ca58ba37b17cca990537239f46c4ce162c44de2fec577800c9bab
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/core_subdivision_shading_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 4d37fc5233d30d41058db6076e5e78c30b7190e5
+Previous-Patch: patches/0063-preserve-shader-socket-float-bits.patch
+Previous-Patch-SHA256: c49b8868e26ca58ba37b17cca990537239f46c4ce162c44de2fec577800c9bab
+Rationale: Socket equality must match existing raw-bit hashing, excluding float3 padding; numeric equality can hide signed-zero/bit-level identity changes.
+Contract: preserve shader socket float bits
+Tests: tests/core_subdivision_shading_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/graph/node.cpp b/src/graph/node.cpp
+index ebcc40988fbd2dd9f0e9b4ae95029b3207348bb4..18639e3b906c3adccbefd31327dde26cbb65271d 100644
+--- a/src/graph/node.cpp
++++ b/src/graph/node.cpp
+@@ -3,6 +3,8 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include "graph/node.h"
++
++#include <cstring>
+ #include "graph/node_type.h"
+ 
+ #include "util/md5.h"
+@@ -11,6 +13,37 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++namespace {
++/* Keep socket change detection consistent with the existing raw-bit hashes and
++ * default-value comparison. Shader operations such as White Noise distinguish
++ * signed zero; numeric equality would discard an authored update. */
++template<typename T> bool socket_value_equal(const T &a, const T &b)
++{
++  if constexpr (std::is_same_v<T, float>) {
++    return std::memcmp(&a, &b, sizeof(float)) == 0;
++  }
++  else if constexpr (std::is_same_v<T, float2>) {
++    return socket_value_equal(a.x, b.x) && socket_value_equal(a.y, b.y);
++  }
++  else if constexpr (std::is_same_v<T, float3> || std::is_same_v<T, packed_float3>) {
++    /* The fourth float3 component is padding, and is not hashed. */
++    return socket_value_equal(a.x, b.x) && socket_value_equal(a.y, b.y) &&
++           socket_value_equal(a.z, b.z);
++  }
++  else if constexpr (std::is_same_v<T, float4>) {
++    return socket_value_equal(a.x, b.x) && socket_value_equal(a.y, b.y) &&
++           socket_value_equal(a.z, b.z) && socket_value_equal(a.w, b.w);
++  }
++  else if constexpr (std::is_same_v<T, Transform>) {
++    return socket_value_equal(a.x, b.x) && socket_value_equal(a.y, b.y) &&
++           socket_value_equal(a.z, b.z);
++  }
++  else {
++    return a == b;
++  }
++}
++}  // namespace
++
+ /* Node Type */
+ 
+ NodeOwner::~NodeOwner() = default;
+@@ -488,7 +521,7 @@ static bool is_value_equal(const Node *node, const Node *other, const SocketType
+ {
+   const T *a = (const T *)(((char *)node) + socket.struct_offset);
+   const T *b = (const T *)(((char *)other) + socket.struct_offset);
+-  return *a == *b;
++  return socket_value_equal(*a, *b);
+ }
+ 
+ bool Node::equals_value(const Node &other, const SocketType &socket) const
+@@ -837,7 +870,7 @@ void Node::clear_modified()
+ 
+ template<typename T> void Node::set_if_different(const SocketType &input, T value)
+ {
+-  if (get_socket_value<T>(this, input) == value) {
++  if (socket_value_equal(get_socket_value<T>(this, input), value)) {
+     return;
+   }
+ 

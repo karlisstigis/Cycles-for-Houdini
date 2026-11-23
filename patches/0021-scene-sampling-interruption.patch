@@ -1,0 +1,209 @@
+From 14988fd785d2c607265b6d8e8f48178b4be1c166 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:32 +0100
+Subject: [PATCH] scene sampling interruption
+
+Locked-Patch: patches/0021-scene-sampling-interruption.patch
+Locked-Patch-SHA256: 96523849cccee06a1453eea9f7b754fc7a77fe2a04b630e94b62fe6ce32940a3
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_scene_interruption_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 4dfb52a757452e0987875d1789b80bceada000d5
+Previous-Patch: patches/0021-scene-sampling-interruption.patch
+Previous-Patch-SHA256: 96523849cccee06a1453eea9f7b754fc7a77fe2a04b630e94b62fe6ce32940a3
+Rationale: Cancellation probes during long scene sampling phases bound latency without accepting partially prepared sampling state.
+Contract: scene sampling interruption
+Tests: tests/houdini_scene_interruption_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/path_trace.cpp b/src/integrator/path_trace.cpp
+index fed7fe237bd55bbc55426b0c5b6af00d16a780d4..5b8c3063351938cf5649ce2bcf8be39f79681808 100644
+--- a/src/integrator/path_trace.cpp
++++ b/src/integrator/path_trace.cpp
+@@ -55,6 +55,7 @@ PathTrace::PathTrace(Device *device,
+     unique_ptr<PathTraceWork> work = PathTraceWork::create(
+         path_trace_device, film, device_scene, &render_cancel_.is_requested);
+     if (work) {
++      work->set_scene_update_requested_flag(&scene_update_requested_);
+       path_trace_works_.emplace_back(std::move(work));
+     }
+   });
+@@ -164,7 +165,7 @@ void PathTrace::render(const RenderWork &render_work)
+   /* Indicate that rendering has started and that it can be requested to cancel. */
+   {
+     const thread_scoped_lock lock(render_cancel_.mutex);
+-    if (render_cancel_.is_requested) {
++    if (is_render_cancel_requested()) {
+       return;
+     }
+     render_cancel_.is_rendering = true;
+@@ -216,7 +217,7 @@ void PathTrace::render_pipeline(RenderWork render_work)
+   }
+ 
+   path_trace(render_work);
+-  if (render_cancel_.is_requested) {
++  if (is_render_cancel_requested()) {
+     return;
+   }
+ 
+@@ -228,22 +229,22 @@ void PathTrace::render_pipeline(RenderWork render_work)
+   }
+ 
+   adaptive_sample(render_work);
+-  if (render_cancel_.is_requested) {
++  if (is_render_cancel_requested()) {
+     return;
+   }
+ 
+   cryptomatte_postprocess(render_work);
+-  if (render_cancel_.is_requested) {
++  if (is_render_cancel_requested()) {
+     return;
+   }
+ 
+   denoise(render_work);
+-  if (render_cancel_.is_requested) {
++  if (is_render_cancel_requested()) {
+     return;
+   }
+ 
+   denoise_volume_guiding_buffers(render_work, has_volume);
+-  if (render_cancel_.is_requested) {
++  if (is_render_cancel_requested()) {
+     return;
+   }
+ 
+@@ -976,7 +977,7 @@ int PathTrace::get_num_samples_in_buffer()
+ 
+ bool PathTrace::is_cancel_requested()
+ {
+-  if (render_cancel_.is_requested) {
++  if (is_render_cancel_requested()) {
+     return true;
+   }
+ 
+diff --git a/src/integrator/path_trace.h b/src/integrator/path_trace.h
+index 0a47de43bff9797e73497a2c6279251b7ccbea25..fe64ff2d38eb81b7be578296b1ad3b70d1ae988d 100644
+--- a/src/integrator/path_trace.h
++++ b/src/integrator/path_trace.h
+@@ -4,6 +4,7 @@
+ 
+ #pragma once
+ 
++#include <atomic>
+ #include <functional>
+ 
+ #include "integrator/denoiser.h"
+@@ -68,6 +69,14 @@ class PathTrace {
+    * render result. */
+   bool ready_to_reset();
+ 
++  /* Latch a pending scene transaction without waiting or cancelling the session.
++   * Session publishes true under its transaction mutex and clears it on the render
++   * thread at the next safe boundary. A regular reset/cancel must not clear it. */
++  void set_scene_update_requested(bool requested)
++  {
++    scene_update_requested_.store(requested, std::memory_order_relaxed);
++  }
++
+   void reset(const BufferParams &full_params,
+              const BufferParams &big_tile_params,
+              bool reset_rendering);
+@@ -187,6 +196,13 @@ class PathTrace {
+   std::function<void(void)> progress_update_cb;
+ 
+  protected:
++  bool is_render_cancel_requested() const
++  {
++    return render_cancel_.is_requested || scene_update_requested_.load(std::memory_order_relaxed);
++  }
++
++  std::atomic<bool> scene_update_requested_{false};
++
+   /* Actual implementation of the rendering pipeline.
+    * Calls steps in order, checking for the cancel to be requested in between.
+    *
+diff --git a/src/integrator/path_trace_work.h b/src/integrator/path_trace_work.h
+index 2e51f643dcaab8d7481d485db06c0507d25f691f..2b7ae1bdd29a096b145ac6feb1abdc92fb9cf28e 100644
+--- a/src/integrator/path_trace_work.h
++++ b/src/integrator/path_trace_work.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include <atomic>
++
+ #include "integrator/pass_accessor.h"
+ #include "scene/pass.h"
+ #include "session/buffers.h"
+@@ -36,6 +38,12 @@ class PathTraceWork {
+ 
+   virtual ~PathTraceWork();
+ 
++  /* Set once before execution. PathTrace owns the flag for this work's lifetime. */
++  void set_scene_update_requested_flag(const std::atomic<bool> *flag)
++  {
++    scene_update_requested_flag_ = flag;
++  }
++
+   /* Access the render buffers.
+    *
+    * Is only supposed to be used by the PathTrace to update buffer allocation and slicing to
+@@ -141,7 +149,8 @@ class PathTraceWork {
+   {
+     /* NOTE: Rely on the fact that on x86 CPU reading scalar can happen without atomic even in
+      * threaded environment. */
+-    return *cancel_requested_flag_;
++    return *cancel_requested_flag_ ||
++           (scene_update_requested_flag_ && scene_update_requested_flag_->load(std::memory_order_relaxed));
+   }
+ 
+   /* Access to the device which is used to path trace this work on. */
+@@ -197,6 +206,7 @@ class PathTraceWork {
+   BufferParams effective_denoised_buffer_params_;
+ 
+   const bool *cancel_requested_flag_ = nullptr;
++  const std::atomic<bool> *scene_update_requested_flag_ = nullptr;
+ };
+ 
+ CCL_NAMESPACE_END
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index 1f4f56229938154326bdc307136980e78b109368..d601347c0a18f8338f15bdab395592141c4fd3b1 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -188,6 +188,9 @@ void Session::synchronize_scene(std::function<void()> transaction)
+         completion->set_exception(std::current_exception());
+       }
+     };
++    /* Publish while holding the transaction mutex. The render thread cannot
++     * consume this transaction before its interrupt has been latched. */
++    path_trace_->set_scene_update_requested(true);
+   }
+   {
+     const thread_scoped_lock pause_lock(pause_mutex_);
+@@ -206,6 +209,9 @@ void Session::run_pending_scene_sync()
+     transaction = std::move(pending_scene_sync_);
+     pending_scene_sync_ = nullptr;
+     scene_sync_requested_.store(false);
++    /* No render work or image callbacks remain in flight on this thread. Clear
++     * only here so a delayed request cannot interrupt the newly accepted scene. */
++    path_trace_->set_scene_update_requested(false);
+   }
+   if (transaction) {
+     transaction();
+diff --git a/src/session/session.h b/src/session/session.h
+index 76b5f5d9aa3b54c49662722429654a5717f12cdb..92fecbcd31b2b304002d2ebbba23e4e4cb72b016 100644
+--- a/src/session/session.h
++++ b/src/session/session.h
+@@ -144,7 +144,10 @@ class Session {
+ 
+   /* Execute an owned scene transaction between render iterations, with no render work or
+    * image callbacks in flight. The caller waits; interactive integrations should call this
+-   * from their control worker, never their UI thread. Does not cancel the session loop.
++   * from their control worker, never their UI thread. Requests early interruption
++   * of obsolete sampling, but does not cancel the session loop.
++   * The transaction must reset accumulation: an interrupted batch may be partial.
++   * Reject invalid or unchanged updates before requesting this boundary.
+    * Transactions must not call cancel(), wait(), or synchronize_scene() recursively.
+    * A throwing transaction stops rendering; the integration must recover or retire its scene. */
+   void synchronize_scene(std::function<void()> transaction);

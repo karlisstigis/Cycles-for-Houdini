@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "asset_size_bytes": 88322,
+  "asset_count": 2,
+  "file_count": 1,
+  "pages": [
+    {
+      "url": "_v1/assets-00000.json",
+      "hash": "SHA256:d8f60c8bdda6bfda1ae2413a08adcab83cbfe2ea14e0fbd247ad62cb708d2b35"
+    }
+  ],
+  "catalogs": [
+    {
+      "path": "Materials/Metal",
+      "uuids": [
+        "d7a2f3c1-0d5e-4c4b-9a8e-1f2e3d4c5b6a"
+      ],
+      "simple_name": "Materials-Metal"
+    },
+    {
+      "path": "Props",
+      "uuids": [
+        "a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d"
+      ],
+      "simple_name": "Props"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "test": "core_subdivision_count_overflow_smoke.py",
+    "device": "CPU",
+    "gui": false,
+    "execution": "worker",
+    "report": "artifacts/stage2/subdivision/count-overflow/report.json"
+  },
+  {
+    "test": "core_point_lifetime_smoke.py",
+    "device": "CPU",
+    "gui": false,
+    "execution": "worker",
+    "report": "artifacts/stage2/particles/lifetime/report.json"
+  }
+]

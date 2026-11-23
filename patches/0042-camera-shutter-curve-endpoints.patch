@@ -1,0 +1,61 @@
+From 86cbf53e867f847eec5bac09bfcf4a5225421b3f Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:36 +0100
+Subject: [PATCH] camera shutter curve endpoints
+
+Locked-Patch: patches/0042-camera-shutter-curve-endpoints.patch
+Locked-Patch-SHA256: 07e42b302276fd26814abce28cc8f07e851b4b334f5153f7c57cd3b3a235815d
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_camera_sampling_gui_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: eb230d690f89e8fdc4a594ce8a62559d98a38938
+Previous-Patch: patches/0042-camera-shutter-curve-endpoints.patch
+Previous-Patch-SHA256: 07e42b302276fd26814abce28cc8f07e851b4b334f5153f7c57cd3b3a235815d
+Rationale: Host shutter-curve lookup needs exact open/close endpoint evaluation, matching the camera's exposure table rather than losing endpoint knots.
+Contract: camera shutter curve endpoints
+Tests: tests/houdini_camera_sampling_gui_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index 4b28d92df0e95f7b605945ac6fb37a8b0b4991ec..aab2133e4eeb2eff93a982233d25b60d372c64f0 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -29,13 +29,13 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+-static float shutter_curve_eval(float x, array<float> &shutter_curve)
++float camera_shutter_curve_eval(float x, const array<float> &shutter_curve)
+ {
+   if (shutter_curve.size() == 0) {
+     return 1.0f;
+   }
+ 
+-  x = saturatef(x) * shutter_curve.size() - 1;
++  x = saturatef(x) * (shutter_curve.size() - 1);
+   const int index = (int)x;
+   const float frac = x - index;
+   if (index < shutter_curve.size() - 1) {
+@@ -577,7 +577,7 @@ void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scen
+         SHUTTER_TABLE_SIZE,
+         0.0f,
+         1.0f,
+-        [this](const float x) { return shutter_curve_eval(x, shutter_curve); },
++        [this](const float x) { return camera_shutter_curve_eval(x, shutter_curve); },
+         false,
+         shutter_table);
+     shutter_table_offset = scene->lookup_tables->add_table(dscene, shutter_table);
+diff --git a/src/scene/camera.h b/src/scene/camera.h
+index 48660ee497ab521645eadfbaaa3498109e22b5f7..130364a72430396ef1eef2a2c602f0aa58d2ba6c 100644
+--- a/src/scene/camera.h
++++ b/src/scene/camera.h
+@@ -36,6 +36,9 @@ class OSLCameraParamQuery {
+  * RenderMan, and Blender after remapping.
+  */
+ 
++/* Host exposure lookup, including exact open/close endpoints. */
++float camera_shutter_curve_eval(float x, const array<float> &shutter_curve);
++
+ class Camera : public Node {
+  public:
+   NODE_DECLARE

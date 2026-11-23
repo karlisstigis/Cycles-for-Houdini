@@ -1,0 +1,557 @@
+From 708d17fd39270ecb501d78d26655d857da58eb22 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:39 +0100
+Subject: [PATCH] upload owned light tree dirty ranges
+
+Locked-Patch: patches/0059-upload-owned-light-tree-dirty-ranges.patch
+Locked-Patch-SHA256: 947b9c45bcbbb09f19f5d2e51f7120f65ab998a80f5643de7975510427990449
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 8e5df9e6a01ee34430db8a8f046ff540c3b56d52
+Previous-Patch: patches/0059-upload-owned-light-tree-dirty-ranges.patch
+Previous-Patch-SHA256: 947b9c45bcbbb09f19f5d2e51f7120f65ab998a80f5643de7975510427990449
+Rationale: Dirty-range uploads add backend memory-range capability checks and fallbacks; sparse tree edits need not resend the full allocation.
+Contract: upload owned light tree dirty ranges
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/device/cpu/device_impl.cpp b/src/device/cpu/device_impl.cpp
+index 31e29b0c20cf30b65513f85e4bbbe1c8c900fc0e..666d1fe045d3c0c44f89653454736b5078e5a09e 100644
+--- a/src/device/cpu/device_impl.cpp
++++ b/src/device/cpu/device_impl.cpp
+@@ -125,6 +125,18 @@ void CPUDevice::mem_copy_to(device_memory &mem)
+   }
+ }
+ 
++bool CPUDevice::mem_copy_to_range_supported(device_memory &mem)
++{
++  return (mem.type == MEM_GLOBAL || mem.type == MEM_READ_ONLY || mem.type == MEM_READ_WRITE) &&
++         mem.host_pointer && mem.device_pointer == device_ptr(mem.host_pointer) &&
++         mem.device_size >= mem.memory_size();
++}
++
++void CPUDevice::mem_copy_to_range(device_memory & /*mem*/, size_t /*offset*/, size_t /*size*/)
++{
++  /* CPU globals already bind this same host allocation. No rebinding or copy. */
++}
++
+ void CPUDevice::mem_move_to_host(device_memory & /*mem*/)
+ {
+   /* no-op */
+diff --git a/src/device/cpu/device_impl.h b/src/device/cpu/device_impl.h
+index 317d3e406497f8b08c83734be7be528305a8bf2c..c6f76acf6b2595419bd1011eff5e8ff0c1e4c371 100644
+--- a/src/device/cpu/device_impl.h
++++ b/src/device/cpu/device_impl.h
+@@ -65,6 +65,8 @@ class CPUDevice : public Device {
+ 
+   void mem_alloc(device_memory &mem) override;
+   void mem_copy_to(device_memory &mem) override;
++  bool mem_copy_to_range_supported(device_memory &mem) override;
++  void mem_copy_to_range(device_memory &mem, size_t offset, size_t size) override;
+   void mem_move_to_host(device_memory &mem) override;
+   void mem_copy_from(
+       device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem) override;
+diff --git a/src/device/cuda/device_impl.cpp b/src/device/cuda/device_impl.cpp
+index 3e91dae8148f6e05e26e813825466fea2676c581..93b8737943082664c4bfec974a738e6a92c54dc9 100644
+--- a/src/device/cuda/device_impl.cpp
++++ b/src/device/cuda/device_impl.cpp
+@@ -664,6 +664,24 @@ void CUDADevice::mem_copy_to(device_memory &mem)
+   }
+ }
+ 
++bool CUDADevice::mem_copy_to_range_supported(device_memory &mem)
++{
++  return (mem.type == MEM_GLOBAL || mem.type == MEM_READ_ONLY || mem.type == MEM_READ_WRITE) &&
++         mem.host_pointer && mem.device_pointer && mem.device_size >= mem.memory_size() &&
++         mem.is_resident(this);
++}
++
++void CUDADevice::mem_copy_to_range(device_memory &mem, const size_t offset, const size_t size)
++{
++  /* Match generic_copy_to for mapped memory. In a mixed device session another
++   * island can own the mapped host allocation while this one is GPU resident. */
++  if (!(mem.is_shared(this) && mem.host_pointer == mem.shared_pointer)) {
++    copy_host_to_device(reinterpret_cast<void *>(mem.device_pointer + offset),
++                        static_cast<unsigned char *>(mem.host_pointer) + offset,
++                        size);
++  }
++}
++
+ void CUDADevice::mem_move_to_host(device_memory &mem)
+ {
+   if (mem.type == MEM_GLOBAL) {
+diff --git a/src/device/cuda/device_impl.h b/src/device/cuda/device_impl.h
+index 9b7d1962d458df8e8d4dc7e4a359600c60330443..909852d6f7ececb3cae583fcb4af406e3ce49534 100644
+--- a/src/device/cuda/device_impl.h
++++ b/src/device/cuda/device_impl.h
+@@ -64,6 +64,8 @@ class CUDADevice : public GPUDevice {
+   /* All memory types. */
+   void mem_alloc(device_memory &mem) override;
+   void mem_copy_to(device_memory &mem) override;
++  bool mem_copy_to_range_supported(device_memory &mem) override;
++  void mem_copy_to_range(device_memory &mem, size_t offset, size_t size) override;
+   void mem_move_to_host(device_memory &mem) override;
+   void mem_copy_from(
+       device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem) override;
+diff --git a/src/device/device.cpp b/src/device/device.cpp
+index 6e6d93134e8c1e438a0657eaee6a2ee89e22fec0..b9963c4037ed6384fe8dc1ff07562c0efec2c920 100644
+--- a/src/device/device.cpp
++++ b/src/device/device.cpp
+@@ -605,6 +605,16 @@ device_ptr Device::mem_device_ptr(const device_memory &mem, Device *sub_device)
+   return mem.device_pointer;
+ }
+ 
++bool Device::mem_copy_to_range_supported(device_memory & /*mem*/)
++{
++  return false;
++}
++
++void Device::mem_copy_to_range(device_memory & /*mem*/, size_t /*offset*/, size_t /*size*/)
++{
++  set_error("Unsupported device memory range copy");
++}
++
+ GPUDevice::~GPUDevice() noexcept(false) = default;
+ 
+ bool GPUDevice::load_image_info(DeviceQueue *queue)
+diff --git a/src/device/device.h b/src/device/device.h
+index 863e98e7aa72c398cbd0957b2d687ec8ead69e3d..beec47d5e60914d69e4227aea669f5c6233f8a7d 100644
+--- a/src/device/device.h
++++ b/src/device/device.h
+@@ -369,6 +369,10 @@ class Device {
+ 
+   virtual void mem_alloc(device_memory &mem) = 0;
+   virtual void mem_copy_to(device_memory &mem) = 0;
++  /* Existing linear allocation only. Backends opt in; unsupported devices use
++   * full copies. Support is preflighted on every memory owner before copying. */
++  virtual bool mem_copy_to_range_supported(device_memory &mem);
++  virtual void mem_copy_to_range(device_memory &mem, size_t offset, size_t size);
+   virtual void mem_move_to_host(device_memory &mem) = 0;
+   virtual void mem_copy_from(
+       device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem) = 0;
+diff --git a/src/device/memory.cpp b/src/device/memory.cpp
+index 848c5847e00fe9285068d15b0debb64e881a632b..d4bf2bfb3f3163b7f516311d4135b94093dd9d54 100644
+--- a/src/device/memory.cpp
++++ b/src/device/memory.cpp
+@@ -153,6 +153,30 @@ void device_memory::device_copy_to()
+   }
+ }
+ 
++bool device_memory::device_copy_to_ranges(const vector<DeviceMemoryRange> &ranges)
++{
++  device_memory_validate_ranges(memory_size(), ranges);
++  if (ranges.empty()) {
++    return true;
++  }
++  if (need_realloc_ || !host_pointer || !device_pointer ||
++      device_size < memory_size() || !device->mem_copy_to_range_supported(*this))
++  {
++    return false;
++  }
++  for (const DeviceMemoryRange &range : ranges) {
++    const double start = device->stats.buffer_copy_callback ? time_dt() : 0;
++    device->mem_copy_to_range(*this, range.offset, range.size);
++    if (device->stats.buffer_copy_callback) {
++      device->stats.buffer_copy_callback(global_name(), range.size, time_dt() - start);
++    }
++    if (device->have_error()) {
++      break;
++    }
++  }
++  return true;
++}
++
+ void device_memory::device_move_to_host()
+ {
+   if (host_pointer) {
+diff --git a/src/device/memory.h b/src/device/memory.h
+index 9a256604674faca0227f51a41a709673a75c2d1e..ebe99e57d6ecd59995836ec666bdec13a12206fd 100644
+--- a/src/device/memory.h
++++ b/src/device/memory.h
+@@ -9,6 +9,7 @@
+  * Data types for allocating, copying and freeing device memory. */
+ 
+ #include "util/array.h"
++#include "device/memory_range.h"
+ #include "util/half.h"
+ #include "util/string.h"
+ #include "util/types.h"
+@@ -321,6 +322,7 @@ class device_memory {
+   /* Device memory allocation and copying. */
+   void device_alloc();
+   void device_copy_to();
++  bool device_copy_to_ranges(const vector<DeviceMemoryRange> &ranges);
+   void device_move_to_host();
+   void device_copy_from(const size_t y, const size_t w, size_t h, const size_t elem);
+   void device_copy_merged_bitmap_from(const size_t y, const size_t w, size_t h);
+@@ -597,6 +599,13 @@ template<typename T> class device_vector : public device_memory {
+     copy_to_device();
+   }
+ 
++  /* Existing allocation only. False requests the ordinary full-copy fallback;
++   * invalid bounds throw before any transfer. Never aliases device ownership. */
++  bool copy_to_device_ranges(const vector<DeviceMemoryRange> &ranges)
++  {
++    return device_copy_to_ranges(ranges);
++  }
++
+   void clear_modified()
+   {
+     modified = false;
+diff --git a/src/device/memory_range.h b/src/device/memory_range.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..a5368cf6973e33902b5d18871fda227bcdc531c2
+--- /dev/null
++++ b/src/device/memory_range.h
+@@ -0,0 +1,109 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++
++#include "util/types.h"
++#include "util/vector.h"
++#include <algorithm>
++#include <atomic>
++#include <limits>
++#include <memory>
++#include <stdexcept>
++
++CCL_NAMESPACE_BEGIN
++
++struct DeviceMemoryRange {
++  size_t offset = 0;
++  size_t size = 0;
++};
++
++/* Byte ranges are ordered, disjoint and checked before any device is touched. */
++inline size_t device_memory_validate_ranges(const size_t bytes,
++                                          const vector<DeviceMemoryRange> &ranges)
++{
++  size_t end = 0, total = 0;
++  for (const DeviceMemoryRange &range : ranges) {
++    if (!range.size || range.offset < end || range.offset > bytes ||
++        range.size > bytes - range.offset)
++    {
++      throw std::runtime_error("Invalid owned device memory copy range");
++    }
++    end = range.offset + range.size;
++    total += range.size;
++  }
++  return total;
++}
++
++/* Exact row comparisons mark coarse blocks concurrently. Storage is bounded by
++ * one bit per 256 rows, with at most 64 coalesced transfers. Dense edits use the
++ * ordinary full upload. No source/device pointers are retained here. */
++class DeviceMemoryDirtyRanges {
++ public:
++  static constexpr size_t block_rows = 256;
++  static constexpr size_t max_ranges = 64;
++
++  void reset(const size_t rows, const size_t stride, const bool compare)
++  {
++    if (!stride || rows > std::numeric_limits<size_t>::max() / stride) {
++      throw std::runtime_error("Invalid owned device dirty-row layout");
++    }
++    rows_ = rows;
++    stride_ = stride;
++    compare_ = compare;
++    const size_t blocks = rows / block_rows + (rows % block_rows != 0);
++    words_ = compare ? blocks / 64 + (blocks % 64 != 0) : 0;
++    bits_.reset(words_ ? new std::atomic<uint64_t>[words_] : nullptr);
++    for (size_t i = 0; i < words_; ++i) {
++      bits_[i].store(0, std::memory_order_relaxed);
++    }
++  }
++
++  void mark(const size_t row) const
++  {
++    if (row >= rows_) {
++      throw std::runtime_error("Device dirty row exceeds its owner");
++    }
++    if (compare_) {
++      const size_t block = row / block_rows;
++      bits_[block / 64].fetch_or(uint64_t(1) << (block % 64), std::memory_order_relaxed);
++    }
++  }
++
++  vector<DeviceMemoryRange> ranges() const
++  {
++    const size_t bytes = rows_ * stride_;
++    if (!compare_) {
++      return bytes ? vector<DeviceMemoryRange>{{0, bytes}} : vector<DeviceMemoryRange>{};
++    }
++    vector<DeviceMemoryRange> result;
++    const size_t blocks = rows_ / block_rows + (rows_ % block_rows != 0);
++    size_t total = 0;
++    for (size_t block = 0; block < blocks; ++block) {
++      if (!(bits_[block / 64].load(std::memory_order_relaxed) &
++            (uint64_t(1) << (block % 64))))
++      {
++        continue;
++      }
++      const size_t first = block * block_rows;
++      const size_t number = std::min(block_rows, rows_ - first);
++      const DeviceMemoryRange range{first * stride_, number * stride_};
++      total += range.size;
++      if (!result.empty() && result.back().offset + result.back().size == range.offset) {
++        result.back().size += range.size;
++      }
++      else {
++        result.push_back(range);
++      }
++      if (result.size() > max_ranges || total >= bytes / 2) {
++        return {{0, bytes}};
++      }
++    }
++    return result;
++  }
++
++ private:
++  size_t rows_ = 0, stride_ = 0, words_ = 0;
++  bool compare_ = false;
++  std::unique_ptr<std::atomic<uint64_t>[]> bits_;
++};
++
++CCL_NAMESPACE_END
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index 06c5fa3293c118e683a3c2ab6942076ff853b6e5..fdeb1fb5b5484c7fdadedb81b01a26807153524d 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -498,6 +498,63 @@ class MultiDevice : public Device {
+     stats.mem_alloc(mem.device_size - existing_size);
+   }
+ 
++  bool mem_copy_to_range_supported(device_memory &mem) override
++  {
++    if (!mem.device_pointer || peer_islands.empty()) {
++      return false;
++    }
++    /* MultiDevice pointers are keys, never addresses. Translate only through
++     * the existing owning island, and restore the original owner on all exits. */
++    const device_ptr key = mem.device_pointer;
++    const size_t bytes = mem.device_size;
++    struct Restore {
++      device_memory &mem;
++      Device *device;
++      device_ptr key;
++      size_t bytes;
++      ~Restore() { mem.device = device; mem.device_pointer = key; mem.device_size = bytes; }
++    } restore{mem, this, key, bytes};
++    for (const vector<SubDevice *> &island : peer_islands) {
++      SubDevice *owner = find_suitable_mem_device(key, island);
++      const device_ptr pointer = ptr_map_find(*owner, key);
++      if (!pointer) {
++        return false;
++      }
++      mem.device = owner->device.get();
++      mem.device_pointer = pointer;
++      mem.device_size = bytes;
++      if (!owner->device->mem_copy_to_range_supported(mem)) {
++        return false;
++      }
++    }
++    return true;
++  }
++
++  void mem_copy_to_range(device_memory &mem, const size_t offset, const size_t size) override
++  {
++    const device_ptr key = mem.device_pointer;
++    const size_t bytes = mem.device_size;
++    struct Restore {
++      device_memory &mem;
++      Device *device;
++      device_ptr key;
++      size_t bytes;
++      ~Restore() { mem.device = device; mem.device_pointer = key; mem.device_size = bytes; }
++    } restore{mem, this, key, bytes};
++    for (const vector<SubDevice *> &island : peer_islands) {
++      SubDevice *owner = find_suitable_mem_device(key, island);
++      mem.device = owner->device.get();
++      mem.device_pointer = ptr_map_find(*owner, key);
++      mem.device_size = bytes;
++      owner->device->mem_copy_to_range(mem, offset, size);
++      if (owner->device->have_error()) {
++        return;
++      }
++    }
++    /* Global bindings remain valid: no allocation or pointer changed. Peers
++     * share the owning island's bytes and must not upload them a second time. */
++  }
++
+   void mem_move_to_host(device_memory &mem) override
+   {
+     assert(mem.type == MEM_GLOBAL || mem.type == MEM_IMAGE_TEXTURE);
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index 3b4fa904c22e7e11d1e8889dc7d5c287af2b35a7..f6353e7487512f28d0bd9c49beaa22be7274029f 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -788,13 +788,18 @@ struct LightTreeFlatten {
+   bool compare_emitters = false;
+   mutable std::atomic<bool> nodes_changed{true};
+   mutable std::atomic<bool> emitters_changed{true};
++  KernelLightTreeNode *node_base = nullptr;
++  KernelLightTreeEmitter *emitter_base = nullptr;
++  DeviceMemoryDirtyRanges dirty_nodes, dirty_emitters;
+ };
+ 
+ template<typename T>
+ static void light_tree_store(T &destination,
+                               const T &prepared,
+                               const bool compare,
+-                              std::atomic<bool> &changed)
++                              std::atomic<bool> &changed,
++                              const T *base,
++                              const DeviceMemoryDirtyRanges &dirty)
+ {
+   static_assert(std::is_trivially_copyable_v<T>);
+   if (compare && std::memcmp(&destination, &prepared, sizeof(T)) == 0) {
+@@ -802,6 +807,7 @@ static void light_tree_store(T &destination,
+   }
+   std::memcpy(&destination, &prepared, sizeof(T));
+   if (compare) {
++    dirty.mark(size_t(&destination - base));
+     changed.store(true, std::memory_order_relaxed);
+   }
+ }
+@@ -845,7 +851,8 @@ static void light_tree_node_copy_to_device(const LightTreeFlatten &flatten,
+       knode.instance.reference = instance->reference;
+     }
+   }
+-  light_tree_store(destination, knode, flatten.compare_nodes, flatten.nodes_changed);
++  light_tree_store(destination, knode, flatten.compare_nodes, flatten.nodes_changed,
++                   flatten.node_base, flatten.dirty_nodes);
+ }
+ 
+ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+@@ -884,7 +891,8 @@ static void light_tree_triangle_emitter_copy_to_device(const LightTreeFlatten &f
+   kemitter.object_id = emitter.object_id;
+   kemitter.triangle.emission_sampling = shader->emission_sampling;
+   kemitter.bit_trail = bit_trail;
+-  light_tree_store(destination, kemitter, flatten.compare_emitters, flatten.emitters_changed);
++  light_tree_store(destination, kemitter, flatten.compare_emitters, flatten.emitters_changed,
++                   flatten.emitter_base, flatten.dirty_emitters);
+   flatten.triangle_array[emitter.prim_id + flatten.object_lookup_offset[emitter.object_id]] =
+       emitter_index;
+ }
+@@ -957,7 +965,8 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+       }
+     }
+     kemitter.bit_trail = node.bit_trail;
+-    light_tree_store(destination, kemitter, flatten.compare_emitters, flatten.emitters_changed);
++    light_tree_store(destination, kemitter, flatten.compare_emitters, flatten.emitters_changed,
++                     flatten.emitter_base, flatten.dirty_emitters);
+   }
+ }
+ 
+@@ -1250,6 +1259,34 @@ static std::pair<int, LightTreeMeasure> light_tree_specialize_nodes_flatten(
+   return std::make_pair(node_index, new_node.measure);
+ }
+ 
++struct LightTreeUpload {
++  size_t bytes = 0, spans = 0;
++  bool partial = false;
++};
++
++template<typename T>
++static LightTreeUpload light_tree_upload(device_vector<T> &buffer,
++                                          const DeviceMemoryDirtyRanges &dirty,
++                                          const bool changed)
++{
++  if (!changed || buffer.size() == 0) {
++    return {};
++  }
++  const char *disable = std::getenv("CYCLES_HOUDINI_DISABLE_LIGHT_TREE_RANGE_UPLOAD");
++  const vector<DeviceMemoryRange> ranges = dirty.ranges();
++  if (ranges.empty()) {
++    throw std::runtime_error("Changed light-tree buffer has no dirty rows");
++  }
++  const size_t bytes = device_memory_validate_ranges(buffer.memory_size(), ranges);
++  if (!(disable && std::strcmp(disable, "1") == 0) && bytes < buffer.memory_size() &&
++      buffer.copy_to_device_ranges(ranges))
++  {
++    return {bytes, ranges.size(), true};
++  }
++  buffer.copy_to_device();
++  return {buffer.memory_size(), 1, false};
++}
++
+ void LightManager::device_update_tree(Device *device,
+                                       DeviceScene *dscene,
+                                       Scene *scene,
+@@ -1282,6 +1319,7 @@ void LightManager::device_update_tree(Device *device,
+   bool profile_triangle_lookup_compared = false;
+   bool profile_nodes_compared = false, profile_emitters_compared = false;
+   bool profile_nodes_upload_requested = false, profile_emitters_upload_requested = false;
++  LightTreeUpload nodes_upload, emitters_upload;
+   /* Declared before the tree: this runs after tree retirement, whose many
+    * transient node allocations were previously hidden in the overall timer. */
+   const scoped_callback_timer phase_timer([&](double /*unused*/) {
+@@ -1295,8 +1333,10 @@ void LightManager::device_update_tree(Device *device,
+                    "\"parallel_cached_ranges\":%zu,\"nodes_compared\":%s,\"emitters_compared\":%s,"
+                    "\"nodes_upload_requested\":%s,\"emitters_upload_requested\":%s,"
+                    "\"buffers_valid\":%s,\"retained_cached_nodes\":%zu,\"retained_cached_ranges\":%zu,"
+-                   "\"previous_ranges\":%zu,\"recorded_ranges\":%zu,\"triangle_lookup_compared\":%s}\n",
+-                   work_end > 0 && !progress.get_cancel() ? "true" : "false",
++                   "\"previous_ranges\":%zu,\"recorded_ranges\":%zu,\"triangle_lookup_compared\":%s,"
++                   "\"nodes_upload_bytes\":%zu,\"nodes_upload_spans\":%zu,\"nodes_partial_upload\":%s,"
++                   "\"emitters_upload_bytes\":%zu,\"emitters_upload_spans\":%zu,\"emitters_partial_upload\":%s}\n",
++                   work_end > 0 && tree_buffers_valid ? "true" : "false",
+                    profile_nodes, profile_emitters, construction_seconds, flatten_seconds,
+                    upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started,
+                    profile_instance_swaps, profile_parallel_cached_nodes,
+@@ -1308,7 +1348,10 @@ void LightManager::device_update_tree(Device *device,
+                    tree_buffers_valid ? "true" : "false",
+                    profile_retained_cached_nodes, profile_retained_cached_ranges,
+                    profile_previous_ranges, profile_recorded_ranges,
+-                   profile_triangle_lookup_compared ? "true" : "false");
++                   profile_triangle_lookup_compared ? "true" : "false",
++                   nodes_upload.bytes, nodes_upload.spans, nodes_upload.partial ? "true" : "false",
++                   emitters_upload.bytes, emitters_upload.spans,
++                   emitters_upload.partial ? "true" : "false");
+     }
+   });
+ 
+@@ -1350,6 +1393,8 @@ void LightManager::device_update_tree(Device *device,
+                              dscene->light_tree_emitters.device_pointer != 0;
+   flatten.emitters_changed.store(!flatten.compare_emitters, std::memory_order_relaxed);
+   KernelLightTreeEmitter *kemitters = dscene->light_tree_emitters.alloc(num_emitters);
++  flatten.emitter_base = kemitters;
++  flatten.dirty_emitters.reset(num_emitters, sizeof(*kemitters), flatten.compare_emitters);
+ 
+   /* Update integrator state. */
+   kintegrator->use_direct_light = num_emitters > 0;
+@@ -1371,6 +1416,8 @@ void LightManager::device_update_tree(Device *device,
+                             dscene->light_tree_nodes.device_pointer != 0;
+     flatten.nodes_changed.store(!flatten.compare_nodes, std::memory_order_relaxed);
+     KernelLightTreeNode *knodes = dscene->light_tree_nodes.alloc(light_tree.num_nodes);
++    flatten.node_base = knodes;
++    flatten.dirty_nodes.reset(light_tree.num_nodes, sizeof(*knodes), flatten.compare_nodes);
+ 
+     if (root) {
+       int next_node_index = 0;
+@@ -1409,6 +1456,7 @@ void LightManager::device_update_tree(Device *device,
+ 
+     /* Allocate and copy nodes into device array. */
+     KernelLightTreeNode *knodes = dscene->light_tree_nodes.alloc(light_link_nodes.size());
++    flatten.dirty_nodes.reset(light_link_nodes.size(), sizeof(*knodes), false);
+     memcpy(knodes, light_link_nodes.data(), light_link_nodes.size() * sizeof(*knodes));
+ 
+     LOG_INFO << "Specialized light tree for light linking, with "
+@@ -1432,14 +1480,14 @@ void LightManager::device_update_tree(Device *device,
+   }
+   if (flatten.nodes_changed.load(std::memory_order_relaxed)) {
+     profile_nodes_upload_requested = dscene->light_tree_nodes.size() > 0;
+-    dscene->light_tree_nodes.copy_to_device();
++    nodes_upload = light_tree_upload(dscene->light_tree_nodes, flatten.dirty_nodes, true);
+   }
+   else {
+     dscene->light_tree_nodes.clear_modified();
+   }
+   if (flatten.emitters_changed.load(std::memory_order_relaxed)) {
+     profile_emitters_upload_requested = dscene->light_tree_emitters.size() > 0;
+-    dscene->light_tree_emitters.copy_to_device();
++    emitters_upload = light_tree_upload(dscene->light_tree_emitters, flatten.dirty_emitters, true);
+   }
+   else {
+     dscene->light_tree_emitters.clear_modified();

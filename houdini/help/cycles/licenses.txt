@@ -1,0 +1,21 @@
+= Cycles for Houdini licenses and notices =
+
+The Cycles Render ROP's About tab opens the complete local notices and licenses for the installed version. Choose Licenses and Notices for the third-party index, Cycles for Houdini License for the integration license, or NVIDIA DLSS License for the SDK license. Development hosts use the pinned source copies when packaged copies are absent.
+
+Installed packages keep LICENSE, THIRD_PARTY_NOTICES.md and the notices directory beside the host directory in the immutable version payload. These files move with the installation. The About buttons resolve their locations when clicked.
+
+== Renderer and optional technology ==
+
+Cycles for Houdini integrates the Blender Cycles renderer. Optional DLSS Ray Reconstruction uses NVIDIA DLSS / NGX technology. Availability depends on the installed build and selected hardware. This page describes included technology; it does not indicate feature availability in a particular build.
+
+* [Blender Cycles|https://www.cycles-renderer.org/]
+* [Blender licensing|https://www.blender.org/about/license/]
+* [NVIDIA DLSS SDK license, v310.9.16|https://github.com/NVIDIA/DLSS/blob/v310.9.16/LICENSE.txt]
+* [Apache License 2.0|https://www.apache.org/licenses/LICENSE-2.0]
+
+The local files shipped with the installed version are the source for its complete license and notice texts.
+
+@related
+
+* [Node:out/cycles_ipr]
+* [Cycles Viewer|/cycles/viewer]

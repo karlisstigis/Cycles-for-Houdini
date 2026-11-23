@@ -1,0 +1,62 @@
+From e51aa45a816a82cc43378b1f911cdfd8d9802415 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:44 +0100
+Subject: [PATCH] Report cumulative temporal sample progress to output drivers
+
+Locked-Patch: patches/0085-temporal-output-sample-count.patch
+Locked-Patch-SHA256: 23fa2425fc582df90c6c80cb8f15db0dfcf62a16e3c6e69436cb5dc80c96b92b
+Contract: Report cumulative sample progress across temporal denoising updates while using the current buffer accumulation count for pixel normalization.
+Related-Fixture: tests/houdini_dlss_worker_smoke.py
+
+Rebased-From: 30ae38908d4a29e9e3d34c2dbac6f874667527b8
+Previous-Patch: patches/0085-temporal-output-sample-count.patch
+Previous-Patch-SHA256: 23fa2425fc582df90c6c80cb8f15db0dfcf62a16e3c6e69436cb5dc80c96b92b
+Rationale: The local output-driver sample accessor reports generation progress to Houdini. Temporal denoising resets the current pixel accumulation while the generation continues rendering.
+Contract: Report cumulative sample progress across temporal denoising updates while using the current buffer accumulation count for pixel normalization.
+Tests: tests/houdini_dlss_worker_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/path_trace.cpp b/src/integrator/path_trace.cpp
+index 9de94fe879ec3a8defc48a11eb0d41ec3e3434f5..5b569064f9ecbe81c80af26dc35d2a630e22917e 100644
+--- a/src/integrator/path_trace.cpp
++++ b/src/integrator/path_trace.cpp
+@@ -1215,6 +1215,14 @@ int PathTrace::get_num_render_tile_samples() const
+   return render_scheduler_.get_num_rendered_samples();
+ }
+ 
++int PathTrace::get_total_render_tile_samples() const
++{
++  if (full_frame_state_.render_buffers) {
++    return full_frame_state_.render_buffers->params.samples;
++  }
++  return render_scheduler_.get_total_rendered_samples();
++}
++
+ bool PathTrace::get_render_tile_pixels(const PassAccessor &pass_accessor,
+                                        const PassAccessor::Destination &destination)
+ {
+diff --git a/src/integrator/path_trace.h b/src/integrator/path_trace.h
+index a0c994789c7011bb5703c939afbdccb14c2beffe..3406a6d6117d15ae3fa9780a150ed729df88d641 100644
+--- a/src/integrator/path_trace.h
++++ b/src/integrator/path_trace.h
+@@ -155,6 +155,8 @@ class PathTrace {
+ 
+   /* Get number of samples in the current big tile render buffers. */
+   int get_num_render_tile_samples() const;
++  /* Progress across temporal denoising updates for output-driver metadata. */
++  int get_total_render_tile_samples() const;
+ 
+   /* Get pass data of the entire big tile.
+    * This call puts pass render result from all devices into the final pixels storage.
+diff --git a/src/integrator/path_trace_tile.cpp b/src/integrator/path_trace_tile.cpp
+index 8dd0b57fed69e9c9bfc51911cf10d9e86b7248c9..f848b46faa1531d58e9dc80e86b4b4e37ee8bfcf 100644
+--- a/src/integrator/path_trace_tile.cpp
++++ b/src/integrator/path_trace_tile.cpp
+@@ -25,7 +25,7 @@ PathTraceTile::PathTraceTile(PathTrace &path_trace)
+ 
+ int PathTraceTile::get_num_samples() const
+ {
+-  return path_trace_.get_num_render_tile_samples();
++  return path_trace_.get_total_render_tile_samples();
+ }
+ 
+ const BufferPass *PathTraceTile::find_pass(const string_view pass_name) const

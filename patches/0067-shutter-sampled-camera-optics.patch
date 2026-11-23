@@ -1,0 +1,393 @@
+From da2ce9ff8ba4b4dd97b252e8365e82d44af3140b Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:40 +0100
+Subject: [PATCH] shutter sampled camera optics
+
+Locked-Patch: patches/0067-shutter-sampled-camera-optics.patch
+Locked-Patch-SHA256: e1b70a27572dea5a75227b13540a6d41e446e7f5f67d35c202a4a294eafc371d
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_camera_dof_motion_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 8870274335ae5963108b6978b2a73999956e1b49
+Previous-Patch: patches/0067-shutter-sampled-camera-optics.patch
+Previous-Patch-SHA256: e1b70a27572dea5a75227b13540a6d41e446e7f5f67d35c202a4a294eafc371d
+Rationale: Sampled DOF optics add focus/aperture/rotation controls over time, preserving unwrapped authored rotations rather than only endpoint quaternions.
+Contract: shutter sampled camera optics
+Tests: tests/houdini_camera_dof_motion_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/camera/camera.h b/src/kernel/camera/camera.h
+index dcfff6e57136b36fa8024af2aad87f2c57b6ed08..f7b7f1f5194e1485953e3781a3c24dbe421f3716 100644
+--- a/src/kernel/camera/camera.h
++++ b/src/kernel/camera/camera.h
+@@ -19,9 +19,33 @@ CCL_NAMESPACE_BEGIN
+ 
+ /* Perspective Camera */
+ 
+-ccl_device float2 camera_sample_aperture(ccl_constant KernelCamera *cam, const float2 rand)
++ccl_device_inline float4 camera_sample_dof(ccl_constant KernelCamera *cam,
++                                          const ccl_global float4 *motion,
++                                          const float time)
++{
++  if (cam->num_dof_motion_steps && motion != nullptr) {
++    const float position = saturatef(time) * float(cam->num_dof_motion_steps - 1);
++    const int index = min(int(position), cam->num_dof_motion_steps - 2);
++    const float fraction = position - float(index);
++    /* Preserve unwrapped authored rotation, including multiple turns. The
++     * weighted form also avoids overflowing b-a for opposite large values. */
++    return motion[index] * (1.0f - fraction) + motion[index + 1] * fraction;
++  }
++  return make_float4(cam->aperturesize, cam->focaldistance, cam->bladesrotation,
++                     cam->aperture_ratio);
++}
++
++ccl_device_inline float3 camera_dof_normalize(const float3 value)
++{
++  const float scale = max(1.0f, max(fabsf(value.x), max(fabsf(value.y), fabsf(value.z))));
++  return normalize(value / scale);
++}
++
++ccl_device float2 camera_sample_aperture(const float blades,
++                                       const float rotation,
++                                       const float inverse_ratio,
++                                       const float2 rand)
+ {
+-  const float blades = cam->blades;
+   float2 bokeh;
+ 
+   if (blades == 0.0f) {
+@@ -30,12 +54,11 @@ ccl_device float2 camera_sample_aperture(ccl_constant KernelCamera *cam, const f
+   }
+   else {
+     /* sample polygon */
+-    const float rotation = cam->bladesrotation;
+     bokeh = regular_polygon_sample(blades, rotation, rand);
+   }
+ 
+   /* anamorphic lens bokeh */
+-  bokeh.x *= cam->inv_aperture_ratio;
++  bokeh.x *= inverse_ratio;
+ 
+   return bokeh;
+ }
+@@ -72,19 +95,21 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+   float3 D = Pcamera;
+ 
+   /* modify ray for depth of field */
+-  const float aperturesize = kernel_data.cam.aperturesize;
++  const float4 optics = camera_sample_dof(&kernel_data.cam,
++                                         kernel_data_array(camera_dof_motion), ray->time);
++  const float aperturesize = optics.x;
+ 
+   if (aperturesize > 0.0f) {
+     /* sample point on aperture */
+-    const float2 lens_uv = camera_sample_aperture(&kernel_data.cam, rand_lens) * aperturesize;
++    const float2 lens_uv = camera_sample_aperture(kernel_data.cam.blades, optics.z,
++                                                 1.0f / optics.w, rand_lens) * aperturesize;
+ 
+     /* compute point on plane of focus */
+-    const float ft = kernel_data.cam.focaldistance / D.z;
+-    const float3 Pfocus = D * ft;
+-
+-    /* update ray for effect of lens */
++    /* Divide by focus before normalizing: a valid large focus distance must
++     * not overflow an intermediate focus-plane point. */
+     P = make_float3(lens_uv);
+-    D = normalize(Pfocus - P);
++    D = camera_dof_normalize(make_float3(D.x / D.z - P.x / optics.y,
++                                        D.y / D.z - P.y / optics.y, 1.0f));
+   }
+ 
+   /* transform ray from camera to world */
+@@ -186,22 +211,23 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+   float3 D = make_float3(0.0f, 0.0f, 1.0f);
+ 
+   /* modify ray for depth of field */
+-  const float aperturesize = kernel_data.cam.aperturesize;
++  const float4 optics = camera_sample_dof(&kernel_data.cam,
++                                         kernel_data_array(camera_dof_motion), ray->time);
++  const float aperturesize = optics.x;
+ 
+   if (aperturesize > 0.0f) {
+     /* sample point on aperture */
+-    const float2 lens_uv = camera_sample_aperture(&kernel_data.cam, rand_lens) * aperturesize;
++    const float2 lens_uv = camera_sample_aperture(kernel_data.cam.blades, optics.z,
++                                                 1.0f / optics.w, rand_lens) * aperturesize;
+ 
+     /* compute point on plane of focus */
+-    const float3 Pfocus = D * kernel_data.cam.focaldistance;
+-
+-    /* Update ray for effect of lens */
+     const float3 lens_uvw = make_float3(lens_uv);
+-
+-    D = normalize(Pfocus - lens_uvw);
++    const float3 focus_direction = make_float3(-lens_uvw.x / optics.y,
++                                               -lens_uvw.y / optics.y, 1.0f);
++    D = camera_dof_normalize(focus_direction);
+     /* Compute position the ray will be if it traveled until it intersected the near clip plane.
+      * This allows for correct DOF while allowing near clipping. */
+-    P = Pcamera + lens_uvw + (D * (kernel_data.cam.nearclip / D.z));
++    P = Pcamera + lens_uvw + focus_direction * kernel_data.cam.nearclip;
+   }
+   else {
+     P = Pcamera + make_float3(0.0f, 0.0f, kernel_data.cam.nearclip);
+@@ -381,6 +407,7 @@ ccl_device_inline float3 camera_panorama_direction(ccl_constant KernelCamera *ca
+ 
+ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam,
+                                                   const ccl_global DecomposedTransform *cam_motion,
++                                                  const ccl_global float4 *dof_motion,
+                                                   const float2 raster,
+                                                   const float2 rand_lens,
+                                                   ccl_private Ray *ray)
+@@ -406,15 +433,16 @@ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam
+   }
+ 
+   /* Perform depth-of-field sampling. */
+-  const float aperturesize = cam->aperturesize;
++  const float4 optics = camera_sample_dof(cam, dof_motion, ray->time);
++  const float aperturesize = optics.x;
+ 
+   if (aperturesize > 0.0f) {
+     /* Sample a point on the aperture. */
+-    const float2 lens_uv = camera_sample_aperture(cam, rand_lens) * aperturesize;
++    const float2 lens_uv = camera_sample_aperture(cam->blades, optics.z,
++                                                 1.0f / optics.w, rand_lens) * aperturesize;
+ 
+     /* Compute the intersection of the original ray with the focal plane. */
+     const float3 Dfocus = normalize(D);
+-    const float3 Pfocus = Dfocus * cam->focaldistance;
+ 
+     /* Calculate orthonormal coordinate system perpendicular to Dfocus. */
+     float3 U = make_float3(1.0f, 0.0f, 0.0f) - Dfocus.x * Dfocus;
+@@ -427,7 +455,7 @@ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam
+     /* Compute new ray by shifting its origin (to account for aperture position) and
+      * setting its direction to meet the original ray at the focal plane. */
+     P = U * lens_uv.x + V * lens_uv.y;
+-    D = normalize(Pfocus - P);
++    D = camera_dof_normalize(Dfocus - P / optics.y);
+   }
+ 
+   camera_sample_to_ray(cam,
+@@ -520,7 +548,8 @@ ccl_device_inline Spectrum camera_sample(KernelGlobals kg,
+   }
+   if (kernel_data.cam.type == CAMERA_PANORAMA) {
+     const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
+-    return camera_sample_panorama(&kernel_data.cam, cam_motion, raster, lens_uv, ray);
++    return camera_sample_panorama(&kernel_data.cam, cam_motion,
++                                   kernel_data_array(camera_dof_motion), raster, lens_uv, ray);
+   }
+   if (kernel_data.cam.type == CAMERA_CUSTOM) {
+     const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
+diff --git a/src/kernel/data_arrays.h b/src/kernel/data_arrays.h
+index 9a46d955da599d904c6fd8dd98b36cc9002365e2..40f7b7e77291154cbe0f24d1ab444aae6410b148 100644
+--- a/src/kernel/data_arrays.h
++++ b/src/kernel/data_arrays.h
+@@ -30,6 +30,7 @@ KERNEL_DATA_ARRAY(uint, object_prim_offset)
+ 
+ /* cameras */
+ KERNEL_DATA_ARRAY(DecomposedTransform, camera_motion)
++KERNEL_DATA_ARRAY(float4, camera_dof_motion)
+ 
+ /* triangles */
+ KERNEL_DATA_ARRAY(uint, tri_shader)
+diff --git a/src/kernel/osl/services_shared.h b/src/kernel/osl/services_shared.h
+index 8bf63a86ee482eea54cc451db1e83760922491a6..14a41ab5029462ea4a1b40f6d0c592f0284616a0 100644
+--- a/src/kernel/osl/services_shared.h
++++ b/src/kernel/osl/services_shared.h
+@@ -1336,7 +1336,10 @@ ccl_device_inline bool osl_shared_get_camera_attribute(KernelGlobals kg,
+   if (name == DeviceStrings::u_aperture_position) {
+     /* The random numbers for aperture sampling are packed into N. */
+     const float2 rand_lens = make_float2(sg->N.x, sg->N.y);
+-    const float2 pos = camera_sample_aperture(&kernel_data.cam, rand_lens);
++    const float2 pos = camera_sample_aperture(kernel_data.cam.blades,
++                                            kernel_data.cam.bladesrotation,
++                                            kernel_data.cam.inv_aperture_ratio,
++                                            rand_lens);
+     return set_attribute(pos * kernel_data.cam.aperturesize, type, derivatives, val);
+   }
+   if (name == DeviceStrings::u_focal_distance) {
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index a413d62bb783d715cbf48c0a811c654299cd6add..96979f2dc46c5df18053411f36dc18b6faea0ea8 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1231,8 +1231,8 @@ struct KernelCamera {
+   float shuttertime;
+   int num_motion_steps, have_perspective_motion;
+ 
+-  int pad1;
+-  int pad2;
++  int num_dof_motion_steps;
++  float aperture_ratio;
+   int pad3;
+ 
+   /* panorama */
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index a8a6659b477abc750bb78859d0de11bd7d06b385..f5c3b7c61aca5aa911343fec3b58b2dbda01d591 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -98,6 +98,7 @@ NODE_DEFINE(Camera)
+ 
+   SOCKET_FLOAT(aperturesize, "Aperture Size", 0.0f);
+   SOCKET_FLOAT(focaldistance, "Focal Distance", 10.0f);
++  SOCKET_FLOAT_ARRAY(dof_motion, "Depth of Field Motion", array<float>());
+   SOCKET_UINT(blades, "Blades", 0);
+   SOCKET_FLOAT(bladesrotation, "Blades Rotation", 0.0f);
+ 
+@@ -484,6 +485,20 @@ void Camera::update(Scene *scene)
+   kcam->focaldistance = max(focaldistance, 1e-5f);
+   kcam->blades = (blades < 3) ? 0.0f : blades;
+   kcam->bladesrotation = bladesrotation;
++  kcam->num_dof_motion_steps = 0;
++  kernel_camera_dof_motion.clear();
++  if (need_motion == Scene::MOTION_BLUR && !dof_motion.empty()) {
++    assert(dof_motion.size() % 4 == 0);
++    const size_t count = dof_motion.size() / 4;
++    kernel_camera_dof_motion.resize(count);
++    for (size_t i = 0; i < count; ++i) {
++      kernel_camera_dof_motion[i] = make_float4(dof_motion[i * 4],
++                                               max(dof_motion[i * 4 + 1], 1e-5f),
++                                               dof_motion[i * 4 + 2],
++                                               dof_motion[i * 4 + 3]);
++    }
++    kcam->num_dof_motion_steps = int(count);
++  }
+ 
+   /* motion blur */
+   kcam->shuttertime = (need_motion == Scene::MOTION_BLUR) ? shuttertime : -1.0f;
+@@ -494,6 +509,7 @@ void Camera::update(Scene *scene)
+ 
+   /* anamorphic lens bokeh */
+   kcam->inv_aperture_ratio = 1.0f / aperture_ratio;
++  kcam->aperture_ratio = aperture_ratio;
+ 
+   /* panorama */
+   kcam->panorama_type = panorama_type;
+@@ -618,6 +634,14 @@ void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scen
+   else {
+     dscene->camera_motion.free();
+   }
++  if (!kernel_camera_dof_motion.empty()) {
++    float4 *samples = dscene->camera_dof_motion.alloc(kernel_camera_dof_motion.size());
++    std::copy_n(kernel_camera_dof_motion.data(), kernel_camera_dof_motion.size(), samples);
++    dscene->camera_dof_motion.copy_to_device();
++  }
++  else {
++    dscene->camera_dof_motion.free();
++  }
+ }
+ 
+ void Camera::device_update_volume(Device * /*device*/, DeviceScene *dscene, Scene *scene)
+@@ -630,9 +654,13 @@ void Camera::device_update_volume(Device * /*device*/, DeviceScene *dscene, Scen
+ 
+   KernelIntegrator *kintegrator = &dscene->data.integrator;
+   if (kintegrator->use_volumes) {
+-    if (camera_type == CAMERA_CUSTOM) {
++    if (camera_type == CAMERA_CUSTOM ||
++        (!kernel_camera_dof_motion.empty() && !kernel_camera_motion.empty())) {
+       kernel_camera.is_inside_volume = 1;
+-      LOG_INFO << "Considering custom camera to be inside volume.";
++      /* Sampled pupil origins under a rotating camera need a swept bound.
++       * Conservatively initialize the volume stack rather than relying on the
++       * centre-pose near-plane bound in this combined case. */
++      LOG_INFO << "Conservatively initializing camera volume stack.";
+     }
+     else {
+       BoundBox viewplane_boundbox = viewplane_bounds_get();
+@@ -672,6 +700,7 @@ void Camera::device_free(Device * /*device*/, DeviceScene *dscene, Scene *scene)
+ {
+   scene->lookup_tables->remove_table(&shutter_table_offset);
+   dscene->camera_motion.free();
++  dscene->camera_dof_motion.free();
+ }
+ 
+ float3 Camera::transform_full_raster_to_world(const float raster_x, const float raster_y)
+@@ -710,11 +739,20 @@ BoundBox Camera::viewplane_bounds_get()
+    * checks we need in a more clear and smart fashion? */
+   BoundBox bounds = BoundBox::empty;
+ 
+-  const float max_aperture_size = aperture_ratio < 1.0f ? aperturesize / aperture_ratio :
+-                                                          aperturesize;
++  double max_aperture = aperturesize, min_ratio = aperture_ratio;
++  double min_focus = max(focaldistance, 1e-5f);
++  for (const float4 sample : kernel_camera_dof_motion) {
++    max_aperture = std::max(max_aperture, double(sample.x));
++    min_ratio = std::min(min_ratio, double(sample.w));
++    min_focus = std::min(min_focus, double(sample.y));
++  }
++  /* Extrema bound all interpolated pupil samples, including an aperture that
++   * is larger only away from the requested frame. Compute intermediates in
++   * double precision; the host validates the resulting float range. */
++  const double max_aperture_size = max_aperture * std::max(1.0, 1.0 / min_ratio);
+ 
+   if (camera_type == CAMERA_PANORAMA || camera_type == CAMERA_CUSTOM) {
+-    const float extend = max_aperture_size + nearclip;
++    const float extend = float(max_aperture_size + nearclip);
+     if (use_spherical_stereo == false) {
+       bounds.grow(make_float3(cameratoworld.x.w, cameratoworld.y.w, cameratoworld.z.w), extend);
+     }
+@@ -760,10 +798,8 @@ BoundBox Camera::viewplane_bounds_get()
+      *  0, 0
+      */
+ 
+-    const float scaled_horz_dof_ray = (max_aperture_size > 0.0f) ?
+-                                          max_aperture_size * (nearclip / focaldistance) :
+-                                          0.0f;
+-    const float extend = max_aperture_size + max(nearclip, scaled_horz_dof_ray);
++    const double scaled_horz_dof_ray = max_aperture_size * (double(nearclip) / min_focus);
++    const float extend = float(max_aperture_size + std::max(double(nearclip), scaled_horz_dof_ray));
+ 
+     bounds.grow(transform_full_raster_to_world(0.0f, 0.0f), extend);
+     bounds.grow(transform_full_raster_to_world(0.0f, (float)full_height), extend);
+@@ -928,6 +964,7 @@ float Camera::world_to_raster_size(const float3 P)
+ #else
+       camera_sample_panorama(&kernel_camera,
+                              kernel_camera_motion.data(),
++                             nullptr, /* Dicing footprints use requested-frame optics. */
+                              0.5f * make_float2(full_width, full_height),
+                              zero_float2(),
+                              &ray);
+diff --git a/src/scene/camera.h b/src/scene/camera.h
+index 37c32cf8dcfecd716e733ce5ba81afee82bdfaf6..1ed3a7ac5ff681f9b614221c2e2dbfe7d427b319 100644
+--- a/src/scene/camera.h
++++ b/src/scene/camera.h
+@@ -79,6 +79,8 @@ class Camera : public Node {
+   /* depth of field */
+   NODE_SOCKET_API(float, focaldistance)
+   NODE_SOCKET_API(float, aperturesize)
++  /* Complete chronological samples: aperture, focus, rotation, ratio. */
++  NODE_SOCKET_API_ARRAY(array<float>, dof_motion)
+   NODE_SOCKET_API(uint, blades)
+   NODE_SOCKET_API(float, bladesrotation)
+ 
+@@ -208,6 +210,7 @@ class Camera : public Node {
+   /* Kernel camera data, copied here for dicing. */
+   KernelCamera kernel_camera;
+   array<DecomposedTransform> kernel_camera_motion;
++  array<float4> kernel_camera_dof_motion;
+ 
+   /* Custom camera script. */
+   std::string script_name;
+diff --git a/src/scene/devicescene.cpp b/src/scene/devicescene.cpp
+index 9b5eb0ff242f7c50b5c8dac2470405dd9f8cba2d..608e62e9d19c3634ae608d2d1fb1996fd8644c96 100644
+--- a/src/scene/devicescene.cpp
++++ b/src/scene/devicescene.cpp
+@@ -33,6 +33,7 @@ DeviceScene::DeviceScene(Device *device)
+       object_flag(device, "object_flag", MEM_GLOBAL),
+       object_prim_offset(device, "object_prim_offset", MEM_GLOBAL),
+       camera_motion(device, "camera_motion", MEM_GLOBAL),
++      camera_dof_motion(device, "camera_dof_motion", MEM_GLOBAL),
+       attributes_map(device, "attributes_map", MEM_GLOBAL),
+       attributes_float(device, "attributes_float", MEM_GLOBAL),
+       attributes_float2(device, "attributes_float2", MEM_GLOBAL),
+diff --git a/src/scene/devicescene.h b/src/scene/devicescene.h
+index b34eb2cc4ba8472e1803aa0fd302f3d73bde70fb..a3fcd5a1aab95538763026388b79fdd2d402b2a4 100644
+--- a/src/scene/devicescene.h
++++ b/src/scene/devicescene.h
+@@ -49,6 +49,7 @@ class DeviceScene {
+ 
+   /* cameras */
+   device_vector<DecomposedTransform> camera_motion;
++  device_vector<float4> camera_dof_motion;
+ 
+   /* attributes */
+   device_vector<AttributeMap> attributes_map;

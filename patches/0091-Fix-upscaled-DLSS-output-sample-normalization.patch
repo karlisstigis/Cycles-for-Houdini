@@ -1,0 +1,35 @@
+From 9dd58d3e601159f42a2f1ea6d932fc6d94132389 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini candidate rebase <candidate@localhost>
+Date: Thu, 12 Nov 2026 02:04:03 +0100
+Subject: [PATCH] Fix upscaled DLSS output sample normalization
+
+Rationale: OutputDriver readback reused low-resolution sample counts for upscaled DLSS pixels, causing darkening and transparent rows.
+Contract: Match viewport normalization for denoised output at a different resolution; retain native and noisy pass sample scaling.
+Tests: tests/houdini_dlss_sample_count_smoke.py
+---
+ src/integrator/path_trace_tile.cpp | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/integrator/path_trace_tile.cpp b/src/integrator/path_trace_tile.cpp
+index 094687efc6e7597911ff0c959e32fb61cc31cc01..6b443f9a8736d3d4b56e74baa89858144d2ecba1 100644
+--- a/src/integrator/path_trace_tile.cpp
++++ b/src/integrator/path_trace_tile.cpp
+@@ -103,8 +103,17 @@ bool PathTraceTile::get_pass_pixels_impl(const string_view pass_name,
+   pass_access_info.use_approximate_shadow_catcher_background =
+       pass_access_info.use_approximate_shadow_catcher && !buffer_params.use_transparent_background;
+ 
+-  const PassAccessorCPU pass_accessor(pass_access_info, exposure, num_samples);
+   const int2 rendered = path_trace_.get_render_tile_effective_size(pass->mode);
++  if (pass->mode == PassMode::DENOISED &&
++      rendered != path_trace_.get_render_tile_effective_size(PassMode::NOISY))
++  {
++    /* Match the viewport display accessor: upscaled denoised pixels are already
++     * normalized when adaptive sample counts exist. Those counts remain at the
++     * input resolution and must not filter the output-resolution image. */
++    pass_access_info.use_sample_count = false;
++    pass_access_info.use_approximate_shadow_catcher_background = false;
++  }
++  const PassAccessorCPU pass_accessor(pass_access_info, exposure, num_samples);
+   if (rendered.x <= 0 || rendered.y <= 0 || rendered.x > size.x || rendered.y > size.y) {
+     return false;
+   }

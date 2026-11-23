@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+try:
+    from cycles_houdini_startup import initialize_rop
+    initialize_rop(kwargs['node'])
+except ModuleNotFoundError as _cycles_import_error:
+    if _cycles_import_error.name not in ('cycles_houdini', 'cycles_houdini_startup'):
+        raise
+    import hou
+    if not getattr(hou.session, '_cycles_missing_notice', False):
+        hou.session._cycles_missing_notice = True
+        print('Cycles renderer unavailable: saved values and graph recovery data are retained.')
+    if not hasattr(hou.session, '_cycles_missing_notice_reset'):
+        def _cycles_missing_notice_reset(event):
+            if event in (hou.hipFileEventType.BeforeLoad, hou.hipFileEventType.AfterClear):
+                hou.session._cycles_missing_notice = False
+        hou.session._cycles_missing_notice_reset = _cycles_missing_notice_reset
+        hou.hipFile.addEventCallback(_cycles_missing_notice_reset)

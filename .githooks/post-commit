@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Queue the exact revision without blocking Git on a build.
+runner=$(git config --local --get cycles.ciPython) || exit 0
+[ -n "$runner" ] || exit 0
+exec "$runner" "$(git rev-parse --show-toplevel)/scripts/workstation-ci.py" enqueue fast HEAD

@@ -1,0 +1,155 @@
+From 4e4462b8db3e858f8c3a9c548cb148d33dbf9716 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:33 +0100
+Subject: [PATCH] sampled point curve attributes
+
+Locked-Patch: patches/0029-sampled-point-curve-attributes.patch
+Locked-Patch-SHA256: fd6f610bb3795d5f54c4ed395ca010bca55033b5b5d21fe3d3be9bc9db25bb63
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_sampled_instance_attribute_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 0f1a8b0d752738c765405155cdf1ec66d834404f
+Previous-Patch: patches/0029-sampled-point-curve-attributes.patch
+Previous-Patch-SHA256: fd6f610bb3795d5f54c4ed395ca010bca55033b5b5d21fe3d3be9bc9db25bb63
+Rationale: Point/curve sampled attributes add per-step field evaluation to primitive types whose upstream layout differs; they depend on the owned sampling schema.
+Contract: sampled point curve attributes
+Tests: tests/houdini_sampled_instance_attribute_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/geom/attribute.h b/src/kernel/geom/attribute.h
+index 5c53a701b3257b3c500a504ba84eba838e90ea4b..93d79a6fd346ac898b338840494454337192ffb4 100644
+--- a/src/kernel/geom/attribute.h
++++ b/src/kernel/geom/attribute.h
+@@ -261,6 +261,33 @@ ccl_device_template_spec Quaternion attribute_data_fetch(KernelGlobals kg,
+   return kernel_data_fetch(attributes_quaternion, offset);
+ }
+ 
++/* Generic field storage keeps the centre first and the remaining samples in
++ * chronological order. Dedicated position/radius/normal readers are unchanged. */
++template<typename T>
++ccl_device T attribute_data_fetch_motion(KernelGlobals kg,
++                                         ccl_private const ShaderData *sd,
++                                         const AttributeDescriptor desc,
++                                         const int index,
++                                         const int stride)
++{
++  if ((desc.element & ATTR_ELEMENT_IS_MOTION) && sd->time >= 0.0f) {
++    const int steps = kernel_data_fetch(objects, sd->object).num_geom_steps;
++    if (steps > 1) {
++      const float time = saturatef(sd->time) * (steps - 1);
++      const int step = min(int(time), steps - 2);
++      const float factor = time - step;
++      const int centre = (steps - 1) / 2;
++      const int first = step == centre ? 0 : step < centre ? step + 1 : step;
++      const int next = step + 1;
++      const int second = next == centre ? 0 : next < centre ? next + 1 : next;
++      const T a = attribute_data_fetch<T>(kg, desc.element, desc.offset + index + first * stride);
++      const T b = attribute_data_fetch<T>(kg, desc.element, desc.offset + index + second * stride);
++      return (1.0f - factor) * a + factor * b;
++    }
++  }
++  return attribute_data_fetch<T>(kg, desc.element, desc.offset + index);
++}
++
+ /* Transform matrix attribute on meshes */
+ 
+ ccl_device Transform primitive_attribute_matrix(KernelGlobals kg, const AttributeDescriptor desc)
+diff --git a/src/kernel/geom/curve.h b/src/kernel/geom/curve.h
+index 7d68a98ad3c8e0cbff3ae849fd8f8e55a069580e..3e94c58ad8436f0863ae71685abc2f16a9fe8e41 100644
+--- a/src/kernel/geom/curve.h
++++ b/src/kernel/geom/curve.h
+@@ -59,8 +59,10 @@ ccl_device T curve_attribute(KernelGlobals kg,
+     const int k0 = curve.first_key + PRIMITIVE_UNPACK_SEGMENT(sd->type);
+     const int k1 = k0 + 1;
+ 
+-    const BaseT f0 = attribute_data_fetch<BaseT>(kg, desc.element, desc.offset + k0);
+-    const BaseT f1 = attribute_data_fetch<BaseT>(kg, desc.element, desc.offset + k1);
++    const int stride = (desc.element & ATTR_ELEMENT_IS_MOTION) ?
++                           kernel_data_fetch(objects, sd->object).numverts : 0;
++    const BaseT f0 = attribute_data_fetch_motion<BaseT>(kg, sd, desc, k0, stride);
++    const BaseT f1 = attribute_data_fetch_motion<BaseT>(kg, sd, desc, k1, stride);
+ 
+     if constexpr (is_dual_v<T>) {
+       T result;
+@@ -82,7 +84,9 @@ ccl_device T curve_attribute(KernelGlobals kg,
+    * could be computed somehow? */
+ 
+   if (desc.element & ATTR_ELEMENT_CURVE) {
+-    return T(attribute_data_fetch<BaseT>(kg, desc.element, desc.offset + sd->prim));
++    const int stride = (desc.element & ATTR_ELEMENT_IS_MOTION) ?
++                           kernel_data_fetch(objects, sd->object).numprims : 0;
++    return T(attribute_data_fetch_motion<BaseT>(kg, sd, desc, sd->prim, stride));
+   }
+   return make_zero<T>();
+ }
+diff --git a/src/kernel/geom/point.h b/src/kernel/geom/point.h
+index 5e16131a5ca2e0810e2e8fa6f73825f147599e3a..864293f55d7584f0619fa283f10fad27916504ea 100644
+--- a/src/kernel/geom/point.h
++++ b/src/kernel/geom/point.h
+@@ -27,7 +27,9 @@ ccl_device T point_attribute(KernelGlobals kg,
+                              const AttributeDescriptor desc)
+ {
+   if (desc.element & ATTR_ELEMENT_VERTEX) {
+-    return T(attribute_data_fetch<dual_base_t<T>>(kg, desc.element, desc.offset + sd->prim));
++    const int stride = (desc.element & ATTR_ELEMENT_IS_MOTION) ?
++                           kernel_data_fetch(objects, sd->object).numverts : 0;
++    return T(attribute_data_fetch_motion<dual_base_t<T>>(kg, sd, desc, sd->prim, stride));
+   }
+   return make_zero<T>();
+ }
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index e7cb7bf1fa8faf66d9922fb0eb70923cb39d367b..d03fdf94cbd0d885b4ce4f3ee05a3743baf4a136 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1476,6 +1476,8 @@ struct KernelObject {
+   uint16_t num_geom_steps;
+   uint16_t num_tfm_steps;
+   int numverts;
++  /* Generic sampled mesh-corner/curve attribute stride, independent of geometry unions. */
++  int numprims;
+ 
+   uint attribute_map_offset;
+   uint motion_offset;
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index fc664a81fe251e5953f10f2fd03f2d3615bcd0ab..67df9a94d9b4c881ac5714c5d896dd8c11af70a8 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -361,10 +361,11 @@ class AttributeTableBuilder {
+ 
+     /* Store element and type. */
+     desc.element = mattr->element;
+-    /* Positions and normals have dedicated motion readers. Other sampled mesh
+-     * attributes are read through triangle_attribute at the shader's ray time. */
+-    if (geom->is_mesh() && mattr->has_motion() &&
+-        (mattr->element & (ATTR_ELEMENT_VERTEX | ATTR_ELEMENT_CORNER)) &&
++    /* Positions, radii and normals retain dedicated readers. Other sampled
++     * mesh, point and hair fields use the generic readers at shader ray time. */
++    if (mattr->has_motion() &&
++        (mattr->element & (ATTR_ELEMENT_VERTEX | ATTR_ELEMENT_CORNER |
++                          ATTR_ELEMENT_CURVE_KEY | ATTR_ELEMENT_CURVE)) &&
+         mattr->std != ATTR_STD_POSITION && mattr->std != ATTR_STD_VERTEX_NORMAL &&
+         mattr->std != ATTR_STD_CORNER_NORMAL) {
+       desc.element = AttributeElement(desc.element | ATTR_ELEMENT_IS_MOTION);
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 107dcd356660515117b0d8ab40b5fdbc4150c907..d16464b7bae808bc69546dfac3be18e2536a069b 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -730,6 +730,9 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+     kobject.mesh_volume.num_prims = static_cast<Mesh *>(geom)->num_triangles();
+     kobject.mesh_volume.normal_offset = ATTR_STD_NOT_FOUND;
+   }
++  kobject.numprims = (geom->is_mesh() || geom->is_volume()) ?
++                         static_cast<Mesh *>(geom)->num_triangles() :
++                         geom->is_hair() ? static_cast<Hair *>(geom)->num_curves() : 0;
+   kobject.attribute_map_offset = 0;
+ 
+   if (ob->asset_name_is_modified() || update_all) {
+@@ -1262,7 +1265,7 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+      * prepared. Motion corner normals use this count as their sample stride. */
+     const int numprims = (geom->is_mesh() || geom->is_volume()) ?
+                              static_cast<Mesh *>(geom)->num_triangles() :
+-                             0;
++                             geom->is_hair() ? static_cast<Hair *>(geom)->num_curves() : 0;
+     if (kobject.numprims != numprims) {
+       kobject.numprims = numprims;
+       update = true;

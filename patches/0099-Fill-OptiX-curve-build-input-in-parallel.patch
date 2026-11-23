@@ -1,0 +1,190 @@
+From 93ed049e7ba6410c45ca260ef6fcd79d984e6f57 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Mon, 16 Nov 2026 17:33:55 +0000
+Subject: [PATCH] Fill OptiX curve build input in parallel
+
+Before each curve acceleration structure build, OptiXDevice::build_bvh
+fills the build input on one thread: a bounding box per segment for ribbon
+curves (a Catmull-Rom bound per segment), and float4 vertices with an index
+per segment for thick and linear curves. With millions of segments this
+serial loop dominated the object BVH stage for curves.
+
+Each curve's first segment in the serial order is the sum of the segment
+counts of the previous curves, and its first vertex follows from it: one
+extra vertex per curve for linear curves, three for Catmull-Rom curves.
+Compute these starts once with a short serial pass that mirrors the serial
+counters, then fill curves with parallel_for, isolated so waiting workers
+do not take other geometry build tasks. Every curve writes exactly the same
+values at the same positions as before, for every motion step.
+
+Rationale: Filling the OptiX curve build input was serial and linear in the segment count, about half a second per GPU for a million ribbon curves.
+Contract: The AABB, index and vertex arrays given to optixAccelBuild are bitwise identical to the serial loop for ribbon, thick and linear curves and all motion steps.
+Tests: tests/houdini_curve_subdivisions_smoke.py, tests/houdini_hair_smoke.py, tests/houdini_rls_hair_smoke.py
+---
+ src/device/optix/device_impl.cpp | 145 ++++++++++++++++++-------------
+ 1 file changed, 86 insertions(+), 59 deletions(-)
+
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 2cae454eb30e7359d0880a90bfb02d4f989b4924..eaa5dfba97074f4ab1095446361feffdbfdae87d 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -1529,73 +1529,100 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+         aabb_data.alloc(num_segments * num_motion_steps);
+       }
+ 
++      /* Position of the first segment of each curve in the serial order. The vertices of a curve
++       * follow the vertices of all previous curves: one more than its segments for linear curves
++       * and three more for Catmull-Rom curves (the duplicated end points). Knowing these, every
++       * curve is written at the same positions as in a serial loop over the curves, so curves
++       * can be filled in parallel and the build input is unchanged. */
++      const size_t num_curves = hair->num_curves();
++      vector<size_t> curve_segment_start(num_curves);
++      {
++        size_t segment_index = 0;
++        for (size_t curve_index = 0; curve_index < num_curves; ++curve_index) {
++          curve_segment_start[curve_index] = segment_index;
++          segment_index += max(hair->get_curve(curve_index).num_segments(), 0);
++        }
++        assert(segment_index == num_segments);
++      }
++      const size_t extra_vertices_per_curve = (hair->curve_shape == CURVE_THICK_LINEAR) ? 1 : 3;
++
+       /* Get AABBs for each motion step. */
+       for (size_t step = 0; step < num_motion_steps; ++step) {
+         const packed_float3 *keys = attr_P->data_at_time_step<packed_float3>(step,
+                                                                              num_motion_steps);
+         const float *curve_radius_step = attr_R->data_at_time_step<float>(step, num_motion_steps);
+ 
+-        if (hair->curve_shape == CURVE_THICK || hair->curve_shape == CURVE_THICK_LINEAR) {
+-          for (size_t curve_index = 0, segment_index = 0, vertex_index = step * num_vertices;
+-               curve_index < hair->num_curves();
+-               ++curve_index)
+-          {
+-            const Hair::Curve curve = hair->get_curve(curve_index);
+-
+-            if (hair->curve_shape == CURVE_THICK_LINEAR) {
+-              const int first_key_index = curve.first_key;
+-
+-              for (int k = 0; k < curve.num_segments(); ++k) {
+-                if (step == 0) {
+-                  index_data[segment_index++] = vertex_index;
++        /* Each curve writes only its own segments and vertices; isolate the loop so a worker
++         * waiting for it does not pick up another geometry's build task. */
++        isolate_task([&]() {
++          parallel_for(
++              blocked_range<size_t>(0, num_curves, 1024), [&](const blocked_range<size_t> &r) {
++                if (hair->curve_shape == CURVE_THICK || hair->curve_shape == CURVE_THICK_LINEAR) {
++                  for (size_t curve_index = r.begin(); curve_index != r.end(); ++curve_index) {
++                    const Hair::Curve curve = hair->get_curve(curve_index);
++                    size_t segment_index = curve_segment_start[curve_index];
++                    size_t vertex_index = step * num_vertices + segment_index +
++                                          curve_index * extra_vertices_per_curve;
++
++                    if (hair->curve_shape == CURVE_THICK_LINEAR) {
++                      const int first_key_index = curve.first_key;
++
++                      for (int k = 0; k < curve.num_segments(); ++k) {
++                        if (step == 0) {
++                          index_data[segment_index++] = vertex_index;
++                        }
++                        vertex_data[vertex_index++] = make_float4(
++                            float3(keys[first_key_index + k]),
++                            curve_radius_step[first_key_index + k]);
++                      }
++
++                      const int last_key_index = first_key_index + curve.num_keys - 1;
++                      vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
++                                                                curve_radius_step[last_key_index]);
++                    }
++                    else {
++                      const int first_key_index = curve.first_key;
++                      vertex_data[vertex_index++] = make_float4(
++                          float3(keys[first_key_index]), curve_radius_step[first_key_index]);
++
++                      for (int k = 0; k < curve.num_segments(); ++k) {
++                        if (step == 0) {
++                          index_data[segment_index++] = vertex_index - 1;
++                        }
++                        vertex_data[vertex_index++] = make_float4(
++                            float3(keys[first_key_index + k]),
++                            curve_radius_step[first_key_index + k]);
++                      }
++
++                      const int last_key_index = first_key_index + curve.num_keys - 1;
++                      vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
++                                                                curve_radius_step[last_key_index]);
++                      vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
++                                                                curve_radius_step[last_key_index]);
++                    }
++                  }
+                 }
+-                vertex_data[vertex_index++] = make_float4(float3(keys[first_key_index + k]),
+-                                                          curve_radius_step[first_key_index + k]);
+-              }
+-
+-              const int last_key_index = first_key_index + curve.num_keys - 1;
+-              vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
+-                                                        curve_radius_step[last_key_index]);
+-            }
+-            else {
+-              const int first_key_index = curve.first_key;
+-              vertex_data[vertex_index++] = make_float4(float3(keys[first_key_index]),
+-                                                        curve_radius_step[first_key_index]);
+-
+-              for (int k = 0; k < curve.num_segments(); ++k) {
+-                if (step == 0) {
+-                  index_data[segment_index++] = vertex_index - 1;
++                else {
++                  for (size_t curve_index = r.begin(); curve_index != r.end(); ++curve_index) {
++                    const Hair::Curve curve = hair->get_curve(curve_index);
++                    size_t i = curve_segment_start[curve_index];
++
++                    for (int segment = 0; segment < curve.num_segments(); ++segment, ++i) {
++                      BoundBox bounds = BoundBox::empty;
++                      curve.bounds_grow(segment, keys, curve_radius_step, bounds);
++
++                      const size_t index = step * num_segments + i;
++                      aabb_data[index].minX = bounds.min.x;
++                      aabb_data[index].minY = bounds.min.y;
++                      aabb_data[index].minZ = bounds.min.z;
++                      aabb_data[index].maxX = bounds.max.x;
++                      aabb_data[index].maxY = bounds.max.y;
++                      aabb_data[index].maxZ = bounds.max.z;
++                    }
++                  }
+                 }
+-                vertex_data[vertex_index++] = make_float4(float3(keys[first_key_index + k]),
+-                                                          curve_radius_step[first_key_index + k]);
+-              }
+-
+-              const int last_key_index = first_key_index + curve.num_keys - 1;
+-              vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
+-                                                        curve_radius_step[last_key_index]);
+-              vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
+-                                                        curve_radius_step[last_key_index]);
+-            }
+-          }
+-        }
+-        else {
+-          for (size_t curve_index = 0, i = 0; curve_index < hair->num_curves(); ++curve_index) {
+-            const Hair::Curve curve = hair->get_curve(curve_index);
+-
+-            for (int segment = 0; segment < curve.num_segments(); ++segment, ++i) {
+-              BoundBox bounds = BoundBox::empty;
+-              curve.bounds_grow(segment, keys, curve_radius_step, bounds);
+-
+-              const size_t index = step * num_segments + i;
+-              aabb_data[index].minX = bounds.min.x;
+-              aabb_data[index].minY = bounds.min.y;
+-              aabb_data[index].minZ = bounds.min.z;
+-              aabb_data[index].maxX = bounds.max.x;
+-              aabb_data[index].maxY = bounds.max.y;
+-              aabb_data[index].maxZ = bounds.max.z;
+-            }
+-          }
+-        }
++              });
++        });
+       }
+ 
+       /* Upload AABB data to GPU. */

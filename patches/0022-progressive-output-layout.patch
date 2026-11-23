@@ -1,0 +1,235 @@
+From fbae5bdcc58d7479269967c7406bc47d18d1e4d5 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:32 +0100
+Subject: [PATCH] progressive output layout
+
+Locked-Patch: patches/0022-progressive-output-layout.patch
+Locked-Patch-SHA256: 5f6420fd8bcdb089adb7a0d94447b8067f16df942ca97e5eecdaaba6ab965321
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_progressive_layout_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 9051ad751b5f173d5660d6e1b37f7615e461e04b
+Previous-Patch: patches/0022-progressive-output-layout.patch
+Previous-Patch-SHA256: 5f6420fd8bcdb089adb7a0d94447b8067f16df942ca97e5eecdaaba6ab965321
+Rationale: Progressive output reads require retained full-frame buffers, a synchronized read boundary and correct rendered-region layout; this is an embedding output API.
+Contract: progressive output layout
+Tests: tests/houdini_progressive_layout_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/path_trace.cpp b/src/integrator/path_trace.cpp
+index 5b8c3063351938cf5649ce2bcf8be39f79681808..b0a751b7f1582df354f296d4ac89eb9f472c6324 100644
+--- a/src/integrator/path_trace.cpp
++++ b/src/integrator/path_trace.cpp
+@@ -1264,6 +1264,17 @@ int2 PathTrace::get_render_tile_size() const
+   return make_int2(tile.window_width, tile.window_height);
+ }
+ 
++int2 PathTrace::get_render_tile_effective_size(const PassMode mode) const
++{
++  if (full_frame_state_.render_buffers) {
++    return get_render_tile_size();
++  }
++  const BufferParams &params = mode == PassMode::DENOISED ?
++                                   render_state_.effective_denoised_big_tile_params :
++                                   render_state_.effective_big_tile_params;
++  return make_int2(params.window_width, params.window_height);
++}
++
+ int2 PathTrace::get_render_tile_offset() const
+ {
+   if (full_frame_state_.render_buffers) {
+diff --git a/src/integrator/path_trace.h b/src/integrator/path_trace.h
+index fe64ff2d38eb81b7be578296b1ad3b70d1ae988d..f2400c126e2bf983917d7d2c71c801a9657d31de 100644
+--- a/src/integrator/path_trace.h
++++ b/src/integrator/path_trace.h
+@@ -175,6 +175,7 @@ class PathTrace {
+    * NOTE: If the full-frame buffer processing is in progress, returns parameters of the full-frame
+    * instead. */
+   int2 get_render_tile_size() const;
++  int2 get_render_tile_effective_size(PassMode mode) const;
+   int2 get_render_tile_offset() const;
+   int2 get_render_size() const;
+ 
+diff --git a/src/integrator/path_trace_tile.cpp b/src/integrator/path_trace_tile.cpp
+index 4ae059f43ae9a1c885ed3835a92d363f84af6e58..2048748a0ff598ad99475338eb47fcd46cbd1250 100644
+--- a/src/integrator/path_trace_tile.cpp
++++ b/src/integrator/path_trace_tile.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include "scene/pass.h"
+ #include "session/buffers.h"
++#include "util/tbb.h"
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -27,24 +28,13 @@ int PathTraceTile::get_num_samples() const
+   return path_trace_.get_num_render_tile_samples();
+ }
+ 
+-bool PathTraceTile::get_pass_pixels(const string_view pass_name,
+-                                    const int num_channels,
+-                                    float *pixels) const
++const BufferPass *PathTraceTile::find_pass(const string_view pass_name) const
+ {
+-  /* NOTE: The code relies on a fact that session is fully update and no scene/buffer modification
+-   * is happening while this function runs. */
+-
+-  if (!copied_from_device_) {
+-    /* Copy from device on demand. */
+-    path_trace_.copy_render_tile_from_device();
+-    copied_from_device_ = true;
+-  }
+-
+   const BufferParams &buffer_params = path_trace_.get_render_tile_params();
+ 
+   const BufferPass *pass = buffer_params.find_pass(pass_name);
+   if (pass == nullptr) {
+-    return false;
++    return nullptr;
+   }
+ 
+   const bool has_denoised_result = path_trace_.has_denoised_result() ||
+@@ -53,17 +43,38 @@ bool PathTraceTile::get_pass_pixels(const string_view pass_name,
+     pass = buffer_params.find_pass(pass->type);
+     if (pass == nullptr) {
+       /* Happens when denoised result pass is requested but is never written by the kernel. */
+-      return false;
++      return nullptr;
+     }
+   }
+ 
+-  pass = buffer_params.get_actual_display_pass(pass);
++  return buffer_params.get_actual_display_pass(pass);
++}
++
++int2 PathTraceTile::get_pass_render_size(const string_view pass_name) const
++{
++  const BufferPass *pass = find_pass(pass_name);
++  return pass ? path_trace_.get_render_tile_effective_size(pass->mode) : make_int2(0, 0);
++}
++
++bool PathTraceTile::get_pass_pixels(const string_view pass_name,
++                                    const int num_channels,
++                                    float *pixels) const
++{
++  /* The caller holds the session at a synchronization point for this read. */
++  const BufferPass *pass = find_pass(pass_name);
+   if (pass == nullptr) {
+     /* Happens when interactive session changes display pass but render
+      * buffer does not contain it yet. */
+     return false;
+   }
+ 
++  if (!copied_from_device_) {
++    path_trace_.copy_render_tile_from_device();
++    copied_from_device_ = true;
++  }
++
++  const BufferParams &buffer_params = path_trace_.get_render_tile_params();
++
+   const float exposure = buffer_params.exposure;
+   const int num_samples = path_trace_.get_num_render_tile_samples();
+ 
+@@ -73,6 +84,31 @@ bool PathTraceTile::get_pass_pixels(const string_view pass_name,
+       pass_access_info.use_approximate_shadow_catcher && !buffer_params.use_transparent_background;
+ 
+   const PassAccessorCPU pass_accessor(pass_access_info, exposure, num_samples);
++  const int2 rendered = path_trace_.get_render_tile_effective_size(pass->mode);
++  if (rendered.x <= 0 || rendered.y <= 0 || rendered.x > size.x || rendered.y > size.y) {
++    return false;
++  }
++  if (rendered != size) {
++    /* Preserve OutputDriver's full tile contract. Read packed effective pixels,
++     * then expand with nearest sampling so raw IDs/data are never interpolated.
++     * No allocated-but-unrendered rows can reach the host. */
++    vector<float> preview(size_t(rendered.x) * rendered.y * num_channels);
++    const PassAccessor::Destination destination(preview.data(), num_channels);
++    if (!path_trace_.get_render_tile_pixels(pass_accessor, destination)) {
++      return false;
++    }
++    parallel_for(0, size.y, [&](int64_t y) {
++      const size_t source_y = size_t(y) * rendered.y / size.y;
++      for (int x = 0; x < size.x; ++x) {
++        const size_t source = (source_y * rendered.x + size_t(x) * rendered.x / size.x) * num_channels;
++        const size_t target = (size_t(y) * size.x + x) * num_channels;
++        for (int c = 0; c < num_channels; ++c) {
++          pixels[target + c] = preview[source + c];
++        }
++      }
++    });
++    return true;
++  }
+   const PassAccessor::Destination destination(pixels, num_channels);
+ 
+   return path_trace_.get_render_tile_pixels(pass_accessor, destination);
+diff --git a/src/integrator/path_trace_tile.h b/src/integrator/path_trace_tile.h
+index c9cf6df2c54ebb18f64417e83527e42b0db837b6..2b374ba457bda5c984028eff31a6ca33b90126eb 100644
+--- a/src/integrator/path_trace_tile.h
++++ b/src/integrator/path_trace_tile.h
+@@ -13,11 +13,13 @@ CCL_NAMESPACE_BEGIN
+  * Implementation of OutputDriver::Tile interface for path tracer. */
+ 
+ class PathTrace;
++class BufferPass;
+ 
+ class PathTraceTile : public OutputDriver::Tile {
+  public:
+   PathTraceTile(PathTrace &path_trace);
+   int get_num_samples() const override;
++  int2 get_pass_render_size(const string_view pass_name) const override;
+ 
+   bool get_pass_pixels(const string_view pass_name,
+                        const int num_channels,
+@@ -27,6 +29,7 @@ class PathTraceTile : public OutputDriver::Tile {
+                        const float *pixels) const override;
+ 
+  private:
++  const BufferPass *find_pass(const string_view pass_name) const;
+   PathTrace &path_trace_;
+   mutable bool copied_from_device_;
+ };
+diff --git a/src/integrator/path_trace_work.cpp b/src/integrator/path_trace_work.cpp
+index 633155db633007a8ba28a361f8ea63b8401ff26b..2790907435f13115c65ae685599ff187d04b8750 100644
+--- a/src/integrator/path_trace_work.cpp
++++ b/src/integrator/path_trace_work.cpp
+@@ -134,14 +134,21 @@ void PathTraceWork::copy_from_denoised_render_buffers(const RenderBuffers *rende
+ bool PathTraceWork::get_render_tile_pixels(const PassAccessor &pass_accessor,
+                                            const PassAccessor::Destination &destination)
+ {
+-  const int offset_y = (effective_buffer_params_.full_y + effective_buffer_params_.window_y) -
+-                       (effective_big_tile_params_.full_y + effective_big_tile_params_.window_y);
+-  const int width = effective_buffer_params_.width;
++  const bool denoised = pass_accessor.get_pass_access_info().mode == PassMode::DENOISED;
++  const BufferParams &params = denoised ? effective_denoised_buffer_params_ :
++                                         effective_buffer_params_;
++  const BufferParams &big_params = denoised ? effective_denoised_big_tile_params_ :
++                                             effective_big_tile_params_;
++  const int offset_y = (params.full_y + params.window_y) -
++                       (big_params.full_y + big_params.window_y);
++  const int width = big_params.window_width;
+ 
+   PassAccessor::Destination slice_destination = destination;
+   slice_destination.offset += offset_y * width;
+ 
+-  return pass_accessor.get_render_tile_pixels(buffers_.get(), slice_destination);
++  /* Allocation dimensions remain full-sized during navigation. Only the
++   * effective window and stride describe the currently rendered pixels. */
++  return pass_accessor.get_render_tile_pixels(buffers_.get(), params, slice_destination);
+ }
+ 
+ bool PathTraceWork::set_render_tile_pixels(PassAccessor &pass_accessor,
+diff --git a/src/session/output_driver.h b/src/session/output_driver.h
+index 91d723a3e13ad4158107ce1d7d3976b9c610594c..ad910bbc5ddbe2294df48ec99c6ce05719ce7b4e 100644
+--- a/src/session/output_driver.h
++++ b/src/session/output_driver.h
+@@ -43,6 +43,10 @@ class OutputDriver {
+     /* Optional sample statistics for host diagnostics and unnormalized passes. */
+     virtual int get_num_samples() const { return 0; }
+ 
++    /* Actual sampling resolution before expansion to size. A denoised pass
++     * may have a different resolution than a noisy/data pass. */
++    virtual int2 get_pass_render_size(const string_view /*pass_name*/) const { return size; }
++
+     virtual bool get_pass_pixels(const string_view pass_name,
+                                  const int num_channels,
+                                  float *pixels) const = 0;

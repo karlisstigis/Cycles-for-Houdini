@@ -1,0 +1,161 @@
+From a0ffd7605f66cd9f5dc0228fd2b7d74dd94fdf39 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:38 +0100
+Subject: [PATCH] owned attribute table layout
+
+Locked-Patch: patches/0052-owned-attribute-table-layout.patch
+Locked-Patch-SHA256: 46faa767f3b16989fdafbc0c7f1dd88e43412b5d0b76e5fc2265997fcae897f1
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_shading_payload_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 14138cad9ece745d8cbd8a4056da3ae0dcdfc7a8
+Previous-Patch: patches/0052-owned-attribute-table-layout.patch
+Previous-Patch-SHA256: 46faa767f3b16989fdafbc0c7f1dd88e43412b5d0b76e5fc2265997fcae897f1
+Rationale: Ordered attribute spans describe buffer ownership independently from dirty values; layout changes must invalidate retained packed tables.
+Contract: owned attribute table layout
+Tests: tests/houdini_shading_payload_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 30b8c0bb3f59e67a66739f1170bf9a088f1ab01a..7fb2e6b7c52caf5c289248d3f9f5563f31492c9c 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1309,6 +1309,12 @@ void GeometryManager::device_update(Device *device,
+ 
+ void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool force_free)
+ {
++  if (force_free) {
++    attribute_layout_valid = false;
++    for (auto &layout : attribute_layout) {
++      layout.clear();
++    }
++  }
+   dscene->bvh_nodes.free_if_need_realloc(force_free);
+   dscene->bvh_leaf_nodes.free_if_need_realloc(force_free);
+   dscene->object_node.free_if_need_realloc(force_free);
+diff --git a/src/scene/geometry.h b/src/scene/geometry.h
+index c43bcca3d9b7b23f633ab85955479c2fc101e1c1..f04f32f8bec68cc62885043d01951beee44b2e08 100644
+--- a/src/scene/geometry.h
++++ b/src/scene/geometry.h
+@@ -289,6 +289,25 @@ class GeometryManager {
+   void collect_statistics(const Scene *scene, RenderStats *stats);
+ 
+  protected:
++  /* Ordered spans describe packed table ownership, independently of whether
++   * source values changed. Shader demand can relocate unchanged attributes. */
++  struct AttributeLayoutSpan {
++    const Node *owner;
++    AttributeStandard standard;
++    ustring name;
++    TypeDesc type;
++    AttributeElement element;
++    size_t count;
++    int steps;
++    bool operator==(const AttributeLayoutSpan &b) const
++    {
++      return owner == b.owner && standard == b.standard && name == b.name && type == b.type &&
++             element == b.element && count == b.count && steps == b.steps;
++    }
++  };
++  vector<AttributeLayoutSpan> attribute_layout[AttrKernelDataType::NUM + 3];
++  bool attribute_layout_valid = false;
++
+   bool displace(Device *device, Scene *scene, Mesh *mesh, Progress &progress);
+ 
+   void create_volume_mesh(const Scene *scene, Volume *volume, Progress &progress);
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index d0013610ae8b072ede2292a54d2b55afeb7b09d9..bbdea91d76db7d68ce2d53b501bece4b6a92a385 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -685,6 +685,33 @@ void GeometryManager::device_update_attributes(Device *device,
+    * take 2x of overall attribute memory usage.
+    */
+   AttributeTableBuilder builder(dscene);
++  vector<AttributeLayoutSpan> next_layout[AttrKernelDataType::NUM + 3];
++  const auto layout_index = [](const Geometry *geom, const Attribute *attr) -> int {
++    if (attr->element & ATTR_ELEMENT_VOXEL) {
++      return -1;
++    }
++    if (attr->std == ATTR_STD_POSITION) {
++      return AttrKernelDataType::NUM + (geom->is_hair() ? 1 : geom->is_pointcloud() ? 2 : 0);
++    }
++    return int(Attribute::kernel_type(*attr));
++  };
++  const auto record_layout = [&](const Node *owner, Geometry *geom, const Attribute *attr) {
++    if (!attr) {
++      return;
++    }
++    const int index = layout_index(geom, attr);
++    if (index < 0) {
++      return;
++    }
++    const bool combined = attr->std == ATTR_STD_POSITION &&
++                          (geom->is_hair() || geom->is_pointcloud());
++    const size_t count = combined ? attr->size :
++                                   Attribute::element_size(geom, attr->element, ATTR_PRIM_GEOMETRY);
++    const int steps = combined ? (attr->has_motion() ? geom->get_motion_steps() : 1) :
++                                attr->num_motion_steps();
++    next_layout[index].push_back(
++        {owner, attr->std, attr->name, attr->type, attr->element, count, steps});
++  };
+ 
+   for (size_t i = 0; i < scene->geometry.size(); i++) {
+     Geometry *geom = scene->geometry[i];
+@@ -700,6 +727,7 @@ void GeometryManager::device_update_attributes(Device *device,
+         /* Special cases for packed position + radius. */
+         if (attr->std == ATTR_STD_POSITION) {
+           builder.reserve_position_radius(geom, attr);
++          record_layout(geom, geom, attr);
+           continue;
+         }
+         if (attr->std == ATTR_STD_RADIUS) {
+@@ -707,6 +735,7 @@ void GeometryManager::device_update_attributes(Device *device,
+         }
+       }
+       builder.reserve(geom, attr, ATTR_PRIM_GEOMETRY);
++      record_layout(geom, geom, attr);
+     }
+   }
+ 
+@@ -715,9 +744,16 @@ void GeometryManager::device_update_attributes(Device *device,
+ 
+     for (Attribute &attr : object_attribute_values[i].attributes) {
+       builder.reserve(object->geometry, &attr, ATTR_PRIM_GEOMETRY);
++      record_layout(object, object->geometry, &attr);
+     }
+   }
+ 
++  bool layout_changed[AttrKernelDataType::NUM + 3];
++  for (int index = 0; index < AttrKernelDataType::NUM + 3; ++index) {
++    layout_changed[index] = !attribute_layout_valid || next_layout[index] != attribute_layout[index];
++  }
++  /* A cancelled upload cannot leave a partially rewritten table certified. */
++  attribute_layout_valid = false;
+   builder.alloc();
+ 
+   /* The order of those flags needs to match that of AttrKernelDataType. */
+@@ -736,6 +772,10 @@ void GeometryManager::device_update_attributes(Device *device,
+    * socket types share an ordinary attribute pool. Reallocating that pool must
+    * not mark unrelated primitive data for copying. */
+   const auto attribute_needs_realloc = [&](const Geometry *geom, const Attribute *attr) {
++    const int index = layout_index(geom, attr);
++    if (index >= 0 && layout_changed[index]) {
++      return true;
++    }
+     if (attr->std == ATTR_STD_POSITION ||
+         (attr->std == ATTR_STD_RADIUS && (geom->is_hair() || geom->is_pointcloud())))
+     {
+@@ -836,6 +876,13 @@ void GeometryManager::device_update_attributes(Device *device,
+   /* After mesh attributes and patch tables have been copied to device memory,
+    * we need to update offsets in the objects. */
+   scene->object_manager->device_update_geom_offsets(device, dscene, scene);
++  if (progress.get_cancel()) {
++    return;
++  }
++  for (int index = 0; index < AttrKernelDataType::NUM + 3; ++index) {
++    attribute_layout[index] = std::move(next_layout[index]);
++  }
++  attribute_layout_valid = true;
+ }
+ 
+ CCL_NAMESPACE_END

@@ -1,0 +1,25 @@
+{
+ "path_length": {
+  "at_the_limit": {
+   "app_folder_length": 137,
+   "longest_installed": 259,
+   "longest_installed_path": "<folder>/installation\\versions\\12a7dd4e208dd3e1\\provenance\\patches\\0106-Update-only-the-object-table-and-lights-when-only-li.patch",
+   "result": "installed, recovered, committed, uninstalled"
+  },
+  "below_app_folder": 121,
+  "longest_bytecode_houdini_may_write": [
+   "host/python3.13libs/cycles_houdini/blender/__pycache__/blend_library_materials.cpython-313.pyc"
+  ],
+  "longest_bytecode_length": 1,
+  "longest_in_package": "provenance/patches/0113-Update-the-flags-of-only-the-written-objects-when-no.patch",
+  "longest_in_package_length": 82,
+  "one_over_the_limit": {
+   "app_folder_length": 138,
+   "message": "{\"result\": \"failed\", \"error\": \"The folder <folder>/installation is too long for Cycles for Houdini: its longest file would get a path of 260 characters and Windows allows 259, so choose a folder at least 1 character shorter.\"}",
+   "result": "refused"
+  }
+ },
+ "result": "passed",
+ "revision": "efc5919",
+ "run": "y-c1c"
+}

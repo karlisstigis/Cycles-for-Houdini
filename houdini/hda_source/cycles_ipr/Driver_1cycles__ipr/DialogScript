@@ -1,0 +1,188 @@
+# SPDX-License-Identifier: Apache-2.0
+{
+    name cycles_ipr
+    script cycles_ipr
+    label "Cycles Render"
+    parm { name "execute" baseparm joinnext }
+    parm { name "executebackground" baseparm invisible }
+    parm { name "renderdialog" baseparm }
+    parm { name "trange" baseparm }
+    parm { name "f" baseparm }
+    parm { name "take" baseparm }
+    parm { name "tprerender" label "Enable Pre-Render Script" type toggle size 1 default { 1 } joinnext }
+    parm { name "prerender" label "Pre-Render Script" type file size 1 default { "" } disablewhen "{ tprerender == 0 }" parmtag { "filechooser_mode" "read" } joinnext }
+    parm { name "lprerender" label "Language" type string size 1 default { "hscript" } menu { "hscript" "Hscript" "python" "Python" } disablewhen "{ tprerender == 0 }" }
+    parm { name "tpreframe" label "Enable Pre-Frame Script" type toggle size 1 default { 1 } joinnext }
+    parm { name "preframe" label "Pre-Frame Script" type file size 1 default { "" } disablewhen "{ tpreframe == 0 }" parmtag { "filechooser_mode" "read" } joinnext }
+    parm { name "lpreframe" label "Language" type string size 1 default { "hscript" } menu { "hscript" "Hscript" "python" "Python" } disablewhen "{ tpreframe == 0 }" }
+    parm { name "tpostframe" label "Enable Post-Frame Script" type toggle size 1 default { 1 } joinnext }
+    parm { name "postframe" label "Post-Frame Script" type file size 1 default { "" } disablewhen "{ tpostframe == 0 }" parmtag { "filechooser_mode" "read" } joinnext }
+    parm { name "lpostframe" label "Language" type string size 1 default { "hscript" } menu { "hscript" "Hscript" "python" "Python" } disablewhen "{ tpostframe == 0 }" }
+    parm { name "tpostrender" label "Enable Post-Render Script" type toggle size 1 default { 1 } joinnext }
+    parm { name "postrender" label "Post-Render Script" type file size 1 default { "" } disablewhen "{ tpostrender == 0 }" parmtag { "filechooser_mode" "read" } joinnext }
+    parm { name "lpostrender" label "Language" type string size 1 default { "hscript" } menu { "hscript" "Hscript" "python" "Python" } disablewhen "{ tpostrender == 0 }" }
+    parm { name "source_mode" label "Geometry source" type string size 1 default { "objects" } menu { "objects" "OBJ Scene" "sop" "Single SOP" } help "OBJ Scene renders matching geometry objects and lights. Single SOP isolates one SOP source with the optional test light. Use object patterns to control inclusion; camera selection is independent." }
+    parm { name "soppath" label "Geometry SOP" type oppath size 1 default { "/obj/geo1/OUT" } disablewhen "{ source_mode == objects }" parmtag { "opfilter" "!!SOP!!" } parmtag { "oprelative" "." } }
+    parm { name "objectroot" label "OBJ scene root" type oppath size 1 default { "/obj" } disablewhen "{ source_mode == sop }" help "An object network or object subnet. Patterns below use Houdini node-pattern syntax, absolute paths, recursive subnet selection and @bundles." }
+    parm { name "vobject" label "Objects" type string size 1 default { "*" } disablewhen "{ source_mode == sop }" }
+    parm { name "forceobject" label "Force objects" type string size 1 default { "" } disablewhen "{ source_mode == sop }" help "Includes hidden objects. Exclude objects takes precedence." }
+    parm { name "excludeobject" label "Exclude objects" type string size 1 default { "" } disablewhen "{ source_mode == sop }" }
+    parm { name "lights" label "Lights" type string size 1 default { "*" } disablewhen "{ source_mode == sop }" }
+    parm { name "forcelights" label "Force lights" type string size 1 default { "" } disablewhen "{ source_mode == sop }" help "Adds lights outside the normal pattern. Enable still controls emission. Exclude lights takes precedence." }
+    parm { name "excludelights" label "Exclude lights" type string size 1 default { "" } disablewhen "{ source_mode == sop }" }
+    parm { name "camera" label "Camera" type oppath size 1 default { "/obj/cam1" } parmtag { "opfilter" "!!OBJ/CAMERA!!" } parmtag { "oprelative" "." } }
+    parm { name "dof_mode" label "Depth of Field" type string size 1 default { "camera" } menu { "camera" "Use Camera" "off" "Disable" "on" "Enable" } help "Use the selected camera's optional Cycles Depth of Field switch, or force depth of field off/on for this render. Focus and aperture settings remain camera-specific. Without a Cycles tab, Enable uses native Focus Distance and F-Stop." }
+    parm { name "pass_depth" label "Depth" type toggle size 1 default { 1 } help "Unfiltered nearest-surface distance. No display color transform or denoising." }
+    parm { name "pass_mist" label "Mist" type toggle size 1 default { 0 } help "Filtered normalized surface distance using the Mist start, depth and falloff settings." }
+    parm { name "pass_position" label "Position" type toggle size 1 default { 1 } help "Unfiltered world-space XYZ. Raw data, without display color transforms." }
+    parm { name "pass_normal" label "Normal" type toggle size 1 default { 1 } help "Filtered world-space shading normals. Raw data, without denoising or color transforms." }
+    parm { name "pass_uv" label "UV" type toggle size 1 default { 1 } help "Filtered render UV coordinates. Stored as U, V and W." }
+    parm { name "pass_roughness" label "Roughness" type toggle size 1 default { 0 } help "Filtered Cycles roughness diagnostic from the visible BSDFs." }
+    parm { name "pass_sample_count" label "Sample Count" type toggle size 1 default { 0 } help "Actual samples taken at each pixel, including adaptive convergence. Output stays float32 and raw." }
+    parm { name "pass_object_id" label "Object Index" type toggle size 1 default { 0 } help "Unfiltered explicit object Pass Index. Raw float32 X channel; no denoising or color transform. Set Pass Index in the optional Cycles OBJ / Cycles Light tab. Cryptomatte provides anti-aliased masks instead." }
+    parm { name "pass_material_id" label "Material Index" type toggle size 1 default { 0 } help "Unfiltered explicit material Pass Index. Set it on a Cycles Material builder or the ROP fallback material. Raw float32 X channel; no denoising or color transform." }
+    parm { name "pass_shadow_catcher" label "Shadow Catcher" type toggle size 1 default { 0 } help "Export the RGB shadow/reflection multiplier; Beauty supplies the foreground RGBA. Set Shadow Catcher Surfaces on receiving OBJs. Composite Beauty over footage multiplied by this factor. Off approximates the shadow directly in Beauty." }
+    parm { name "pass_diffuse_direct" label "Direct" type toggle size 1 default { 0 } help "Direct diffuse/subsurface light without BSDF color. Multiply direct plus indirect by the Diffuse Color pass to reconstruct this component." }
+    parm { name "pass_diffuse_indirect" label "Indirect" type toggle size 1 default { 0 } help "Indirect diffuse/subsurface light without BSDF color." }
+    parm { name "pass_diffuse_color" label "Color" type toggle size 1 default { 0 } help "Diffuse/subsurface BSDF color weights, without lighting." }
+    parm { name "pass_glossy_direct" label "Direct" type toggle size 1 default { 0 } help "Direct glossy/specular light without BSDF color." }
+    parm { name "pass_glossy_indirect" label "Indirect" type toggle size 1 default { 0 } help "Indirect glossy/specular light without BSDF color." }
+    parm { name "pass_glossy_color" label "Color" type toggle size 1 default { 0 } help "Glossy/specular BSDF color weights, without lighting." }
+    parm { name "pass_transmission_direct" label "Direct" type toggle size 1 default { 0 } help "Direct transmission light without BSDF color." }
+    parm { name "pass_transmission_indirect" label "Indirect" type toggle size 1 default { 0 } help "Indirect transmission light without BSDF color." }
+    parm { name "pass_transmission_color" label "Color" type toggle size 1 default { 0 } help "Transmission BSDF color weights, without lighting." }
+    parm { name "pass_volume_direct" label "Direct" type toggle size 1 default { 0 } help "Direct volume scattering light." }
+    parm { name "pass_volume_indirect" label "Indirect" type toggle size 1 default { 0 } help "Indirect volume scattering light." }
+    parm { name "pass_emission" label "Emission" type toggle size 1 default { 0 } help "Emission from directly visible surfaces." }
+    parm { name "pass_background" label "Environment" type toggle size 1 default { 0 } help "Emission from the directly visible world, also available for compositing a transparent film." }
+    parm { name "pass_ao" label "Ambient Occlusion" type toggle size 1 default { 0 } help "Normalized surface ambient occlusion, independent of BSDF color. Uses the light-path AO distance; this does not enable Fast GI." }
+    parm { name "mist_start" label "Start" type float size 1 default { 5 } range { 0! 1000 } disablewhen "{ pass_mist == 0 }" help "Distance from the camera at which mist begins, in scene units." }
+    parm { name "mist_depth" label "Depth" type float size 1 default { 25 } range { 0.0001! 1000 } disablewhen "{ pass_mist == 0 }" help "Distance over which mist reaches one, in scene units." }
+    parm { name "mist_falloff" label "Falloff" type string size 1 default { "2" } menu { "2" "Quadratic" "1" "Linear" "0.5" "Inverse Quadratic" } disablewhen "{ pass_mist == 0 }" }
+    parm { name "samples" label "Max Samples" type integer size 1 default { 4096 } range { 1! 16777216! } }
+    parm { name "adaptive_sampling" label "Adaptive Sampling" type toggle size 1 default { 1 } help "Stop sampling converged pixels. Lower thresholds require more work." }
+    parm { name "noise_threshold" label "Noise Threshold" type float size 1 default { 0.01 } range { 0! 1! } disablewhen "{ adaptive_sampling == 0 }" help "Zero selects Cycles' automatic threshold from the maximum sample count. This is a sampling error target, not a guaranteed image error." }
+    parm { name "min_samples" label "Min Samples" type integer size 1 default { 0 } range { 0! 16777216! } disablewhen "{ adaptive_sampling == 0 }" help "Zero lets Cycles choose the minimum before testing convergence." }
+    parm { name "time_limit" label "Time Limit (seconds)" type float size 1 default { 0 } range { 0! 3600 } help "Final path-tracing time budget per frame. Zero is unlimited. Cooking, scene synchronization, denoising and output are outside this budget." }
+    parm { name "ipr_samples" label "IPR Max Samples" type integer size 1 default { 1024 } range { 1! 16777216! } }
+    parm { name "ipr_adaptive_sampling" label "IPR Adaptive Sampling" type toggle size 1 default { 1 } }
+    parm { name "ipr_noise_threshold" label "IPR Noise Threshold" type float size 1 default { 0.1 } range { 0! 1! } disablewhen "{ ipr_adaptive_sampling == 0 }" }
+    parm { name "ipr_min_samples" label "IPR Min Samples" type integer size 1 default { 0 } range { 0! 16777216! } disablewhen "{ ipr_adaptive_sampling == 0 }" }
+    parm { name "use_denoise" label "Denoise beauty" type toggle size 1 default { 1 } help "Denoises linear beauty in Cycles using albedo and normal guides. Keeps a separate noisy beauty and raw guide passes. Native IPR, the panel and batch use the same settings. Changing denoiser settings resets sampling while retaining geometry." }
+    parm { name "denoiser" label "Denoiser" type string size 1 default { "oidn" } menu { "auto" "Automatic" "oidn" "OpenImageDenoise" "optix" "OptiX" } disablewhen "{ use_denoise == 0 }" help "Automatic prefers OpenImageDenoise on the render device, then OptiX on an OptiX GPU. CPU rendering uses OpenImageDenoise CPU. Unsupported explicit requests fail visibly; disable Use GPU to explicitly use CPU OpenImageDenoise while rendering on a GPU." }
+    parm { name "denoise_use_gpu" label "Use GPU for denoising" type toggle size 1 default { 0 } disablewhen "{ use_denoise == 0 } { denoiser == optix }" help "OpenImageDenoise uses the selected render GPU if supported. Disabling this explicitly uses CPU denoising. OptiX always requires the selected OptiX GPU. GPU denoising uses additional device memory." }
+    parm { name "denoise_quality" label "OIDN quality" type string size 1 default { "high" } menu { "high" "High" "balanced" "Balanced" "fast" "Fast" } disablewhen "{ use_denoise == 0 } { denoiser == optix }" }
+    parm { name "denoise_prefilter" label "OIDN guide prefilter" type string size 1 default { "accurate" } menu { "accurate" "Accurate" "fast" "Fast" "none" "None (clean guides)" } disablewhen "{ use_denoise == 0 } { denoiser == optix }" help "Accurate separately denoises albedo/normal guides. Fast trades guide detail for speed. None requires clean guides, usually from a high sample count." }
+    parm { name "denoise_start_sample" label "IPR denoising start sample" type integer size 1 default { 16 } range { 0! 4096 } disablewhen "{ use_denoise == 0 }" help "The progressive beauty uses noisy pixels until Cycles schedules denoising. The final image is denoised even when total samples are below this value. This is a spatial denoiser; temporal frame coherence is not certified." }
+    parm { name "denoise_passes" label "Denoising Passes" type string size 1 default { "albedo_normal" } menu { "rgb" "Color Only" "albedo" "Color and Albedo" "albedo_normal" "Color, Albedo and Normal" } disablewhen "{ use_denoise == 0 }" }
+    parm { name "ipr_use_denoise" label "IPR Denoise Beauty" type toggle size 1 default { 0 } }
+    parm { name "ipr_denoiser" label "IPR Denoiser" type string size 1 default { "auto" } menu { "auto" "Automatic" "oidn" "OpenImageDenoise" "optix" "OptiX" "dlss" "DLSS Ray Reconstruction (requires RTX/NGX)" } disablewhen "{ ipr_use_denoise == 0 }" help "DLSS is interactive only and requires compatible NVIDIA RTX hardware, SDK-enabled build and NGX driver runtime. Unsupported GPU/runtime requests report an error. Explicit Motion Vectors or shutter motion blur uses the Automatic conventional denoiser with a visible render warning, preserving authored motion data. Automatic retains its OIDN/OptiX behavior." }
+    parm { name "ipr_dlss_quality" label "DLSS Quality" type string size 1 default { "quality" } menu { "native" "Native (1x)" "quality" "Quality (1.5x)" "balanced" "Balanced (1.72x)" "performance" "Performance (2x)" "ultra_performance" "Ultra Performance (3x)" } disablewhen "{ ipr_use_denoise == 0 } { ipr_denoiser != dlss }" help "Viewer resolution and linked zoom define the display target. DLSS quality chooses the lower internal tracing resolution. Native preserves the target resolution. Shadow catchers disable upscaling in Cycles." }
+    parm { name "ipr_denoise_use_gpu" label "IPR Use GPU for Denoising" type toggle size 1 default { 1 } disablewhen "{ ipr_denoiser == dlss } { ipr_use_denoise == 0 } { ipr_denoiser == optix }" }
+    parm { name "ipr_denoise_quality" label "IPR OIDN Quality" type string size 1 default { "balanced" } menu { "high" "High" "balanced" "Balanced" "fast" "Fast" } disablewhen "{ ipr_denoiser == dlss } { ipr_use_denoise == 0 } { ipr_denoiser == optix }" }
+    parm { name "ipr_denoise_prefilter" label "IPR OIDN Guide Prefilter" type string size 1 default { "fast" } menu { "accurate" "Accurate" "fast" "Fast" "none" "None (clean guides)" } disablewhen "{ ipr_denoiser == dlss } { ipr_use_denoise == 0 } { ipr_denoiser == optix }" }
+    parm { name "ipr_denoise_start_sample" label "IPR Denoising Start Sample" type integer size 1 default { 1 } range { 0! 16777216! } disablewhen "{ ipr_denoiser == dlss } { ipr_use_denoise == 0 }" }
+    parm { name "ipr_denoise_passes" label "IPR Denoising Passes" type string size 1 default { "albedo" } menu { "rgb" "Color Only" "albedo" "Color and Albedo" "albedo_normal" "Color, Albedo and Normal" } disablewhen "{ ipr_denoiser == dlss } { ipr_use_denoise == 0 }" }
+    parm { name "light_tree" label "Light Tree" type toggle size 1 default { 1 } help "Improves many-light sampling using positions and estimated intensity. Changing this rebuilds the light sampling data while retaining geometry." }
+    parm { name "light_threshold" label "Light Threshold" type float size 1 default { 0.01 } range { 0! 1 } disablewhen "{ light_tree == 1 }" help "Probabilistically terminates low-contribution light samples when the light tree is disabled. Zero disables the threshold." }
+    parm { name "sampling_pattern" label "Sampling Pattern" type string size 1 default { "auto" } menu { "auto" "Automatic (Blue Noise)" "tabulated_sobol" "Tabulated Sobol" "blue_noise" "Blue Noise" "blue_noise_first" "Blue Noise First Sample" "sobol_burley" "Sobol-Burley" } help "Automatic selects first-sample blue noise for IPR and full blue noise for final renders, following Blender's policy. Automatic is the Blender default." }
+    parm { name "seed" label "Seed" type integer size 1 default { 0 } range { 0! 2147483647! } }
+    parm { name "animate_seed" label "Animate Seed" type toggle size 1 default { 0 } help "Hashes explicit render frame and subframe with the base seed using Cycles' hash function. Does not change Houdini's current frame." }
+    parm { name "min_bounce" label "Min Light Bounces" type integer size 1 default { 0 } range { 0! 1024! } }
+    parm { name "transparent_min_bounce" label "Min Transparent Bounces" type integer size 1 default { 0 } range { 0! 1024! } }
+    parm { name "sample_subset" label "Sample Subset" type toggle size 1 default { 0 } help "Renders a range of the final sample budget. Intended for externally managed distributed sampling. This does not merge separate EXRs or implement a farm scheduler." }
+    parm { name "subset_offset" label "Sample Offset" type integer size 1 default { 0 } range { 0! 16777215! } disablewhen "{ sample_subset == 0 }" }
+    parm { name "subset_length" label "Sample Length" type integer size 1 default { 2048 } range { 1! 16777216! } disablewhen "{ sample_subset == 0 }" }
+    parm { name "max_bounce" label "Total" type integer size 1 default { 12 } range { 0! 1024! } }
+    parm { name "diffuse_bounce" label "Diffuse" type integer size 1 default { 4 } range { 0! 1024! } }
+    parm { name "glossy_bounce" label "Glossy" type integer size 1 default { 4 } range { 0! 1024! } }
+    parm { name "transmission_bounce" label "Transmission" type integer size 1 default { 12 } range { 0! 1024! } }
+    parm { name "volume_bounce" label "Volume" type integer size 1 default { 0 } range { 0! 1024! } }
+    parm { name "transparent_max_bounce" label "Transparent" type integer size 1 default { 8 } range { 0! 1024! } }
+    parm { name "clamp_direct" label "Direct Light" type float size 1 default { 0 } range { 0! 100 } help "Limits direct sample intensity. Zero disables clamping. Clamping reduces fireflies at the cost of accuracy." }
+    parm { name "clamp_indirect" label "Indirect Light" type float size 1 default { 10 } range { 0! 100 } help "Limits indirect sample intensity. Zero disables clamping." }
+    parm { name "filter_glossy" label "Filter Glossy" type float size 1 default { 1 } range { 0! 10 } }
+    parm { name "resampled_light_sampling" label "Resampled Light Sampling" type toggle size 1 default { 0 } help "Samples several candidate light points and material directions, retaining one in proportion to its expected contribution. Can reduce direct-light noise; extra work per sample means the benefit depends on the scene. Primary surfaces made entirely of sharp reflective lobes retain standard Cycles sampling, preserving efficient glossy highlights and bokeh. Rough glossy, diffuse, subsurface, transmission and mixed materials retain resampling where supported. Works with area, point, spot, textured and linked lights. Huang hair, shadow-catcher paths and unsupported situations use standard sampling. Changes sampling, not the intended lighting. Off uses standard Cycles sampling." }
+    parm { name "use_guiding" label "Path Guiding (CPU)" type toggle size 1 default { 0 } hidewhen "{ device_mode != cpu }" help "Train an OpenPGL guide while rendering on CPU. The saved choice remains when switching to GPU and takes effect again on CPU." }
+    parm { name "deterministic_guiding" label "Deterministic Guiding" type toggle size 1 default { 1 } hidewhen "{ device_mode != cpu } { use_guiding == 0 }" help "Use deterministic guide training. Advanced CPU path-guiding control; enabled by default." }
+    parm { name "caustics_reflective" label "Reflective Caustics" type toggle size 1 default { 1 } }
+    parm { name "caustics_refractive" label "Refractive Caustics" type toggle size 1 default { 1 } }
+    parm { name "nested_dielectrics" label "Nested Dielectrics" type toggle size 1 default { 0 } help "Resolve overlapping refractive objects, such as liquid in a glass, by their object Dielectric Priority. In an overlap the higher priority defines the medium and the other surface is ignored, so refraction uses the IOR relative to the neighbouring medium. Works with Glass, Refraction and Principled BSDF transmission on closed meshes. Off renders exactly like standard Cycles." }
+    parm { name "fast_gi" label "Fast GI Approximation" type toggle size 1 default { 0 } help "Biased approximation of diffuse indirect light using background-tinted ambient occlusion." }
+    parm { name "fast_gi_method" label "Method" type string size 1 default { "replace" } menu { "replace" "Replace GI after Bounces" "add" "Add Ambient Occlusion" } disablewhen "{ fast_gi == 0 }" }
+    parm { name "ao_factor" label "AO Factor" type float size 1 default { 1 } range { 0! 10 } disablewhen "{ fast_gi == 0 }" }
+    parm { name "ao_distance" label "AO Distance" type float size 1 default { 10 } range { 0.0001! 100 } disablewhen "{ fast_gi == 0 }" }
+    parm { name "ao_bounces" label "Final Bounces" type integer size 1 default { 1 } range { 0! 1024! } disablewhen "{ fast_gi == 0 } { fast_gi_method == add }" }
+    parm { name "ipr_ao_bounces" label "IPR Bounces" type integer size 1 default { 1 } range { 0! 1024! } disablewhen "{ fast_gi == 0 } { fast_gi_method == add }" }
+    parm { name "use_texture_cache" label "Use Cycles texture cache" type toggle size 1 default { 1 } }
+    parm { name "auto_texture_cache" label "Generate texture cache files" type toggle size 1 default { 0 } }
+    parm { name "persistent_data" label "Persistent Data" type toggle size 1 default { 0 } help "Keeps the Cycles session and unchanged scene resources for an ordered final-render sequence. Changed geometry, materials and textures still update per frame. Releases all resources when rendering completes or fails. Off (the Blender default) releases the scene after every frame, which costs time on every frame but suits interleaving several memory-heavy ROPs. The interactive viewer always keeps its scene; this setting does not affect it." }
+    parm { name "render_threads" label "Render Threads (0 = Automatic)" type integer size 1 default { 0 } range { 0! 1024! } help "Cycles session thread count. This does not control Houdini's SOP cook threads. Changing the count recreates the render session." }
+    parm { name "allowmotionblur" label "Allow motion blur" type toggle size 1 default { 0 } }
+    parm { name "shutteroffset" label "Shutter offset" type float size 1 default { 0 } range { -1! 1! } help "Camera shutter is a fraction of a frame. Offset -1 ends at the render time, 0 centres the shutter, and +1 starts at the render time." }
+    parm { name "motion_samples" label "Motion samples (odd count)" type integer size 1 default { 3 } range { 3! 129! } help "Steps across the shutter for camera, object and deformation blur, including the centre (odd, 3 to 129). Velocity draws points and curves with three; Acceleration and Geometry Samples use all of them." }
+    parm { name "geometry_motion" label "Deformation" type string size 1 default { "transform" } menu { "transform" "Off" "velocity" "Velocity" "acceleration" "Acceleration" "deformation" "Geometry Samples" "velocity_if_available" "Velocity if Available" } help "How shapes blur; camera and object transform blur always apply. Objects can override it under Cycles / Motion Blur. Off: no deformation blur. Velocity: moves points by v (units per second), and turns packed primitives and instances by w (radians per second), from this frame only; nothing else is cooked. Geometry without v gets no deformation blur. Acceleration: like Velocity, plus accel (units per second squared) for curved paths, drawn with all Samples. Geometry Samples: cooks the geometry at each shutter sample. Velocity if Available: Velocity for objects whose points carry v (or w on packed and instance points), Geometry Samples for the rest." }
+    parm { name "dicing_rate" label "Dicing Rate Render" type float size 1 default { 1 } range { 0.1! 1000! } }
+    parm { name "ipr_dicing_rate" label "Viewport" type float size 1 default { 8 } range { 0.1! 1000! } }
+    parm { name "offscreen_dicing_scale" label "Offscreen Scale" type float size 1 default { 4 } range { 1! 25 } }
+    parm { name "max_subdivisions" label "Max Subdivisions" type integer size 1 default { 12 } range { 0! 16! } }
+    parm { name "dicing_camera" label "Dicing Camera" type oppath size 1 default { "" } parmtag { "opfilter" "!!OBJ/CAMERA!!" } parmtag { "oprelative" "." } }
+    parm { name "tessellation_update" label "Adaptive Subdivision Update" type toggle size 1 default { 1 } help "Automatically recalculate adaptive tessellation in IPR. Off retains existing tessellation through camera and object movement. Without cached tessellation, render the original polygons. Source edits that invalidate the cache also render original polygons until refreshed. Refresh Tessellation recalculates once without changing this toggle. Disk renders always use current settings." }
+    parm { name "ipr_refit_meshes" label "Refit Meshes While Interacting" type toggle size 1 default { 0 } help "In a live render, a mesh whose points move but whose triangles stay the same is updated in place instead of being rebuilt. The first image after a change comes a little sooner (about 10 % on a 5-million-triangle mesh) and the image is identical; GPU memory during the update is about 6 % higher. Curves, points, volumes and subdivided or displaced meshes are always rebuilt, as in Blender's viewport, and every 16th update of a mesh rebuilds it. Final and batch renders always rebuild. Changing it restarts the live render." }
+    parm { name "refresh_tessellation" label "Refresh Tessellation" type button size 1 default { 0 } parmtag { "script_callback" "from cycles_houdini.scene import tessellation; tessellation.refresh(kwargs['node'])" } parmtag { "script_callback_language" "python" } help "Recalculate adaptive tessellation once using the current scene and view, including when Adaptive Subdivision Update is off." }
+    
+    
+    
+    
+    parm { name "limit_subdivision" label "Limit Subdivision Triangles" type toggle size 1 default { 0 } }
+    parm { name "subdivision_limit" label "Triangle Budget" type integer size 1 default { 100000000 } range { 1! 100000000 } disablewhen "{ limit_subdivision == 0 }" help "Optional per-mesh allocation ceiling, disabled by default. Exceeding it reports an error without reducing subdivision quality." }
+    
+    
+    parm { name "material_kind" label "Material" type string size 1 default { "diffuse" } menu { "diffuse" "Diffuse surface" "principled" "Principled surface" "emission" "Emissive surface" "volume_absorption" "Volume absorption" "principled_volume" "Principled volume" } }
+    parm { name "material_pass_index" label "Fallback Pass Index" type integer size 1 default { 0 } range { 0! 32767! } disablewhen "{ materialpath != \"\" }" help "Material Index for geometry using the fallback surface. Assigned or overriding Cycles Material builders use their own Pass Index. This changes IDs without modifying shading or displacement." }
+    parm { name "use_material_assignments" label "Use object and geometry materials" type toggle size 1 default { 1 } help "Use Cycles Material or Cycles Volume Material builders assigned through OBJ, detail, polygon/curve primitive, VDB field or sphere-point shop_materialpath. All fields in one VDB volume must resolve to one volume material. Point bindings override containing particle primitives. Embedded packed assignments take precedence. Empty bindings use the uniform controls below. Per-key hair bindings and overrides/style sheets require additional adapters. Disable this control for a uniform material across the source." }
+    parm { name "materialpath" label "Material override (optional)" type oppath size 1 default { "" } parmtag { "opfilter" "!!VOP!!" } parmtag { "oprelative" "." } help "A Cycles Material or Cycles Volume Material builder that overrides object, geometry and embedded packed assignments for this source. The graph replaces the uniform controls below. Surface builders can drive polygon displacement. Volume builders require VDB geometry; combined surface/volume graphs need a separate media adapter." }
+    parm { name "basecolor" label "Material color" type color size 3 default { 1 1 1 } }
+    parm { name "color_attribute" label "Color attribute (optional)" type string size 1 default { "" } }
+    parm { name "point_radius" label "Point radius without pscale" type float size 1 default { 0.05 } range { 0! 1 } }
+    parm { name "curve_width" label "Curve width without width attribute" type float size 1 default { 0.001 } range { 0! 1 } }
+    parm { name "curve_subdivisions" label "Curve Subdivisions" type integer size 1 default { 2 } range { 0! 24! } help "Splits each curve segment into 2^n pieces so Rounded Ribbons follow the curve smoothly: 0 = 1 piece, 2 = 4, 4 = 16 (higher values render as 4). Scene-wide, the same as Blender's Curve Subdivisions. Higher values take longer to render. Does not change 3D Curves, Linear 3D Curves or the sampling of Bezier and NURBS curves (Bezier/NURBS Segments)." }
+    parm { name "volume_step_size" label "Volume step size (0 = automatic)" type float size 1 default { 0 } range { 0! 1 } help "Object-space sampling step for moving-volume ray marching. Zero derives it from grid resolution. Smaller steps improve thin-feature accuracy and increase rendering cost. Shared packed volumes with different step sizes use distinct geometry variants." }
+    parm { name "volume_biased" label "Biased Volume Ray Marching" type toggle size 1 default { 0 } help "Uses ray marching instead of the null-scattering volume integrator. Active volume velocity currently requires ray marching regardless of this preference." }
+    parm { name "volume_step_rate" label "Final Step Rate" type float size 1 default { 1 } range { 0.0001! 10 } disablewhen "{ volume_biased == 0 allowmotionblur == 0 }" help "Global multiplier on voxel-derived ray-marching steps. Larger values trade detail for speed." }
+    parm { name "ipr_volume_step_rate" label "IPR Step Rate" type float size 1 default { 1 } range { 0.0001! 10 } disablewhen "{ volume_biased == 0 allowmotionblur == 0 }" }
+    parm { name "volume_max_steps" label "Max Steps" type integer size 1 default { 1024 } range { 1! 1048576! } disablewhen "{ volume_biased == 0 allowmotionblur == 0 }" }
+    parm { name "roughness" label "Roughness" type float size 1 default { 0.5 } range { 0! 1! } }
+    parm { name "metallic" label "Metallic" type float size 1 default { 0 } range { 0! 1! } }
+    parm { name "emission_strength" label "Surface emission strength" type float size 1 default { 1 } range { 0! 10 } }
+    parm { name "density" label "Volume density scale" type float size 1 default { 1 } range { 0! 10 } }
+    parm { name "anisotropy" label "Volume anisotropy" type float size 1 default { 0 } range { -0.99! 0.99! } }
+    parm { name "volume_emission_strength" label "Volume emission strength" type float size 1 default { 0 } range { 0! 10 } }
+    parm { name "volume_emission_color" label "Volume emission color" type color size 3 default { 1 1 1 } }
+    parm { name "emission_field" label "Emission field (blank uses density)" type string size 1 default { "" } }
+    parm { name "blackbody_intensity" label "Blackbody intensity" type float size 1 default { 0 } range { 0! 1! } }
+    parm { name "temperature_kelvin_scale" label "Kelvin per temperature unit" type float size 1 default { 1000 } range { 0.001! 10000 } }
+    parm { name "background" label "Background color" type color size 3 default { 0.05 0.05 0.05 } }
+    parm { name "film_exposure" label "Film Exposure" type float size 1 default { 1 } range { 0! 10 } help "Linear multiplier applied to rendered color passes and EXR output. Changes restart sampling while retaining geometry. For display-only exposure that preserves sampling, use the viewer's exposure control." }
+    parm { name "pixel_filter" label "Pixel Filter" type string size 1 default { "blackman_harris" } menu { "box" "Box" "gaussian" "Gaussian" "blackman_harris" "Blackman-Harris" } }
+    parm { name "filter_width" label "Filter Width (pixels)" type float size 1 default { 1.5 } range { 0.0001! 5 } }
+    parm { name "pass_alpha_threshold" label "Pass Alpha Threshold" type float size 1 default { 0.5 } range { 0! 1! } help "Surface alpha threshold for data passes such as depth and position. Beauty alpha is independent." }
+    parm { name "transparent_background" label "Transparent background" type toggle size 1 default { 0 } help "Hide the environment from camera coverage while preserving its illumination and reflections. Combined and EXR output use associated alpha. Emission can have positive RGB with zero alpha." }
+    parm { name "transparent_glass" label "Transparent glass" type toggle size 1 default { 0 } disablewhen "{ transparent_background == 0 }" help "Include smooth transmissive surfaces in transparent film coverage. Reflections remain in the image. Requires a transparent background." }
+    parm { name "transparent_roughness_threshold" label "Transparent glass roughness threshold" type float size 1 default { 0.1 } range { 0! 1! } disablewhen "{ transparent_background == 0 } { transparent_glass == 0 }" help "Transmissive surfaces with roughness above this threshold keep opaque coverage." }
+    parm { name "lightpath" label "Point light OBJ (optional)" type oppath size 1 default { "" } disablewhen "{ source_mode == objects }" parmtag { "opfilter" "!!OBJ!!" } parmtag { "oprelative" "." } }
+    parm { name "lightstrength" label "Point light strength" type color size 3 default { 500 500 500 } disablewhen "{ source_mode == objects }" }
+    parm { name "picture" label "Linear EXR output" type file size 1 default { "$HIP/render/$HIPNAME.$OS.$F4.exr" } }
+    parm { name "soho_program" type string size 1 default { "CHRender.py" } invisible }
+    parm { name "soho_outputmode" type integer size 1 default { 1 } invisible }
+    parm { name "soho_diskfile" type string size 1 default { "$HOUDINI_TEMP_DIR/cycles-$OS-$F4.log" } invisible }
+    parm { name "soho_pipecmd" type string size 1 default { "\"$HFS/python313/python.exe\" -u \"$CYCLES_HOUDINI_HOST_ROOT/scripts/soho_pipe.py\"" } invisible }
+    parm { name "soho_foreground" type integer size 1 default { 0 } invisible }
+    parm { name "soho_ipr_support" type integer size 1 default { 1 } invisible }
+    parm { name "soho_previewsupport" type integer size 1 default { 1 } invisible }
+    parm { name "soho_autoheadlight" type integer size 1 default { 0 } invisible }
+    parm { name "soho_viewport_menu" type integer size 1 default { 1 } invisible }
+    // Reuse Houdini's documented native-view override binding during this lifecycle prototype.
+    // No Mantra shader evaluation or renderer implementation is used.
+    parm { name "soho_shopstyle" type string size 1 default { "VMantra" } invisible }
+}

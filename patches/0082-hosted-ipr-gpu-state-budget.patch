@@ -1,0 +1,91 @@
+From d9cfdd8c4ec616f87fe75bb42ff93f877dc0a4af Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:44 +0100
+Subject: [PATCH] Keep hosted interactive GPU integrator states at normal
+ device concurrency by default while preserving low-memory shrink, explicit
+ environment overrides and upstream/final growth; carry policy per session and
+ each physical render device.
+
+Locked-Patch: patches/0082-hosted-ipr-gpu-state-budget.patch
+Locked-Patch-SHA256: 9d8560ef3b7939dfef6dfb7a4a0413d92b1f9e01170885e4240d0b843283d03b
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/core_gpu_concurrency_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: e1429f9b4aab8c7899bcf5490f8815b54d5bd818
+Previous-Patch: patches/0082-hosted-ipr-gpu-state-budget.patch
+Previous-Patch-SHA256: 9d8560ef3b7939dfef6dfb7a4a0413d92b1f9e01170885e4240d0b843283d03b
+Rationale: Hosted IPR chooses normal per-device GPU concurrency instead of consuming spare memory for state growth, while retaining low-memory shrink and final-render defaults.
+Contract: Keep hosted interactive GPU integrator states at normal device concurrency by default while preserving low-memory shrink, explicit environment overrides and upstream/final growth; carry policy per session and each physical render device.
+Tests: tests/core_gpu_concurrency_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/device/device.h b/src/device/device.h
+index ccef1fee2e3dd8e8d42769ca1e6fb2d6fb5cb074..f017d088bf655a09dba056358482ec9949dc50b1 100644
+--- a/src/device/device.h
++++ b/src/device/device.h
+@@ -193,6 +193,10 @@ class Device {
+   Profiler &profiler;
+   bool headless = true;
+ 
++  /* Embedding sessions may prefer baseline integrator concurrency over using spare memory.
++   * Read only by integrator queues; denoising-only queues are unaffected. */
++  bool use_gpu_concurrent_states_growth = true;
++
+   /* constant memory */
+   virtual void const_copy_to(const char *name, void *host, const size_t size) = 0;
+ 
+diff --git a/src/device/queue.cpp b/src/device/queue.cpp
+index 12593102ffe152586a736b9b5b0e72788290e879..65fa87cf9589defdeae450d3ab35f4d0ce442d00 100644
+--- a/src/device/queue.cpp
++++ b/src/device/queue.cpp
+@@ -32,6 +32,12 @@ static void env_override(const char *name, int &value)
+ int DeviceQueue::num_concurrent_states(const size_t state_size) const
+ {
+   ConcurrentStatesParams params = concurrent_states_params();
++  /* Hosted interactive sessions keep their device's normal concurrency baseline. Keep this
++   * before environment overrides so explicit user tuning retains precedence. The memory
++   * budget below still shrinks concurrency when even the baseline cannot fit. */
++  if (!device->use_gpu_concurrent_states_growth) {
++    params.grow_percent = 0;
++  }
+   env_override("CYCLES_CONCURRENT_STATES_BASELINE", params.baseline);
+   env_override("CYCLES_CONCURRENT_STATES_MIN", params.min);
+   env_override("CYCLES_CONCURRENT_STATES_MAX", params.max);
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index 71fe3c414da0c6366c0adb1736589b09f5b9bb75..1265bac07c0f0c3151a981f1ee4f4b2a820b75cc 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -43,6 +43,10 @@ Session::Session(const SessionParams &params_, const SceneParams &scene_params)
+   new_work_added_ = false;
+ 
+   device = Device::create(params.device, stats, profiler, params_.headless);
++  device->use_gpu_concurrent_states_growth = params.use_gpu_concurrent_states_growth;
++  device->foreach_device([&](Device *render_device) {
++    render_device->use_gpu_concurrent_states_growth = params.use_gpu_concurrent_states_growth;
++  });
+ 
+   if (device->have_error()) {
+     progress.set_error(device->error_message());
+diff --git a/src/session/session.h b/src/session/session.h
+index 1d8740d89a0e5dfbf332fcc5177f4f3ad2b617f2..0e868953b696e7483c3ecb68afbdb3ac23d46501 100644
+--- a/src/session/session.h
++++ b/src/session/session.h
+@@ -47,6 +47,10 @@ class SessionParams {
+   bool headless;
+   bool background;
+ 
++  /* Opt out of integrator-state growth above normal device concurrency in an embedding IPR.
++   * Standalone/upstream sessions retain their existing memory/performance policy by default. */
++  bool use_gpu_concurrent_states_growth = true;
++
+   int samples;
+   bool use_sample_subset;
+   int sample_subset_offset;
+@@ -103,6 +107,7 @@ class SessionParams {
+     /* Modified means we have to recreate the session, any parameter changes
+      * that can be handled by an existing Session are omitted. */
+     return !(device == params.device && headless == params.headless &&
++             use_gpu_concurrent_states_growth == params.use_gpu_concurrent_states_growth &&
+              background == params.background && pixel_size == params.pixel_size &&
+              threads == params.threads && use_profiling == params.use_profiling &&
+              use_auto_tile == params.use_auto_tile && tile_size == params.tile_size &&

@@ -1,0 +1,231 @@
+From ff30c367e812c4a80afbed17096342ade76f5856 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 09:55:35 +0000
+Subject: [PATCH 112/113] Reuse the light object list of the object update in
+ the light manager
+
+The light manager walked every object of the scene to find the lights
+several times per update (enabled test, light count, light copy and the
+background light test); with hundreds of thousands of instances that is
+the larger part of a light edit. The object manager now collects the light
+objects in object order while it assigns object indices, and the light
+manager uses that list. The list is invalidated whenever the object
+manager is tagged (objects added, removed or modified, including a change
+of geometry), so the light manager, which runs after the object update of
+a scene update, always reads a fresh list; a caller before the object
+update (the background light test of the shader manager) then walks the
+objects as before.
+
+CYCLES_FULL_LIGHT_WALK walks every object as before, as a reference.
+CYCLES_VERIFY_LIGHT_LIST compares the list used with walking every object
+on every light manager update and reports a difference as an error.
+
+Rationale: On large instanced scenes each light edit walked all objects four times in the light manager, about 10-20 ms per edit on 380k objects.
+Contract: The light objects used, and their order, are those found by walking every object (checked by CYCLES_VERIFY_LIGHT_LIST); kernel lights, light tree and distribution are unchanged.
+Tests: tests/houdini_light_list_smoke.py
+---
+ src/scene/light.cpp  | 74 +++++++++++++++++++++++++++++++++-----------
+ src/scene/light.h    |  4 +++
+ src/scene/object.cpp |  8 +++++
+ src/scene/object.h   |  6 ++++
+ 4 files changed, 74 insertions(+), 18 deletions(-)
+
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index a8fae41dc4ac2d48269e9095c297c7d9ad160e7f..5dd58940b89be593a6d85eda5de2a14f4fadc157 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -508,12 +508,50 @@ LightManager::LightManager()
+ 
+ LightManager::~LightManager() = default;
+ 
+-bool LightManager::has_background_light(Scene *scene)
++/* The light objects of the scene in object order. The object manager collects them while assigning
++ * object indices, so a light edit does not walk every object of the scene again (several times).
++ * CYCLES_FULL_LIGHT_WALK walks every object as before, as a reference. */
++const vector<Object *> &LightManager::light_objects(const Scene *scene)
+ {
+-  for (Object *object : scene->objects) {
++  static const bool full_walk = getenv("CYCLES_FULL_LIGHT_WALK") != nullptr;
++  const ObjectManager *object_manager = scene->object_manager.get();
++  if (!full_walk && object_manager->light_objects_valid) {
++    return object_manager->light_objects;
++  }
++  walked_light_objects.clear();
++  for (const Object *object : scene->objects) {
++    if (object->get_geometry()->is_light()) {
++      walked_light_objects.push_back(const_cast<Object *>(object));
++    }
++  }
++  return walked_light_objects;
++}
++
++/* CYCLES_VERIFY_LIGHT_LIST: the light objects used are those found by walking every object. */
++bool LightManager::verify_light_objects(const Scene *scene, string &difference)
++{
++  const vector<Object *> &used = light_objects(scene);
++  size_t k = 0;
++  for (const Object *object : scene->objects) {
+     if (!object->get_geometry()->is_light()) {
+       continue;
+     }
++    if (k >= used.size() || used[k] != object) {
++      difference = "light object " + object->name.string() + " missing or out of order";
++      return false;
++    }
++    k++;
++  }
++  if (k != used.size()) {
++    difference = string_printf("%zu light objects listed, %zu in the scene", used.size(), k);
++    return false;
++  }
++  return true;
++}
++
++bool LightManager::has_background_light(Scene *scene)
++{
++  for (Object *object : light_objects(scene)) {
+ 
+     Light *light = static_cast<Light *>(object->get_geometry());
+     if (light->is_background_light() && light->is_enabled) {
+@@ -532,10 +570,7 @@ void LightManager::test_enabled_lights(Scene *scene)
+   vector<BackgroundLight *> background_lights;
+   size_t num_lights = 0;
+   bool has_portal = false;
+-  for (Object *object : scene->objects) {
+-    if (!object->get_geometry()->is_light()) {
+-      continue;
+-    }
++  for (Object *object : light_objects(scene)) {
+ 
+     Light *light = static_cast<Light *>(object->get_geometry());
+     light->is_enabled = light->has_contribution(scene, object);
+@@ -1573,10 +1608,7 @@ void LightManager::device_update_background(Device *device,
+   bool background_mis = false;
+ 
+   /* find background light */
+-  for (Object *object : scene->objects) {
+-    if (!object->get_geometry()->is_light()) {
+-      continue;
+-    }
++  for (Object *object : light_objects(scene)) {
+ 
+     Light *light = static_cast<Light *>(object->get_geometry());
+     if (light->is_background_light() && light->is_enabled) {
+@@ -1760,10 +1792,7 @@ void LightManager::count_lights(KernelIntegrator *kintegrator, const Scene *scen
+   size_t num_background_lights = 0;
+   size_t num_distant_lights = 0;
+ 
+-  for (const Object *object : scene->objects) {
+-    if (!object->get_geometry()->is_light()) {
+-      continue;
+-    }
++  for (const Object *object : light_objects(scene)) {
+ 
+     const Light *light = static_cast<const Light *>(object->get_geometry());
+     if (light->is_enabled) {
+@@ -1795,10 +1824,7 @@ void LightManager::device_update_lights(DeviceScene *dscene, Scene *scene)
+   int light_index = 0;
+   int portal_index = kintegrator->num_lights;
+ 
+-  for (const Object *object : scene->objects) {
+-    if (!object->get_geometry()->is_light()) {
+-      continue;
+-    }
++  for (const Object *object : light_objects(scene)) {
+ 
+     const Light *light = static_cast<const Light *>(object->get_geometry());
+     if (light->is_portal_light()) {
+@@ -1831,6 +1857,18 @@ void LightManager::device_update(Device *device,
+     }
+   });
+ 
++  static const bool verify_light_list = getenv("CYCLES_VERIFY_LIGHT_LIST") != nullptr;
++  if (verify_light_list) {
++    string difference;
++    if (!verify_light_objects(scene, difference)) {
++      progress.set_error("Light list verification failed: " + difference);
++      return;
++    }
++    if (scene->update_stats) {
++      scene->update_stats->light.times.add_entry({"light list verifications", 1.0});
++    }
++  }
++
+   /* Detect which lights are enabled, also determines if we need to update the background. */
+   test_enabled_lights(scene);
+ 
+diff --git a/src/scene/light.h b/src/scene/light.h
+index 42433a7593eaea961fcded068d0b7af9cc23e7a1..585b051b61bc8b8c8dc7bc2925aa742daaa7f1e7 100644
+--- a/src/scene/light.h
++++ b/src/scene/light.h
+@@ -266,6 +266,10 @@ class LightManager {
+   unique_ptr<LightTreeMeshCache> mesh_light_tree_cache;
+   unique_ptr<LightTreeFlattenCache> flattened_mesh_ranges;
+   bool tree_buffers_valid = false;
++  /* The objects with a light geometry, in object order (see light_objects()). */
++  vector<Object *> walked_light_objects;
++  const vector<Object *> &light_objects(const Scene *scene);
++  bool verify_light_objects(const Scene *scene, string &difference);
+ };
+ 
+ CCL_NAMESPACE_END
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 27185b5bd4a176908cab52d4d125ab45477958dc..f3249021f6cbe4c953d9e9e3305322d72d0b410b 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1439,9 +1439,12 @@ void ObjectManager::device_update(Device *device,
+ 
+   device_free(device, dscene, false);
+ 
++  light_objects.clear();
++  light_objects_valid = false;
+   if (scene->objects.empty()) {
+     have_shader_palettes = false;
+     dscene->object_shader_palette.free();
++    light_objects_valid = true;
+     return;
+   }
+ 
+@@ -1471,6 +1474,7 @@ void ObjectManager::device_update(Device *device,
+       if (!object->get_geometry()->is_light()) {
+         continue;
+       }
++      light_objects.push_back(object);
+ 
+       const Light *light = static_cast<const Light *>(object->get_geometry());
+       if (light->is_background_light()) {
+@@ -1478,6 +1482,7 @@ void ObjectManager::device_update(Device *device,
+       }
+     }
+   }
++  light_objects_valid = true;
+ 
+   {
+     /* set object transform matrices, before applying static transforms */
+@@ -1898,6 +1903,9 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, P
+ void ObjectManager::tag_update(Scene *scene, const uint32_t flag, const bool notify_geometry)
+ {
+   update_flags |= flag;
++  /* Objects may have been added, removed or given another geometry: the light object list is
++   * collected again by the next object update. */
++  light_objects_valid = false;
+ 
+   /* avoid infinite loops if the geometry manager tagged us for an update */
+   if ((flag & GEOMETRY_MANAGER) == 0 && notify_geometry) {
+diff --git a/src/scene/object.h b/src/scene/object.h
+index bbcf59b968b89000829fba2befe2422c4ca1257a..343cc7dd4c07d0c157d7b69328973246d54ea43f 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -207,6 +207,12 @@ class ObjectManager {
+    * (RenderSession::cancel/close), from a failed scene transaction, or from a path tracing error. */
+   bool top_level_pending = false;
+   bool top_level_pending_before = false;
++  /* The objects with a light geometry, in object order, collected while assigning object indices.
++   * Valid from that object update until the object manager is tagged again (any object added,
++   * removed or modified, which includes a change of geometry); the light manager, which runs after
++   * the object update of a scene update, then reads a fresh list. */
++  bool light_objects_valid = false;
++  vector<Object *> light_objects;
+   vector<Object *> top_level_changed_objects;
+ 
+   /* Verification only, after the object flags of a scene update: when the object table was

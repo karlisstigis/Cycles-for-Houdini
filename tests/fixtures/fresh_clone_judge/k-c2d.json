@@ -1,0 +1,57 @@
+{
+ "error": "new tool, first compile: GPU programs: already up to date in this build folder.",
+ "result": "failed",
+ "revision": "d5abb5a",
+ "run": "k-c2d",
+ "states": {
+  "on_new_schema": {
+   "compiled": [],
+   "damaged_ignored": false,
+   "decisions": [],
+   "files": {
+    "cuda/kernel_compute_75.ptx": "844648300330a797077e351be2466cabcccbbb77ffe1c289c79de23c940e3edb",
+    "cuda/kernel_compute_75.ptx.zst": "3a2090e5aad662fd13b9a1335ee8328b415bae79847b027b714bb01e6a1a43d8",
+    "cuda/kernel_sm_86.cubin": "81826eec193dddb4624dbc559197b5e429733428a1c8bb93ec072f841354908b",
+    "cuda/kernel_sm_86.cubin.zst": "f7b4fa8f7960d0229cf4ba40f5642259b7984e45bb1da6f382212c9fdf40b802",
+    "cuda/kernel_sm_89.cubin": "222b6104093d1b6a735f777467577e99d040e6d896c4aefdeb0f35c1b3f9cb36",
+    "cuda/kernel_sm_89.cubin.zst": "8f77d029b9b3478577c4db55660332d51c7029ad761f1846250a99684acde602",
+    "optix/kernel_optix.ptx": "fc64abc3c651fb81554205f660418909c902a5805805ad847f8b59d90c2d30aa",
+    "optix/kernel_optix.ptx.zst": "9f61ed726fb992d69e2cb3cc82a88c41052045f4fdb3c8752468f4d04b15a9c3",
+    "optix/kernel_optix_mnee.ptx": "9ec9a1257e316eb5d6f9ebd8abbde1d5eb21284cf6d08a09e8824cab0419f3bc",
+    "optix/kernel_optix_mnee.ptx.zst": "fd5d45fff9fc43e96e842bc19cf90abf336fca13be4a4cd2a1f0c67231c6e122",
+    "optix/kernel_optix_shader_raytrace.ptx": "af23326b2aa03bd5b26278a9a56dbdf4a894aeb3114f0ee644d2eb479d79f493",
+    "optix/kernel_optix_shader_raytrace.ptx.zst": "df5496a7deb90ddd6509e87075a4370aedc130546bdb0ebf779ea9bb636f4ee5"
+   },
+   "line": "GPU programs: already up to date in this build folder.",
+   "mode": "on",
+   "reused": [],
+   "state": "unchanged"
+  },
+  "reuse_off_first": {
+   "compiled": [],
+   "damaged_ignored": false,
+   "decisions": [],
+   "files": {
+    "cuda/kernel_compute_75.ptx": "844648300330a797077e351be2466cabcccbbb77ffe1c289c79de23c940e3edb",
+    "cuda/kernel_compute_75.ptx.zst": "3a2090e5aad662fd13b9a1335ee8328b415bae79847b027b714bb01e6a1a43d8",
+    "cuda/kernel_sm_86.cubin": "81826eec193dddb4624dbc559197b5e429733428a1c8bb93ec072f841354908b",
+    "cuda/kernel_sm_86.cubin.zst": "f7b4fa8f7960d0229cf4ba40f5642259b7984e45bb1da6f382212c9fdf40b802",
+    "cuda/kernel_sm_89.cubin": "222b6104093d1b6a735f777467577e99d040e6d896c4aefdeb0f35c1b3f9cb36",
+    "cuda/kernel_sm_89.cubin.zst": "8f77d029b9b3478577c4db55660332d51c7029ad761f1846250a99684acde602",
+    "optix/kernel_optix.ptx": "fc64abc3c651fb81554205f660418909c902a5805805ad847f8b59d90c2d30aa",
+    "optix/kernel_optix.ptx.zst": "9f61ed726fb992d69e2cb3cc82a88c41052045f4fdb3c8752468f4d04b15a9c3",
+    "optix/kernel_optix_mnee.ptx": "9ec9a1257e316eb5d6f9ebd8abbde1d5eb21284cf6d08a09e8824cab0419f3bc",
+    "optix/kernel_optix_mnee.ptx.zst": "fd5d45fff9fc43e96e842bc19cf90abf336fca13be4a4cd2a1f0c67231c6e122",
+    "optix/kernel_optix_shader_raytrace.ptx": "af23326b2aa03bd5b26278a9a56dbdf4a894aeb3114f0ee644d2eb479d79f493",
+    "optix/kernel_optix_shader_raytrace.ptx.zst": "df5496a7deb90ddd6509e87075a4370aedc130546bdb0ebf779ea9bb636f4ee5"
+   },
+   "line": "GPU programs compiled in 7 min 54 s (reuse is turned off).",
+   "mode": "off",
+   "reused": [],
+   "state": "compiled"
+  }
+ },
+ "steps": {
+  "new-tool-compiles-identically-to-reuse-off": false
+ }
+}

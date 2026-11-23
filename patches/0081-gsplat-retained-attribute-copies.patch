@@ -1,0 +1,47 @@
+From d1bbdcd399982147711129e6fdfb36139de6f935 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:43 +0100
+Subject: [PATCH] Repopulate unchanged quaternion and packed SH attributes
+ whenever the shared buffer is reallocated or its layout changes, preserving
+ Gaussian radiance and orientation during object insertion/removal without
+ forcing unrelated geometry conversion.
+
+Locked-Patch: patches/0081-gsplat-retained-attribute-copies.patch
+Locked-Patch-SHA256: 8fa97defd8c75f9076b564382eb487dfc792c4874c9d76e3981073b351acdd73
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_blender53_gsplats_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 5bee9d5d4614e932284bfbdef839559ecf3d8496
+Previous-Patch: patches/0081-gsplat-retained-attribute-copies.patch
+Previous-Patch-SHA256: 8fa97defd8c75f9076b564382eb487dfc792c4874c9d76e3981073b351acdd73
+Rationale: Unchanged Gaussian quaternion and packed SH data must be recopied when shared attributes move or reallocate; otherwise orientation/radiance can become stale.
+Contract: Repopulate unchanged quaternion and packed SH attributes whenever the shared buffer is reallocated or its layout changes, preserving Gaussian radiance and orientation during object insertion/removal without forcing unrelated geometry conversion.
+Tests: tests/houdini_blender53_gsplats_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index dbfb75a4d089010be24631c1da1263dbc77b55d5..8519fff464a44c329af5da14ae641152394e8004 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -452,17 +452,17 @@ class AttributeTableBuilder {
+       }
+     }
+     else if (mattr->type == TypeQuaternion) {
+-      offset = attr_quaternion.add(mattr->data<Quaternion>(), per_step, mattr->modified);
++      offset = attr_quaternion.add(mattr->data<Quaternion>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+-        attr_quaternion.add(mattr->data<Quaternion>(step), per_step, mattr->modified);
++        attr_quaternion.add(mattr->data<Quaternion>(step), per_step, modified);
+       }
+     }
+     else if (mattr->type == TypePackedSphericalHarmonicsRest) {
+       offset = attr_spherical_harmonics_rest.add(
+-          mattr->data<PackedSphericalHarmonicsRest>(), per_step, mattr->modified);
++          mattr->data<PackedSphericalHarmonicsRest>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+         attr_spherical_harmonics_rest.add(
+-            mattr->data<PackedSphericalHarmonicsRest>(step), per_step, mattr->modified);
++            mattr->data<PackedSphericalHarmonicsRest>(step), per_step, modified);
+       }
+     }
+     else if (mattr->type == TypeFloat4 || mattr->type == TypeRGBA) {

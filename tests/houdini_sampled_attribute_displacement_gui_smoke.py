@@ -1,0 +1,193 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Sampled UV/color displacement repair through actual parameter-pane edits."""
+
+import json
+import os
+from pathlib import Path
+import time
+import traceback
+import hou
+import numpy as np
+from PySide6 import QtCore, QtTest, QtWidgets
+import cycles_houdini as ch
+from cycles_houdini import registry
+from sampled_attribute_displacement_fixture import Fixture, CASES
+
+
+class Workflow:
+    def __init__(self):
+        self.path = Path(os.environ["CYCLES_HOUDINI_GUI_REPORT"])
+        self.report = dict(result="running", events=[])
+        self.fixture = Fixture(os.environ["CYCLES_HOUDINI_GUI_DEVICE"])
+        self.rop = self.fixture.rop
+        self.tab = hou.ui.curDesktop().createFloatingPaneTab(hou.paneTabType.PythonPanel, size=(1000, 740))
+        self.tab.setActiveInterface(hou.pypanel.interfaceByName("cycles_houdini_render"))
+        self.settings = hou.ui.curDesktop().createFloatingPaneTab(hou.paneTabType.Parm, size=(650, 450))
+        self.settings.setPin(True)
+        self.settings.setCurrentNode(self.fixture.source)
+        self.panel = None
+        self.stage = "mount"
+        self.started = time.monotonic()
+        self.next_at = 0
+        self.generation = 0
+        self.busy = False
+        self.index = 0
+        self.phase = 0
+        self.baseline = None
+        self.native_field = False
+        example = self.fixture.dest / "sampled-attributes.hiplc"
+        hou.hipFile.save(str(example))
+        hou.ui.addEventLoopCallback(self.tick)
+
+    def case_name(self):
+        return "native_uv_attribute_delete" if self.native_field else CASES[self.index]
+
+    def parameter(self):
+        return self.fixture.missing.parm("ptdel") if self.native_field else self.fixture.parm
+
+    def expected_text(self):
+        return ("uv" if self.phase == 1 else "") if self.native_field else ("1" if self.phase == 1 else "0")
+
+    def begin_edit(self):
+        self.settings.setCurrentNode(self.parameter().node())
+        self.settings.setIsCurrentTab()
+        window = hou.qt.floatingPanelWindow(self.settings.floatingPanel())
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        self.stage = "focus"
+        self.next_at = time.monotonic() + 0.25
+
+    def ready(self):
+        entry = self.panel.entry
+        if not entry:
+            return False
+        status = entry.session.status()
+        assert not entry.error and status["state"] != "failed", (entry.error, status)
+        info = entry.session.frame_info()
+        if (
+            status.get("capture_pending")
+            or not info
+            or not info["complete"]
+            or info["generation"] <= self.generation
+            or self.panel._live_generation != info["generation"]
+        ):
+            return False
+        # A generation's first coarse preview is not its completed displayed image.
+        if self.panel.canvas.frame_metadata.get("sequence") != info["sequence"]:
+            return False
+        self.generation = info["generation"]
+        broken = self.phase == 1
+        if self.native_field:
+            assert status["geometry_resources"] == status["object_resources"] == 1, status
+            assert bool(status["source_diagnostics"]) == broken, status
+            pixels = {
+                name: np.frombuffer(p["pixels"], np.float32).reshape(90, 160, p["channels"]).copy()
+                for name, p in entry.session.frame()["planes"].items()
+            }
+            assert all(np.isfinite(p).all() for p in pixels.values()) and pixels["combined"][:, :, :3].max() > 0.1
+            if not broken and self.baseline is not None:
+                assert np.allclose(pixels["combined"], self.baseline["combined"], atol=1e-6)
+        else:
+            pixels = self.fixture.check(entry.session.frame(), status, broken, self.baseline)
+        if self.phase == 0:
+            self.baseline = pixels
+        if broken:
+            assert np.mean(np.abs(pixels["combined"] - self.baseline["combined"])) > 0.0001, (
+                "Displayed state did not change"
+            )
+        issues = status["source_diagnostics"]
+        assert len(registry.entries()) == 1 and entry.views == 1
+        assert not self.panel.render_button.isEnabled() and self.panel.stop_button.isEnabled()
+        self.report["events"].append(
+            dict(case=self.case_name(), broken=broken, generation=self.generation, diagnostics=issues)
+        )
+        self.panel.grab().save(str(self.path.with_name("%s-%d-%d.png" % (self.path.stem, self.index, self.phase))))
+        return True
+
+    def tick(self):
+        # HOM cooks and Qt keyboard delivery can run nested event loops.
+        if self.busy:
+            return
+        self.busy = True
+        try:
+            assert time.monotonic() - self.started < 300, (self.stage, self.report)
+            if time.monotonic() < self.next_at:
+                return
+            if self.stage == "mount":
+                self.panel = self.tab.activeInterfaceRootWidget()
+                if self.panel is None:
+                    return
+                self.panel.set_rop(self.rop)
+                QtTest.QTest.mouseClick(self.panel.render_button, QtCore.Qt.LeftButton)
+                self.stage = "wait"
+            elif self.stage == "focus":
+                self.settings.moveFocusTo(self.parameter().name())
+                self.stage = "type"
+                self.next_at = time.monotonic() + 0.2
+            elif self.stage == "type":
+                self.stage = "sending"
+                focus = QtWidgets.QApplication.focusWidget()
+                self.report["input_focus"] = dict(
+                    case=self.case_name(),
+                    phase=self.phase,
+                    widget=type(focus).__name__,
+                    parameter=self.parameter().path(),
+                    before=self.parameter().evalAsString(),
+                )
+                hou.qt.floatingPanelWindow(self.settings.floatingPanel()).grab().save(
+                    str(self.path.with_name("parameter-before.png"))
+                )
+                QtTest.QTest.keyClick(focus, QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
+                QtTest.QTest.keyClick(focus, QtCore.Qt.Key_Backspace)
+                QtTest.QTest.keyClicks(focus, self.expected_text())
+                QtTest.QTest.keyClick(focus, QtCore.Qt.Key_Return)
+                self.stage = "wait"
+                self.next_at = time.monotonic() + 0.3
+            elif self.stage == "wait":
+                assert (
+                    self.parameter().evalAsString() == self.expected_text()
+                    if self.native_field
+                    else self.parameter().evalAsInt() == int(self.phase == 1)
+                ), (self.parameter().evalAsString(), self.expected_text(), self.report.get("input_focus"))
+                if not self.ready():
+                    return
+                self.phase += 1
+                if self.phase < 3:
+                    self.begin_edit()
+                else:
+                    if self.native_field:
+                        QtTest.QTest.mouseClick(self.panel.stop_button, QtCore.Qt.LeftButton)
+                        self.finish()
+                        return
+                    self.index += 1
+                    if self.index == len(CASES):
+                        self.native_field = True
+                        self.fixture.configure("uv")
+                        self.fixture.switch.parm("input").deleteAllKeyframes()
+                        self.fixture.switch.parm("input").set(1)
+                        self.fixture.missing.parm("ptdel").set("")
+                    else:
+                        self.fixture.configure(CASES[self.index])
+                    self.settings.setCurrentNode(self.parameter().node())
+                    self.phase = 0
+                    self.baseline = None
+                    self.stage = "wait"
+                    self.next_at = time.monotonic() + 0.3
+            self.path.write_text(json.dumps(self.report, indent=2), encoding="utf-8")
+        except Exception:
+            self.finish(traceback.format_exc())
+        finally:
+            self.busy = False
+
+    def finish(self, error=None):
+        hou.ui.removeEventLoopCallback(self.tick)
+        if self.panel:
+            self.panel.dispose()
+        registry.close_all()
+        self.report.update(result="failed" if error else "passed", error=error)
+        self.path.write_text(json.dumps(self.report, indent=2), encoding="utf-8")
+        hou.exit(1 if error else 0, suppress_save_prompt=True)
+
+
+workflow = Workflow()

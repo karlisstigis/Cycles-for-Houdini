@@ -1,0 +1,7 @@
+{
+ "error": "Cannot bind argument to parameter 'ReferenceObject' because it is null.",
+ "first_run_outside_project": null,
+ "result": "failed",
+ "revision": "86a3c51",
+ "run": "x-c1"
+}

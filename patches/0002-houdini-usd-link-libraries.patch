@@ -1,0 +1,41 @@
+From ab6298cf50ef35e44bccc633acf14c71d4efe5e7 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:28 +0100
+Subject: [PATCH] Supply the Houdini USD 26.05 HD/SI and MaterialX link
+ dependencies required by the pinned delegate.
+
+Locked-Patch: patches/0002-houdini-usd-link-libraries.patch
+Locked-Patch-SHA256: 2cf4692c8a94d521bd80f14a423ccc8f7afaa2b52e48fea442238d3b104ed355
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: See patch inventory
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 5a3f51087c90fcc8c994fa7c71d82375d8aba86f
+Previous-Patch: patches/0002-houdini-usd-link-libraries.patch
+Previous-Patch-SHA256: 2cf4692c8a94d521bd80f14a423ccc8f7afaa2b52e48fea442238d3b104ed355
+Rationale: Houdini USD 26.05 supplies a particular HD/SI and MaterialX link closure; this is SDK-provider policy rather than a renderer correction.
+Contract: Supply the Houdini USD 26.05 HD/SI and MaterialX link dependencies required by the pinned delegate.
+Tests: scripts/verify-upstream-patches.py
+
+diff --git a/src/cmake/Modules/FindUSDHoudini.cmake b/src/cmake/Modules/FindUSDHoudini.cmake
+index 7c50030ae48b8c943cfa7811e311d10ee774a15a..a43246050a1ef94a69d1e3006f9f4fc8155efef8 100644
+--- a/src/cmake/Modules/FindUSDHoudini.cmake
++++ b/src/cmake/Modules/FindUSDHoudini.cmake
+@@ -204,7 +204,7 @@ if(HOUDINI_ROOT AND EXISTS ${HOUDINI_ROOT})
+   if(_materialx_core_library AND _materialx_format_library AND _materialx_render_library AND 
+     _materialx_genglsl_library AND _materialx_genmsl_library)
+     list(APPEND USD_LIBRARIES
+-      ${_materialx_library}
++      ${_materialx_core_library}
+       ${_materialx_format_library}
+       ${_materialx_render_library}
+       ${_materialx_genglsl_library}
+@@ -212,7 +212,7 @@ if(HOUDINI_ROOT AND EXISTS ${HOUDINI_ROOT})
+     )
+     set(USD_OVERRIDE_MATERIALX ON)
+   endif()
+-  unset(_materialx_library CACHE)
++  unset(_materialx_core_library CACHE)
+ 
+   # Cleanup
+   unset(_library_dir)

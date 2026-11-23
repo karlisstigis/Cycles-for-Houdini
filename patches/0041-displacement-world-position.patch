@@ -1,0 +1,37 @@
+From 2647ed74f31e82d7767264fbc612a2a841650a90 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:36 +0100
+Subject: [PATCH] displacement world position
+
+Locked-Patch: patches/0041-displacement-world-position.patch
+Locked-Patch-SHA256: 4948d0ba391194276edb4598bfcd160725052c9b51d3bd04c1702e14d8541a9f
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_camera_coordinate_displacement_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: cc241b3e583f1be7003de962c95b9483a37c1a3b
+Previous-Patch: patches/0041-displacement-world-position.patch
+Previous-Patch-SHA256: 4948d0ba391194276edb4598bfcd160725052c9b51d3bd04c1702e14d8541a9f
+Rationale: Displacement evaluation needs the proper world-position transform; object/world position disagreement changes displacement under transforms.
+Contract: displacement world position
+Tests: tests/houdini_camera_coordinate_displacement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/geom/shader_data.h b/src/kernel/geom/shader_data.h
+index ff81d0e4c715ec1e1e2589db7d1bca427949d588..4279ef63331d05c3bbaf45570b3c8abbb5f58f97 100644
+--- a/src/kernel/geom/shader_data.h
++++ b/src/kernel/geom/shader_data.h
+@@ -291,12 +291,12 @@ ccl_device void shader_setup_from_displace(KernelGlobals kg,
+ #ifdef __OBJECT_MOTION__
+   if (sd->object_flag & SD_OBJECT_HAS_VERTEX_MOTION) {
+     /* Device attributes still contain the original, undisplaced shutter poses.
+-     * Use the same interpolation as path tracing, before world transformation. */
++     * The motion setup returns a world-space position, but object-space normals
++     * and derivatives. Transform only the latter, exactly as for path tracing. */
+     sd->type = PRIMITIVE_MOTION_TRIANGLE;
+     motion_triangle_shader_setup(kg, sd, true);
+     sd->shader |= SHADER_SMOOTH_NORMAL;
+     if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
+-      object_position_transform(kg, sd, &sd->P);
+       object_normal_transform(kg, sd, &sd->Ng);
+       object_normal_transform(kg, sd, &sd->N);
+ #  ifdef __DPDU__

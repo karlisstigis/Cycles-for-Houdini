@@ -1,0 +1,602 @@
+From 75de781579dacb49033ceeb2c86f191c8ddbf130 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 05:57:37 +0000
+Subject: [PATCH 108/109] Write and copy only the modified objects of the
+ object table
+
+A light or object move rewrote every entry of the object table and copied the whole table to every device: about 55 ms per edit with 500,000 instanced objects. When only a few objects changed their own settings or transforms and nothing else the table depends on changed (geometry or an object's geometry, light groups, particles, motion type and motion sizes, palette offsets, object count), only those entries are written and copied; their attribute offsets, which the attribute update restores from the unchanged attribute map, the motion offsets and the scene object flags of the previous write are kept. The update statistics count partial updates. CYCLES_FULL_OBJECT_TABLE_UPDATE writes every object as before, as a reference. CYCLES_VERIFY_OBJECT_TABLE verifies every partial write at the end of the scene update: the device copies on every device against the host tables, then a full rewrite of every object against the partial result (objects including attribute offsets, flags, motion tables, scene object flags); any difference is a scene update error naming the object and member.
+
+Rationale: A light or object move rewrote and copied the whole object table, about 55 ms per edit with 500,000 instanced objects.
+Contract: The host and device object tables, motion tables and scene flags are byte-identical to a full rewrite; at most one sixteenth of the objects may be modified for the partial path, otherwise and for every other change the full rewrite runs; CYCLES_FULL_OBJECT_TABLE_UPDATE restores the full rewrite and CYCLES_VERIFY_OBJECT_TABLE verifies every partial write on every device and reports differences as errors.
+Tests: tests/houdini_light_update_smoke.py
+---
+ src/device/device.cpp       |  23 +++
+ src/device/device.h         |   5 +
+ src/device/multi/device.cpp |  21 ++
+ src/scene/object.cpp        | 390 +++++++++++++++++++++++++++++++++---
+ src/scene/object.h          |  18 ++
+ src/scene/scene.cpp         |   1 +
+ 6 files changed, 429 insertions(+), 29 deletions(-)
+
+diff --git a/src/device/device.cpp b/src/device/device.cpp
+index eb55131f0c5f7e4e7dc8a8d9151782ad5ca2ffab..c7acdbbdeeed290b2ccd3da5b808f0683a9d152e 100644
+--- a/src/device/device.cpp
++++ b/src/device/device.cpp
+@@ -625,6 +625,29 @@ device_ptr Device::mem_device_ptr(const device_memory &mem, Device *sub_device)
+   return mem.device_pointer;
+ }
+ 
++bool Device::verify_device_copy(device_memory &mem, string &difference)
++{
++  if (info.type == DEVICE_CPU || !mem.host_pointer || !mem.device_pointer) {
++    return true;
++  }
++  const size_t bytes = mem.memory_size();
++  if (bytes == 0) {
++    return true;
++  }
++  vector<char> scratch(bytes);
++  void *host = mem.host_pointer;
++  mem.host_pointer = scratch.data();
++  mem_copy_from(mem, 0, mem.data_size, 1, mem.memory_elements_size(1));
++  mem.host_pointer = host;
++  for (size_t i = 0; i < bytes; i++) {
++    if (scratch[i] != static_cast<const char *>(host)[i]) {
++      difference = string_printf("%s on %s differs at byte %zu", mem.global_name(), info.description.c_str(), i);
++      return false;
++    }
++  }
++  return true;
++}
++
+ bool Device::mem_copy_to_range_supported(device_memory & /*mem*/)
+ {
+   return false;
+diff --git a/src/device/device.h b/src/device/device.h
+index af7a03adaecccb01a2df129b16b825091ab888c9..a03306df136a87992be21f6db0b2eeaf595349d1 100644
+--- a/src/device/device.h
++++ b/src/device/device.h
+@@ -260,6 +260,11 @@ class Device {
+    * temporary build buffer. Called when the geometry update no longer builds structures. */
+   virtual void release_bvh_build_memory() {}
+ 
++  /* Verification only: read the device copy of a linear allocation back and compare it with the
++   * host data, on every sub-device of a multi-device. Returns false and describes the first
++   * difference when they differ. Devices whose memory is the host memory always match. */
++  virtual bool verify_device_copy(device_memory &mem, string &difference);
++
+   /* Inform of BVH limits, return true to force-rebuild all BVHs and kernels. */
+   virtual bool set_bvh_limits(size_t /*instance_count*/, size_t /*max_prim_count*/)
+   {
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index a67c840d1c5e923b05a98aa8f1f2d8f11e0630bb..0fe5460680a83ab289bc0318120d0529fb7823e2 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -238,6 +238,27 @@ class MultiDevice : public Device {
+     }
+   }
+ 
++  bool verify_device_copy(device_memory &mem, string &difference) override
++  {
++    const device_ptr key = mem.device_pointer;
++    if (!key) {
++      return true;
++    }
++    bool same = true;
++    for (SubDevice &sub : devices) {
++      SubDevice *owner_sub = find_matching_mem_device(key, sub);
++      mem.device = owner_sub->device.get();
++      mem.device_pointer = ptr_map_find(*owner_sub, key);
++      same = owner_sub->device->verify_device_copy(mem, difference);
++      if (!same) {
++        break;
++      }
++    }
++    mem.device = this;
++    mem.device_pointer = key;
++    return same;
++  }
++
+   /* Primitives a bottom level build of these geometries covers. */
+   static size_t bvh_primitive_count(const BVH *bvh)
+   {
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 7bbc9bd30d2d0c8de70163b0fc0399ecb65e4b90..f7f5c72a43465a9d57d8bc2d1f56abaf856aa018 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -30,7 +30,10 @@
+ #include "util/vector.h"
+ 
+ #include "kernel/geom/attribute.h"
++#include <algorithm>
+ #include <atomic>
++#include <cstddef>
++#include <cstring>
+ #include <stdexcept>
+ #include <cstdlib>
+ 
+@@ -840,6 +843,129 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+   }
+ }
+ 
++/* Name of the KernelObject member that contains a byte, for verification messages. */
++static string kernel_object_member(const size_t byte)
++{
++  struct Member {
++    const char *name;
++    size_t offset;
++  };
++  static const Member members[] = {
++#define KERNEL_OBJECT_MEMBER(name) {#name, offsetof(KernelObject, name)}
++      KERNEL_OBJECT_MEMBER(tfm),
++      KERNEL_OBJECT_MEMBER(itfm),
++      KERNEL_OBJECT_MEMBER(color),
++      KERNEL_OBJECT_MEMBER(alpha),
++      KERNEL_OBJECT_MEMBER(pass_id),
++      KERNEL_OBJECT_MEMBER(random_number),
++      KERNEL_OBJECT_MEMBER(particle_index),
++      KERNEL_OBJECT_MEMBER(motion_offset),
++      KERNEL_OBJECT_MEMBER(numverts),
++      KERNEL_OBJECT_MEMBER(numprims),
++      KERNEL_OBJECT_MEMBER(attribute_map_offset),
++      KERNEL_OBJECT_MEMBER(position_offset),
++      KERNEL_OBJECT_MEMBER(visibility),
++      KERNEL_OBJECT_MEMBER(primitive_type),
++      KERNEL_OBJECT_MEMBER(lightgroup),
++#undef KERNEL_OBJECT_MEMBER
++  };
++  const char *name = "unnamed member";
++  size_t best = 0;
++  for (const Member &member : members) {
++    if (member.offset <= byte && member.offset >= best) {
++      best = member.offset;
++      name = member.name;
++    }
++  }
++  return string_printf("byte %zu (at or after member %s)", byte, name);
++}
++
++void ObjectManager::verify_object_table(Device *device,
++                                        DeviceScene *dscene,
++                                        Scene *scene,
++                                        Progress &progress)
++{
++  if (!object_table_verify_pending) {
++    return;
++  }
++  object_table_verify_pending = false;
++  const char *prefix = "Object table verification failed: ";
++  if (scene->update_stats) {
++    scene->update_stats->object.times.add_entry({"object table verifications", 1.0});
++  }
++
++  /* 1. The device copies hold the host tables, on every device. */
++  string difference;
++  if (!device->verify_device_copy(dscene->objects, difference) ||
++      !device->verify_device_copy(dscene->object_flag, difference) ||
++      (dscene->object_motion.size() && !device->verify_device_copy(dscene->object_motion, difference)) ||
++      (dscene->object_motion_pass.size() &&
++       !device->verify_device_copy(dscene->object_motion_pass, difference)))
++  {
++    progress.set_error(prefix + difference);
++    return;
++  }
++
++  /* 2. A full rewrite of every object gives the same tables. */
++  const size_t n = scene->objects.size();
++  const vector<KernelObject> objects(dscene->objects.data(), dscene->objects.data() + n);
++  const vector<uint> flags(dscene->object_flag.data(), dscene->object_flag.data() + n);
++  const vector<DecomposedTransform> motion(dscene->object_motion.data(),
++                                           dscene->object_motion.data() + dscene->object_motion.size());
++  const vector<Transform> motion_pass(dscene->object_motion_pass.data(),
++                                      dscene->object_motion_pass.data() +
++                                          dscene->object_motion_pass.size());
++  const KernelBVH bvh = dscene->data.bvh;
++
++  object_table_force_full = true;
++  device_update_transforms(dscene, scene, progress);
++  object_table_force_full = false;
++  device_update_geom_offsets(device, dscene, scene);
++  need_flags_update = true;
++  device_update_flags(device, dscene, scene, progress);
++  if (progress.get_cancel()) {
++    return;
++  }
++
++  for (size_t i = 0; i < n; i++) {
++    const char *a = reinterpret_cast<const char *>(&objects[i]);
++    const char *b = reinterpret_cast<const char *>(dscene->objects.data() + i);
++    for (size_t byte = 0; byte < sizeof(KernelObject); byte++) {
++      if (a[byte] != b[byte]) {
++        progress.set_error(prefix + string_printf("object %zu (%s) ", i, scene->objects[i]->name.c_str()) +
++                           kernel_object_member(byte));
++        return;
++      }
++    }
++    if (flags[i] != dscene->object_flag.data()[i]) {
++      progress.set_error(prefix + string_printf("object %zu (%s) flags %x instead of %x", i,
++                                                scene->objects[i]->name.c_str(), flags[i],
++                                                dscene->object_flag.data()[i]));
++      return;
++    }
++  }
++  if (motion.size() != dscene->object_motion.size() ||
++      (motion.size() && std::memcmp(motion.data(), dscene->object_motion.data(),
++                                    motion.size() * sizeof(DecomposedTransform)) != 0))
++  {
++    progress.set_error(string(prefix) + "object motion table");
++    return;
++  }
++  if (motion_pass.size() != dscene->object_motion_pass.size() ||
++      (motion_pass.size() && std::memcmp(motion_pass.data(), dscene->object_motion_pass.data(),
++                                         motion_pass.size() * sizeof(Transform)) != 0))
++  {
++    progress.set_error(string(prefix) + "object motion pass table");
++    return;
++  }
++  if (bvh.have_motion != dscene->data.bvh.have_motion || bvh.have_curves != dscene->data.bvh.have_curves ||
++      bvh.have_points != dscene->data.bvh.have_points || bvh.have_volumes != dscene->data.bvh.have_volumes)
++  {
++    progress.set_error(string(prefix) + "scene object flags (motion, curves, points, volumes)");
++    return;
++  }
++}
++
+ void ObjectManager::device_update_prim_offsets(Device * /*device*/,
+                                                DeviceScene *dscene,
+                                                Scene *scene)
+@@ -973,32 +1099,108 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+   state.scene = scene;
+   state.queue_start_object = 0;
+ 
+-  state.objects = dscene->objects.alloc(scene->objects.size());
+-  state.object_flag = dscene->object_flag.alloc(scene->objects.size());
++  const size_t num_objects = scene->objects.size();
++  state.objects = dscene->objects.alloc(num_objects);
++  state.object_flag = dscene->object_flag.alloc(num_objects);
+   state.object_motion = nullptr;
+   state.object_motion_pass = nullptr;
+ 
++  /* When only a few objects changed their own settings or transforms, and nothing else that the
++   * object table depends on changed (geometry or an object's geometry, light groups, particles,
++   * motion type and motion sizes, palette offsets, object count), write and copy only those
++   * objects. The other entries of the host tables are the ones on the device, and the motion
++   * offsets and scene flags of the previous write still hold. CYCLES_FULL_OBJECT_TABLE_UPDATE
++   * writes every object as before, as a reference. */
++  static const bool full_table = getenv("CYCLES_FULL_OBJECT_TABLE_UPDATE") != nullptr;
++  vector<Object *> partial_objects;
++  bool partial = !full_table && !object_table_force_full && object_table_complete &&
++                 !palette_offsets_changed &&
++                 !dscene->objects.need_realloc() && !dscene->object_motion.need_realloc() &&
++                 (update_flags & ~(OBJECT_MODIFIED | TRANSFORM_MODIFIED | VISIBILITY_MODIFIED |
++                                   HOLDOUT_MODIFIED)) == 0 &&
++                 object_table_need_motion == int(state.need_motion) &&
++                 object_table_lightgroups == scene->lightgroups &&
++                 object_table_motion_offset.size() ==
++                     (state.need_motion == Scene::MOTION_BLUR ? num_objects : 0);
++  if (partial) {
++    /* Light geometries do not contribute to the object table (no vertices, primitives, motion or
++     * attributes), and their modified state is only cleared by the geometry manager, which a light
++     * edit does not run: they do not block the partial write. */
++    for (const Geometry *geom : scene->geometry) {
++      if (geom->is_modified() && !geom->is_light()) {
++        partial = false;
++        break;
++      }
++    }
++  }
++  if (partial) {
++    /* Modified objects in index order, found on all cores. */
++    vector<uint8_t> modified(num_objects);
++    parallel_for(blocked_range<size_t>(0, num_objects, 4096), [&](const blocked_range<size_t> &r) {
++      for (size_t i = r.begin(); i != r.end(); i++) {
++        modified[i] = scene->objects[i]->is_modified() ? 1 : 0;
++      }
++    });
++    for (size_t i = 0; i < num_objects; i++) {
++      if (modified[i]) {
++        Object *ob = scene->objects[i];
++        if (ob->geometry_is_modified() || size_t(ob->index) != i) {
++          partial = false;
++          break;
++        }
++        partial_objects.push_back(ob);
++      }
++    }
++    partial = partial && partial_objects.size() * 16 <= num_objects;
++    if (scene->update_stats) {
++      /* Counts, not times: the modified objects found and the object count of the decision. */
++      scene->update_stats->object.times.add_entry(
++          {"object table modified objects", double(partial_objects.size())});
++      scene->update_stats->object.times.add_entry({"object table objects", double(num_objects)});
++    }
++  }
++  if (partial && state.need_motion == Scene::MOTION_BLUR) {
++    for (Object *ob : partial_objects) {
++      const size_t i = size_t(ob->index);
++      const size_t end = (i + 1 < num_objects) ? object_table_motion_offset[i + 1] :
++                                                 object_table_motion_size;
++      /* Clear motion array if there is no actual motion. */
++      ob->update_motion(state.need_motion);
++      if (ob->motion.size() != end - object_table_motion_offset[i]) {
++        partial = false;
++        break;
++      }
++    }
++  }
++  object_table_complete = false;
++
+   if (state.need_motion == Scene::MOTION_PASS ||
+       state.need_motion == Scene::MOTION_PASS_INTERACTIVE)
+   {
+     state.object_motion_pass = dscene->object_motion_pass.alloc(OBJECT_MOTION_PASS_SIZE *
+-                                                                scene->objects.size());
++                                                                num_objects);
+   }
+   else if (state.need_motion == Scene::MOTION_BLUR) {
+-    /* Set object offsets into global object motion array. */
+-    uint *motion_offsets = state.motion_offset.resize(scene->objects.size());
+-    uint motion_offset = 0;
++    if (partial) {
++      state.motion_offset = object_table_motion_offset;
++      state.object_motion = dscene->object_motion.alloc(object_table_motion_size);
++    }
++    else {
++      /* Set object offsets into global object motion array. */
++      uint *motion_offsets = state.motion_offset.resize(num_objects);
++      uint motion_offset = 0;
+ 
+-    for (Object *ob : scene->objects) {
+-      *motion_offsets = motion_offset;
+-      motion_offsets++;
++      for (Object *ob : scene->objects) {
++        *motion_offsets = motion_offset;
++        motion_offsets++;
+ 
+-      /* Clear motion array if there is no actual motion. */
+-      ob->update_motion(state.need_motion);
+-      motion_offset += ob->motion.size();
+-    }
++        /* Clear motion array if there is no actual motion. */
++        ob->update_motion(state.need_motion);
++        motion_offset += ob->motion.size();
++      }
+ 
+-    state.object_motion = dscene->object_motion.alloc(motion_offset);
++      state.object_motion = dscene->object_motion.alloc(motion_offset);
++    }
+   }
+ 
+   /* Particle system device offsets
+@@ -1015,31 +1217,133 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+    * Rebuild every decomposition when storage changes; unchanged-size layouts
+    * are handled by checking each object's previous motion offset above. */
+   const bool update_all = dscene->objects.need_realloc() || dscene->object_motion.need_realloc() ||
+-                          previous_motion_size != dscene->object_motion.size() || palette_offsets_changed;
++                          previous_motion_size != dscene->object_motion.size() ||
++                          palette_offsets_changed || object_table_force_full;
++  if (update_all && partial) {
++    /* Cannot happen by the conditions above; take the full path rather than assume it. */
++    partial = false;
++    if (state.need_motion == Scene::MOTION_BLUR) {
++      uint *motion_offsets = state.motion_offset.resize(num_objects);
++      uint motion_offset = 0;
++      for (Object *ob : scene->objects) {
++        *motion_offsets++ = motion_offset;
++        ob->update_motion(state.need_motion);
++        motion_offset += ob->motion.size();
++      }
++      state.object_motion = dscene->object_motion.alloc(motion_offset);
++    }
++  }
+ 
+   /* Parallel object update, with grain size to avoid too much threading overhead
+    * for individual objects. */
+   static const int OBJECTS_PER_TASK = 32;
+-  parallel_for(blocked_range<size_t>(0, scene->objects.size(), OBJECTS_PER_TASK),
+-               [&](const blocked_range<size_t> &r) {
+-                 for (size_t i = r.begin(); i != r.end(); i++) {
+-                   Object *ob = state.scene->objects[i];
+-                   device_update_object_transform(&state, ob, update_all, scene);
+-                 }
+-               });
++  if (partial) {
++    parallel_for(blocked_range<size_t>(0, partial_objects.size(), OBJECTS_PER_TASK),
++                 [&](const blocked_range<size_t> &r) {
++                   for (size_t i = r.begin(); i != r.end(); i++) {
++                     Object *ob = partial_objects[i];
++                     /* The attribute offsets are restored by the attribute update from the
++                      * attribute map, which did not change: keep the current ones. */
++                     const KernelObject previous = state.objects[ob->index];
++                     device_update_object_transform(&state, ob, false, scene);
++                     KernelObject &kobject = state.objects[ob->index];
++                     kobject.attribute_map_offset = previous.attribute_map_offset;
++                     kobject.position_offset = previous.position_offset;
++                     const Geometry *geom = ob->geometry;
++                     if (geom->is_mesh() || geom->is_volume()) {
++                       kobject.mesh_volume.normal_offset = previous.mesh_volume.normal_offset;
++                     }
++                     else if (geom->is_pointcloud() &&
++                              (static_cast<const PointCloud *>(geom)->primitive_type() &
++                               PRIMITIVE_GSPLAT))
++                     {
++                       kobject.gsplat.scale_offset_and_flag = previous.gsplat.scale_offset_and_flag;
++                       kobject.gsplat.rotation_offset_and_flag =
++                           previous.gsplat.rotation_offset_and_flag;
++                       kobject.gsplat.radiance_base_offset_and_flag =
++                           previous.gsplat.radiance_base_offset_and_flag;
++                       kobject.gsplat.radiance_spherical_harmonics_rest_offset =
++                           previous.gsplat.radiance_spherical_harmonics_rest_offset;
++                     }
++                   }
++                 });
++    /* No geometry and no object's geometry changed and every modified object keeps its motion
++     * size, so the flags that describe all objects are those of the previous write. */
++    state.have_motion = dscene->data.bvh.have_motion;
++    state.have_curves = dscene->data.bvh.have_curves;
++    state.have_points = dscene->data.bvh.have_points;
++    state.have_volumes = dscene->data.bvh.have_volumes;
++  }
++  else {
++    parallel_for(blocked_range<size_t>(0, scene->objects.size(), OBJECTS_PER_TASK),
++                 [&](const blocked_range<size_t> &r) {
++                   for (size_t i = r.begin(); i != r.end(); i++) {
++                     Object *ob = state.scene->objects[i];
++                     device_update_object_transform(&state, ob, update_all, scene);
++                   }
++                 });
++  }
+ 
+   if (progress.get_cancel()) {
+     return;
+   }
+ 
+-  dscene->objects.copy_to_device_if_modified();
+-  if (state.need_motion == Scene::MOTION_PASS ||
+-      state.need_motion == Scene::MOTION_PASS_INTERACTIVE)
+-  {
+-    dscene->object_motion_pass.copy_to_device();
++  if (partial) {
++    /* Byte ranges of the written entries, in index order, adjacent entries merged. */
++    const auto copy_ranges = [&](auto &buffer, const auto &range_of) {
++      vector<DeviceMemoryRange> ranges;
++      vector<std::pair<size_t, size_t>> rows;
++      for (const Object *ob : partial_objects) {
++        const std::pair<size_t, size_t> row = range_of(ob);
++        if (row.second) {
++          rows.push_back(row);
++        }
++      }
++      std::sort(rows.begin(), rows.end());
++      for (const auto &[offset, size] : rows) {
++        if (!ranges.empty() && ranges.back().offset + ranges.back().size >= offset) {
++          const size_t end = std::max(ranges.back().offset + ranges.back().size, offset + size);
++          ranges.back().size = end - ranges.back().offset;
++        }
++        else {
++          ranges.push_back({offset, size});
++        }
++      }
++      if (!buffer.copy_to_device_ranges(ranges)) {
++        buffer.copy_to_device();
++      }
++    };
++    copy_ranges(dscene->objects, [](const Object *ob) {
++      return std::pair<size_t, size_t>(size_t(ob->index) * sizeof(KernelObject), sizeof(KernelObject));
++    });
++    if (state.need_motion == Scene::MOTION_PASS ||
++        state.need_motion == Scene::MOTION_PASS_INTERACTIVE)
++    {
++      copy_ranges(dscene->object_motion_pass, [](const Object *ob) {
++        return std::pair<size_t, size_t>(size_t(ob->index) * OBJECT_MOTION_PASS_SIZE * sizeof(Transform),
++                                         OBJECT_MOTION_PASS_SIZE * sizeof(Transform));
++      });
++    }
++    else if (state.need_motion == Scene::MOTION_BLUR) {
++      copy_ranges(dscene->object_motion, [&](const Object *ob) {
++        return ob->use_motion() ?
++                   std::pair<size_t, size_t>(size_t(state.motion_offset[ob->index]) *
++                                                 sizeof(DecomposedTransform),
++                                             ob->motion.size() * sizeof(DecomposedTransform)) :
++                   std::pair<size_t, size_t>(0, 0);
++      });
++    }
+   }
+-  else if (state.need_motion == Scene::MOTION_BLUR) {
+-    dscene->object_motion.copy_to_device();
++  else {
++    dscene->objects.copy_to_device_if_modified();
++    if (state.need_motion == Scene::MOTION_PASS ||
++        state.need_motion == Scene::MOTION_PASS_INTERACTIVE)
++    {
++      dscene->object_motion_pass.copy_to_device();
++    }
++    else if (state.need_motion == Scene::MOTION_BLUR) {
++      dscene->object_motion.copy_to_device();
++    }
+   }
+ 
+   dscene->data.bvh.have_motion = state.have_motion;
+@@ -1050,6 +1354,31 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+   dscene->objects.clear_modified();
+   dscene->object_motion_pass.clear_modified();
+   dscene->object_motion.clear_modified();
++
++  if (partial) {
++    object_table_partial_updates++;
++    if (scene->update_stats) {
++      /* Counts, not times: reported with the update statistics for tests and profiles. */
++      scene->update_stats->object.times.add_entry({"partial object table updates", 1.0});
++      scene->update_stats->object.times.add_entry(
++          {"partial object table objects", double(partial_objects.size())});
++    }
++    static const bool verify = getenv("CYCLES_VERIFY_OBJECT_TABLE") != nullptr;
++    object_table_verify_pending = verify;
++  }
++  object_table_complete = true;
++  object_table_need_motion = int(state.need_motion);
++  object_table_lightgroups = scene->lightgroups;
++  if (state.need_motion == Scene::MOTION_BLUR) {
++    if (!partial) {
++      object_table_motion_offset = state.motion_offset;
++    }
++    object_table_motion_size = dscene->object_motion.size();
++  }
++  else {
++    object_table_motion_offset.clear();
++    object_table_motion_size = 0;
++  }
+ }
+ 
+ void ObjectManager::device_update(Device *device,
+@@ -1452,6 +1781,9 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+ 
+ void ObjectManager::device_free(Device * /*unused*/, DeviceScene *dscene, bool force_free)
+ {
++  if (force_free) {
++    object_table_complete = false;
++  }
+   dscene->objects.free_if_need_realloc(force_free);
+   dscene->object_motion_pass.free_if_need_realloc(force_free);
+   dscene->object_motion.free_if_need_realloc(force_free);
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 5597d1502b096aedaea12c43c55ac0210327f0bd..668981fbdf657aa1f5fd11eb06f314987fcbc299 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -181,6 +181,24 @@ class ObjectManager {
+   bool need_flags_update;
+   bool have_shader_palettes = false;
+ 
++  /* State of the last complete object table write, used to write and copy only the modified
++   * objects when few objects change between updates. */
++  bool object_table_complete = false;
++  int object_table_need_motion = -1;
++  map<ustring, int> object_table_lightgroups;
++  array<uint> object_table_motion_offset;
++  size_t object_table_motion_size = 0;
++  /* CYCLES_VERIFY_OBJECT_TABLE: a partial write is verified against a full rewrite at the end of
++   * the scene update (see verify_object_table). */
++  bool object_table_verify_pending = false;
++  bool object_table_force_full = false;
++  int object_table_partial_updates = 0;
++
++  /* Verification only, after the object flags of a scene update: when the object table was
++   * written partially, compare it on every device with the host table, then rewrite every object
++   * and compare the results; any difference is reported as a scene update error. */
++  void verify_object_table(Device *device, DeviceScene *dscene, Scene *scene, Progress &progress);
++
+   ObjectManager();
+   ~ObjectManager();
+ 
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index 728becc02da137e99390ac16f69518f74ed69475..2364eabb88ca7517b731f559204e4d27109a4d31 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -350,6 +350,7 @@ void Scene::device_update(Device *device_, Progress &progress)
+   /* Update object flags with final geometry. */
+   progress.set_status("Updating Objects Flags");
+   object_manager->device_update_flags(device, &dscene, this, progress);
++  object_manager->verify_object_table(device, &dscene, this, progress);
+ 
+   if (progress.get_cancel() || device->have_error()) {
+     return;

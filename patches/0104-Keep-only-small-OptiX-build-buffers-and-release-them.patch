@@ -1,0 +1,80 @@
+From 911d70bd6fd1bd23bf66d9e5d1d0d7741f25506d Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Tue, 17 Nov 2026 09:50:30 +0000
+Subject: [PATCH] Keep only small OptiX build buffers and release them before
+ attributes
+
+The temporary build buffer reused between OptiX acceleration structure
+builds was kept at the size of the largest build of the update and
+released when the geometry update returned. Builds without compaction,
+such as ribbon curves and interactive meshes, left their full temporary
+memory in it: about 4 GB per GPU for 5 million ribbon curves. It was also
+still held while the attribute tables were allocated, although the
+geometry update defers the attributes until after the BVH builds so that
+the two do not overlap.
+
+Only temporary buffers of at most 64 MB are now kept for reuse; a build
+that needs more allocates and frees its own, as before. The kept buffer is
+released right after the scene BVH is built, before the attributes; the
+scope guard still releases it on early returns.
+
+Rationale: A kept temporary buffer must not raise the device memory peak: large ones are not reused and none survives into the attribute upload.
+Contract: Build inputs, build calls and results are unchanged; at most 64 MB of temporary build memory per device is kept between builds and none while attributes are allocated.
+Tests: tests/houdini_curve_subdivisions_smoke.py
+---
+ src/device/optix/device_impl.cpp | 10 +++++++---
+ src/scene/geometry.cpp           |  4 ++++
+ 2 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index dfcf88b7f4895ae362016ee6b5c7278c0c5511e9..3a90d395714cad2b4e3b13dd7b8c07e2c3ef773b 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -1393,9 +1393,13 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+    * overwrites temporary memory that a previous build still uses. */
+   static const bool temp_per_build = getenv("CYCLES_OPTIX_BVH_TEMP_PER_BUILD") != nullptr;
+   const size_t temp_size = align_up(sizes.tempSizeInBytes, 8) + 8;
++  /* Only small temporary buffers are kept for reuse: reuse pays off for many small builds, and a
++   * large buffer kept until the end of the stage would raise the device memory peak. */
++  constexpr size_t max_reused_temp_size = size_t(64) << 20;
++  const bool reuse_temp = !temp_per_build && temp_size <= max_reused_temp_size;
+   device_only_memory<char> local_temp_mem(this, "optix temp as build mem", true);
+   device_only_memory<char> *temp_mem_ptr = &local_temp_mem;
+-  if (temp_per_build) {
++  if (!reuse_temp) {
+     local_temp_mem.alloc_to_device(temp_size);
+   }
+   else {
+@@ -1410,7 +1414,7 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+   device_only_memory<char> &temp_mem = *temp_mem_ptr;
+   if (!temp_mem.device_pointer) {
+     /* Make sure temporary memory allocation succeeded. */
+-    if (!temp_per_build) {
++    if (reuse_temp) {
+       bvh_build_temp_mem.reset();
+     }
+     return false;
+@@ -1462,7 +1466,7 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+ 
+     /* Temporary memory is no longer needed, so free it now to make space. */
+     temp_mem.free();
+-    if (!temp_per_build) {
++    if (reuse_temp) {
+       bvh_build_temp_mem.reset();
+     }
+ 
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 0780ed83a1052d1d88e86774584888ae91c2b350..a4f2177a4a45c47a9ea947af57bed91a0e7ea129 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1236,6 +1236,10 @@ void GeometryManager::device_update(Device *device,
+     }
+   }
+ 
++  /* Release memory kept between the builds above before the attribute buffers are allocated
++   * below, so the two never overlap. */
++  device->release_bvh_build_memory();
++
+   /* Always set BVH layout again after displacement where it was set to none,
+    * to avoid ray-tracing at that stage. */
+   dscene->data.bvh.bvh_layout = BVHParams::best_bvh_layout(

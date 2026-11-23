@@ -1,0 +1,361 @@
+From 07bf0ad9e2fe5021a4c3dab3c40c0bfde6eb27f2 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:43 +0100
+Subject: [PATCH] Store absolute wavelength-dependent medium IORs through
+ camera, SSS and MNEE probes before forming interface ratios; preserve shared
+ CPU/GPU spectral weights and adapt Quaternion attribute/shadow result types
+ to Blender 5.3.
+
+Locked-Patch: patches/0078-spectral-nested-medium-ior-and-53-kernel-types.patch
+Locked-Patch-SHA256: f6b342c8264b2e1964a3fee72a812f52c0b2c709507ea0e2067003e7a3785574
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_spectral_nested_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 7b6cc7c5894c387a4aa84f093502f8c4ee783d24
+Previous-Patch: patches/0078-spectral-nested-medium-ior-and-53-kernel-types.patch
+Previous-Patch-SHA256: f6b342c8264b2e1964a3fee72a812f52c0b2c709507ea0e2067003e7a3785574
+Rationale: Absolute spectral medium IORs must survive camera/SSS/MNEE probes before interface ratios are formed; this also carries unrelated 5.3 Quaternion/shadow-type adaptations.
+Contract: Store absolute wavelength-dependent medium IORs through camera, SSS and MNEE probes before forming interface ratios; preserve shared CPU/GPU spectral weights and adapt Quaternion attribute/shadow result types to Blender 5.3.
+Tests: tests/houdini_spectral_nested_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/CMakeLists.txt b/src/kernel/CMakeLists.txt
+index b7e80032f5e0701de23deb57fcc2c03aeed9ee2b..145fbb5127814c72e33ed24e7d57d0a15b8e898e 100644
+--- a/src/kernel/CMakeLists.txt
++++ b/src/kernel/CMakeLists.txt
+@@ -27,6 +27,7 @@ set(SRC_KERNEL_CLOSURE_HEADERS
+   closure/bsdf_burley.h
+   closure/bsdf_diffuse.h
+   closure/bsdf_diffuse_ramp.h
++  closure/dispersion.h
+   closure/bsdf_microfacet.h
+   closure/bsdf_oren_nayar.h
+   closure/bsdf_phong_ramp.h
+diff --git a/src/kernel/closure/bsdf_microfacet.h b/src/kernel/closure/bsdf_microfacet.h
+index b9261e4d0d3b4578e0f6f2ffe5647cb3e48e9873..0aa4a32a7b272cc11bc845a868b218274d751ab5 100644
+--- a/src/kernel/closure/bsdf_microfacet.h
++++ b/src/kernel/closure/bsdf_microfacet.h
+@@ -7,6 +7,8 @@
+ 
+ #pragma once
+ 
++#include "kernel/closure/dispersion.h"
++
+ #include "kernel/closure/bsdf_transparent.h"
+ #include "kernel/closure/bsdf_util.h"
+ #include "kernel/constants.h"
+@@ -348,22 +350,7 @@ ccl_device_inline float bsdf_glass_ior(ccl_private ShaderData *sd, float ior, co
+   sd->runtime_flag |= SR_BSDF_HAS_DISPERSION;
+   ior = backfacing ? 1.0f / ior : ior;
+ 
+-  /* Wavelengths of the Fraunhofer spectral lines in um. */
+-  constexpr float lambda_d = 0.5876f;
+-  constexpr float lambda_C = 0.6563f;
+-  constexpr float lambda_F = 0.4861f;
+-
+-  constexpr float fac = 1.0f / (1.0f / (lambda_F * lambda_F) - 1.0f / (lambda_C * lambda_C));
+-  constexpr float inv_lambda_d_sq = 1.0f / (lambda_d * lambda_d);
+-
+-  /* OpenPBR Surface specification v1.1.1, Eq. (56). */
+-  const float B = (ior - 1.0f) * inv_abbe * fac;
+-  const float A = ior - B * inv_lambda_d_sq;
+-
+-  const float wavelength = sample_wavelength(sd->rand_wavelength);
+-
+-  /* OpenPBR Surface specification v1.1.1, Eq. (55). */
+-  ior = A + B / sqr(wavelength);
++  ior = bsdf_cauchy_ior(ior, inv_abbe, sample_wavelength(sd->rand_wavelength));
+   return backfacing ? 1.0f / ior : ior;
+ #else
+   (void)sd;
+diff --git a/src/kernel/closure/dispersion.h b/src/kernel/closure/dispersion.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a6ea948df31088d6e9c7dbb53e137585cc50ba2
+--- /dev/null
++++ b/src/kernel/closure/dispersion.h
+@@ -0,0 +1,31 @@
++/* SPDX-FileCopyrightText: 2026 Cycles for Houdini contributors
++ * SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++#include "util/math.h"
++
++CCL_NAMESPACE_BEGIN
++
++/* Absolute IOR at a wavelength in micrometres, from the d-line IOR and inverse
++ * Abbe number. Keep this shared by CPU/GPU closures and physical contract tests. */
++ccl_device_inline float bsdf_cauchy_ior(const float ior,
++                                       const float inv_abbe,
++                                       const float wavelength)
++{
++  constexpr float lambda_d = 0.5876f;
++  constexpr float lambda_C = 0.6563f;
++  constexpr float lambda_F = 0.4861f;
++  constexpr float fac = 1.0f / (1.0f / (lambda_F * lambda_F) - 1.0f / (lambda_C * lambda_C));
++  constexpr float inv_lambda_d_sq = 1.0f / (lambda_d * lambda_d);
++  const float B = (ior - 1.0f) * inv_abbe * fac;
++  const float A = ior - B * inv_lambda_d_sq;
++  return A + B / sqr(wavelength);
++}
++
++/* Every physical IOR is positive. The sign in a nested stack entry carries
++ * wavelength dependence without changing the CPU/GPU path-state layout. */
++ccl_device_inline float nested_ior_encode(const float ior, const bool dispersion)
++{
++  return dispersion ? -ior : ior;
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/geom/attribute.h b/src/kernel/geom/attribute.h
+index 73fe5e83fff3fc3e0e61c6370937702dac17c3f4..7649b2049fd05003b1fc0c8504331bfd45c45a1b 100644
+--- a/src/kernel/geom/attribute.h
++++ b/src/kernel/geom/attribute.h
+@@ -47,6 +47,20 @@ ccl_device_inline float4 attribute_select_constant(
+                      attribute_select_constant(a.w, b.w, c.w, uniform.w, varying.w));
+ }
+ 
++/* Quaternion attributes participate in the same component-preserving generic readers.
++ * Keep upstream's linear quaternion attribute convention (normalization happens at use). */
++ccl_device_inline Quaternion attribute_select_constant(const Quaternion a,
++                                                        const Quaternion b,
++                                                        const Quaternion c,
++                                                        const Quaternion uniform,
++                                                        const Quaternion varying)
++{
++  return make_quaternion(attribute_select_constant(a.w, b.w, c.w, uniform.w, varying.w),
++                         attribute_select_constant(a.x, b.x, c.x, uniform.x, varying.x),
++                         attribute_select_constant(a.y, b.y, c.y, uniform.y, varying.y),
++                         attribute_select_constant(a.z, b.z, c.z, uniform.z, varying.z));
++}
++
+ /* Attributes
+  *
+  * We support an arbitrary number of attributes on various mesh elements.
+@@ -359,6 +373,16 @@ ccl_device_inline float4 attribute_object_lerp(const float4 a, const float4 b, c
+                      attribute_object_lerp(a.w, b.w, factor));
+ }
+ 
++ccl_device_inline Quaternion attribute_object_lerp(const Quaternion a,
++                                                   const Quaternion b,
++                                                   const float factor)
++{
++  return make_quaternion(attribute_object_lerp(a.w, b.w, factor),
++                         attribute_object_lerp(a.x, b.x, factor),
++                         attribute_object_lerp(a.y, b.y, factor),
++                         attribute_object_lerp(a.z, b.z, factor));
++}
++
+ template<typename T>
+ ccl_device T attribute_data_fetch_object(KernelGlobals kg,
+                                          const ccl_private ShaderData *sd,
+diff --git a/src/kernel/integrator/intersect_volume_stack.h b/src/kernel/integrator/intersect_volume_stack.h
+index cc8d928886d4db1ac9527ba9eb1719bd83e28299..26a9456d167e9f8bf70850108b0b379224716a92 100644
+--- a/src/kernel/integrator/intersect_volume_stack.h
++++ b/src/kernel/integrator/intersect_volume_stack.h
+@@ -111,7 +111,11 @@ ccl_device_forceinline float nested_probe_entry_ior(KernelGlobals kg,
+   if (c > 0.0f) {
+     return c;
+   }
++#  ifdef __SPECTRAL__
++  shader_setup_wavelength(kg, sd, state);
++#  endif
+   sd->runtime_flag |= SR_NESTED_ACTIVE | SR_NESTED_MASKED;
++  sd->runtime_flag &= ~SR_NESTED_ENTRY_DISPERSION;
+   sd->nested_opposite_ior = 1.0f;
+   sd->nested_ior_sum = 0.0f;
+   sd->nested_ior_weight = 0.0f;
+diff --git a/src/kernel/integrator/mnee.h b/src/kernel/integrator/mnee.h
+index 699567322760233b7303a257b8151285c1a00cd2..50d2f02f64105d5defc88b551fa258c22a5fbc8b 100644
+--- a/src/kernel/integrator/mnee.h
++++ b/src/kernel/integrator/mnee.h
+@@ -848,7 +848,11 @@ ccl_device_forceinline float mnee_nested_entry_ior(KernelGlobals kg,
+   if (c > 0.0f) {
+     return c;
+   }
++#  ifdef __SPECTRAL__
++  shader_setup_wavelength(kg, sd, state);
++#  endif
+   sd->runtime_flag |= SR_NESTED_ACTIVE | SR_NESTED_MASKED;
++  sd->runtime_flag &= ~SR_NESTED_ENTRY_DISPERSION;
+   sd->nested_opposite_ior = 1.0f;
+   sd->nested_ior_sum = 0.0f;
+   sd->nested_ior_weight = 0.0f;
+diff --git a/src/kernel/integrator/nested_dielectric.h b/src/kernel/integrator/nested_dielectric.h
+index 8f3fba5fc58f42435dd0ba9ed383d0897015eebb..c5dc18fa85b0d994fd8f4427607282f38249ffef 100644
+--- a/src/kernel/integrator/nested_dielectric.h
++++ b/src/kernel/integrator/nested_dielectric.h
+@@ -6,7 +6,9 @@
+  * patch 0074.
+  *
+  * Every path carries the participating objects it is inside, in order of entry, with the IOR read
+- * at entry (shadow paths: objects only). A participating hit on object X is "masked" (a buried
++ * at entry (shadow paths: objects only). A negative stored IOR marks wavelength dependence;
++ * its magnitude is the positive absolute IOR at the shared path wavelength. The sign is retained
++ * verbatim by camera/SSS probes and CPU/GPU stack copies, and decoded only at a real interface. A participating hit on object X is "masked" (a buried
+  * boundary the ray passes straight through) when another entry has a higher priority. Otherwise
+  * the closures use the relative IOR against the "opposite" medium: the highest entry below X
+  * (ties: entered first), or air. See artifacts/feature-nested/DESIGN.md.
+@@ -18,6 +20,7 @@
+ #pragma once
+ 
+ #include "util/atomic.h"
++#include "kernel/closure/dispersion.h"
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -208,7 +211,15 @@ ccl_device_forceinline void nested_surface_prepare(KernelGlobals kg,
+   const bool masked = nested_classify<false>(
+       kg, state, sd->object, nested_object_priority(kg, sd->object), &opposite_ior);
+   sd->runtime_flag |= SR_NESTED_ACTIVE | (masked ? SR_NESTED_MASKED : 0);
+-  sd->nested_opposite_ior = fmaxf(opposite_ior, 1e-5f);
++  sd->nested_opposite_ior = fmaxf(fabsf(opposite_ior), 1e-5f);
++#  ifdef __SPECTRAL__
++  if (opposite_ior < 0.0f && !masked) {
++    /* Even a non-dispersive BSDF is wavelength-dependent against a dispersive medium. */
++    sd->runtime_flag |= SR_BSDF_HAS_DISPERSION;
++    sd->shader_flag |= SD_REQUIRES_WAVELENGTH;
++  }
++#  endif
++  sd->runtime_flag &= ~SR_NESTED_ENTRY_DISPERSION;
+   sd->nested_ior_sum = 0.0f;
+   sd->nested_ior_weight = 0.0f;
+ }
+@@ -237,7 +248,8 @@ ccl_device_forceinline bool nested_isect_is_masked(KernelGlobals kg,
+ ccl_device_forceinline float nested_entry_ior(KernelGlobals kg, const ccl_private ShaderData *sd)
+ {
+   if ((sd->runtime_flag & SR_NESTED_ACTIVE) && sd->nested_ior_weight > 0.0f) {
+-    return sd->nested_ior_sum / sd->nested_ior_weight;
++    const float ior = sd->nested_ior_sum / sd->nested_ior_weight;
++    return nested_ior_encode(ior, (sd->runtime_flag & SR_NESTED_ENTRY_DISPERSION) != 0);
+   }
+   const float c = fabsf(kernel_data_fetch(shaders, (sd->shader & SHADER_MASK)).nested_ior);
+   return (c > 0.0f) ? c : 1.0f;
+diff --git a/src/kernel/integrator/shade_shadow.h b/src/kernel/integrator/shade_shadow.h
+index f2a7f93f7912b0b6fd89ac7bc09e17dd55d48196..47696516e7bf1ebc37bbfbf3b5b2545a18298b8e 100644
+--- a/src/kernel/integrator/shade_shadow.h
++++ b/src/kernel/integrator/shade_shadow.h
+@@ -117,8 +117,7 @@ ccl_device_inline TransparentShadowEvalResult integrate_transparent_surface_shad
+                             nullptr))
+   {
+     volume_stack_enter_exit<true>(kg, state, shadow_sd);
+-    result = SHADER_EVAL_OK;
+-    return one_spectrum();
++    return TRANSPARENT_SHADOW_EVAL_CONTINUE;
+   }
+ #  endif
+ 
+diff --git a/src/kernel/integrator/shade_surface.h b/src/kernel/integrator/shade_surface.h
+index 47f4ffd726ed0850012db5df182e8c93b700e1f6..1dff5dc9e45cf6b7cde14dac2c518308d4b96621 100644
+--- a/src/kernel/integrator/shade_surface.h
++++ b/src/kernel/integrator/shade_surface.h
+@@ -846,6 +846,10 @@ ccl_device int integrate_surface(KernelGlobals kg,
+ #ifdef __VOLUME__
+   if (kernel_data.integrator.nested_dielectrics) {
+     nested_surface_prepare(kg, state, &sd);
++#  ifdef __SPECTRAL__
++    /* nested_surface_prepare may add a wavelength dependency from the opposite medium. */
++    shader_setup_wavelength(kg, &sd, state);
++#  endif
+ #  ifdef __MNEE__
+     if ((sd.runtime_flag & SR_NESTED_ACTIVE) &&
+         ((sd.runtime_flag & SR_NESTED_MASKED) || sd.nested_opposite_ior != 1.0f))
+diff --git a/src/kernel/svm/closure.h b/src/kernel/svm/closure.h
+index 4c59c5c39bc79c9454a0a21430abc6c5125b8ead..c9393ae8374acddd3d6caac70fd9d7f26401b50a 100644
+--- a/src/kernel/svm/closure.h
++++ b/src/kernel/svm/closure.h
+@@ -95,9 +95,13 @@ ccl_device_inline int svm_node_closure_bsdf_skip(int offset, const uint type)
+  * for a masked (buried) boundary, where no closure is needed. */
+ ccl_device_forceinline bool svm_nested_record_ior(ccl_private ShaderData *sd,
+                                                   const float ior,
+-                                                  const float weight)
++                                                  const float weight,
++                                                  const bool dispersion = false)
+ {
+   if (weight > 0.0f) {
++    if (dispersion) {
++      sd->runtime_flag |= SR_NESTED_ENTRY_DISPERSION;
++    }
+     sd->nested_ior_sum += ior * weight;
+     sd->nested_ior_weight += weight;
+   }
+@@ -309,8 +313,23 @@ ccl_device
+ 
+       /* Transmission component */
+       const float transmission_weight = saturatef(stack_load(stack, data.transmission_weight));
++      float nested_medium_ior = ior;
+       if ((sd->runtime_flag & SR_NESTED_ACTIVE) && !thin_wall) {
+-        svm_nested_record_ior(sd, ior, transmission_weight * mix_weight);
++        const float dispersion_scale = saturatef(
++            stack_load(stack, data.transmission_dispersion_scale));
++        const float abbe_number = fmaxf(
++            stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
++        const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
++        const bool backfacing = (sd->runtime_flag & SR_BACKFACING) != 0;
++        /* Disperse the absolute material IOR before forming the relative IOR. Applying
++         * Cauchy to the ratio would use (n1/n2 - 1), which is wrong for two media. */
++        const float material_eta = bsdf_glass_ior(
++            sd, backfacing ? 1.0f / ior : ior, inv_abbe);
++        nested_medium_ior = fmaxf(backfacing ? 1.0f / material_eta : material_eta, 1e-5f);
++        svm_nested_record_ior(sd,
++                              nested_medium_ior,
++                              transmission_weight * mix_weight,
++                              inv_abbe != 0.0f);
+       }
+       if (transmission_weight > CLOSURE_WEIGHT_CUTOFF) {
+         if (reflective_caustics || refractive_caustics) {
+@@ -345,14 +364,16 @@ ccl_device
+               bsdf->alpha_y = alpha_y;
+ 
+               const bool nested = (sd->runtime_flag & SR_NESTED_ACTIVE) != 0;
+-              const float eta = nested ? ior / sd->nested_opposite_ior : ior;
++              const float eta = nested ? nested_medium_ior / sd->nested_opposite_ior : ior;
+               const float dispersion_scale = saturatef(
+                   stack_load(stack, data.transmission_dispersion_scale));
+               const float abbe_number = fmaxf(
+                   stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
+               const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
+               bsdf->ior = backfacing ? 1.0f / eta : eta;
+-              bsdf->ior = bsdf_glass_ior(sd, bsdf->ior, inv_abbe);
++              if (!nested) {
++                bsdf->ior = bsdf_glass_ior(sd, bsdf->ior, inv_abbe);
++              }
+               if (backfacing) {
+                 adjust_thin_film_ior_at_backface(thinfilm.ior, bsdf->ior);
+               }
+@@ -360,7 +381,7 @@ ccl_device
+                 /* Film between the two media, normalised by the medium the light comes from.
+                  * Back face written as film * (1 / ior), the same float operations as the
+                  * native adjustment above, so an opposite IOR of 1 stays bit-identical. */
+-                thinfilm.ior = backfacing ? thinfilm_ior * (1.0f / ior) :
++                thinfilm.ior = backfacing ? thinfilm_ior * (1.0f / nested_medium_ior) :
+                                             thinfilm_ior / sd->nested_opposite_ior;
+ 
+               }
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index 90c9b1bc025e436d400d5e780b2ac013d5852bb8..b7ffb1f2f4fefdeef3076a599e7551908653f717 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -988,6 +988,8 @@ enum ShaderRuntimeFlag {
+   SR_NESTED_ACTIVE = (1 << 15),
+   /* Nested dielectrics: buried boundary, only the IOR is recorded, no closures are needed. */
+   SR_NESTED_MASKED = (1 << 16),
++  /* The recorded absolute medium IOR depends on the path wavelength. */
++  SR_NESTED_ENTRY_DISPERSION = (1 << 17),
+ };
+ 
+ /* Shader flags that are set after compiling the shaders. */
+diff --git a/src/scene/shader.cpp b/src/scene/shader.cpp
+index 3c3ee7a81da6b24f0b77ff8e86a3bffc8bb5e2db..ad0d4c24e1de2b8b68faefcb677b85f9fc401379 100644
+--- a/src/scene/shader.cpp
++++ b/src/scene/shader.cpp
+@@ -618,6 +618,11 @@ void ShaderManager::device_update_pre(Device * /*device*/,
+             }
+           }
+           if (is_glass || is_principled_transmission) {
++            /* Camera-inside and buried boundaries must evaluate dispersive IORs at the
++             * same path wavelength as every later interface, even with a constant d-line IOR. */
++            if (node->has_dispersion()) {
++              shader->nested_ior_varying = true;
++            }
+             ShaderInput *ior = node->input("IOR");
+             if (ior) {
+               const float value = node->get_float(ior->socket_type);

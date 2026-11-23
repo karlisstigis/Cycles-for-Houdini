@@ -1,0 +1,217 @@
+From 7ae2be37e654ac75449b74b6647dd33d94703ca9 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:37 +0100
+Subject: [PATCH] parallel cached light tree flatten
+
+Locked-Patch: patches/0047-parallel-cached-light-tree-flatten.patch
+Locked-Patch-SHA256: a9e6f0afffc46d2f8dc1c05bd8a5a317f0d5ff8513b9f65a63b5c8eed055671b
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 0544b02fc0fa4f7f99621d7f3e9f9add60e6714f
+Previous-Patch: patches/0047-parallel-cached-light-tree-flatten.patch
+Previous-Patch-SHA256: a9e6f0afffc46d2f8dc1c05bd8a5a317f0d5ff8513b9f65a63b5c8eed055671b
+Rationale: Parallel cached-tree flattening reduces host rebuild cost but must preserve deterministic node offsets and bounds from the serial path.
+Contract: parallel cached light tree flatten
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index 877a20533a0a2ad4c68954463cbdf9ab6d39a44f..76bc570e982fe6d8b6aaa301f8e2150d3e2093c3 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -24,6 +24,7 @@
+ #include "util/log.h"
+ #include "util/path.h"
+ #include "util/progress.h"
++#include "util/task.h"
+ #include "util/time.h"
+ 
+ #include <cstdio>
+@@ -769,6 +770,8 @@ struct LightTreeFlatten {
+   /* Map from instance node to its node index. */
+   std::unordered_map<LightTreeNode *, int> instances;
+   size_t instance_swaps = 0;
++  size_t parallel_cached_nodes = 0;
++  size_t parallel_cached_ranges = 0;
+ };
+ 
+ static void light_tree_node_copy_to_device(KernelLightTreeNode &knode,
+@@ -813,6 +816,30 @@ static int light_tree_flatten(LightTreeFlatten &flatten,
+                               KernelLightTreeEmitter *kemitters,
+                               int &next_node_index);
+ 
++static void light_tree_triangle_emitter_copy_to_device(const LightTreeFlatten &flatten,
++                                                       const LightTreeEmitter &emitter,
++                                                       const uint bit_trail,
++                                                       const int emitter_index,
++                                                       KernelLightTreeEmitter &kemitter)
++{
++  assert(emitter.is_triangle());
++  Object *object = flatten.scene->objects[emitter.object_id];
++  Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
++  Shader *shader = static_cast<Shader *>(
++      mesh->get_used_shaders()[mesh->get_shader()[emitter.prim_id]]);
++
++  kemitter.energy = emitter.measure.energy;
++  kemitter.theta_o = emitter.measure.bcone.theta_o;
++  kemitter.theta_e = emitter.measure.bcone.theta_e;
++  kemitter.triangle.id = emitter.prim_id + mesh->prim_offset;
++  kemitter.visibility_flag = light_object_visibility_flags(object);
++  kemitter.object_id = emitter.object_id;
++  kemitter.triangle.emission_sampling = shader->emission_sampling;
++  kemitter.bit_trail = bit_trail;
++  flatten.triangle_array[emitter.prim_id + flatten.object_lookup_offset[emitter.object_id]] =
++      emitter_index;
++}
++
+ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+                                                       const LightTreeNode &node,
+                                                       KernelLightTreeNode *knodes,
+@@ -825,25 +852,17 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+     const LightTreeEmitter &emitter = flatten.emitters[emitter_index];
+     KernelLightTreeEmitter &kemitter = kemitters[emitter_index];
+ 
++    if (emitter.is_triangle()) {
++      light_tree_triangle_emitter_copy_to_device(
++          flatten, emitter, node.bit_trail, emitter_index, kemitter);
++      continue;
++    }
++
+     kemitter.energy = emitter.measure.energy;
+     kemitter.theta_o = emitter.measure.bcone.theta_o;
+     kemitter.theta_e = emitter.measure.bcone.theta_e;
+ 
+-    if (emitter.is_triangle()) {
+-      /* Triangle. */
+-      Object *object = flatten.scene->objects[emitter.object_id];
+-      Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+-      Shader *shader = static_cast<Shader *>(
+-          mesh->get_used_shaders()[mesh->get_shader()[emitter.prim_id]]);
+-
+-      kemitter.triangle.id = emitter.prim_id + mesh->prim_offset;
+-      kemitter.visibility_flag = light_object_visibility_flags(object);
+-      kemitter.object_id = emitter.object_id;
+-      kemitter.triangle.emission_sampling = shader->emission_sampling;
+-      flatten.triangle_array[emitter.prim_id + flatten.object_lookup_offset[emitter.object_id]] =
+-          emitter_index;
+-    }
+-    else if (emitter.is_light()) {
++    if (emitter.is_light()) {
+       /* Light object. */
+       kemitter.light.id = emitter.prim_id;
+       kemitter.visibility_flag = 0;
+@@ -901,33 +920,54 @@ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+   const auto &cache = anchor.get_cached();
+   const int first_node = next_node_index;
+   next_node_index += cache.num_nodes;
+-  for (int index = 0; index < cache.num_nodes; ++index) {
+-    const LightTreeCachedNode &stored = cache.nodes[index];
+-    LightTreeNode node(stored.measure(), stored.bit_trail);
+-    node.object_id = anchor.object_id;
+-    int left_child = -1, right_child = -1;
+-    if (stored.type & LIGHT_TREE_LEAF) {
+-      node.make_leaf(cache.emitter_start + stored.first, stored.second);
+-    }
+-    else {
+-      left_child = first_node + stored.first;
+-      right_child = first_node + stored.second;
+-    }
+-    node.type = stored.type;
+-    if (index == 0) {
+-      /* Root measures describe the current instance, and flattening may have
+-       * moved the reference variant to a different first-encountered instance. */
+-      node.measure = anchor.measure;
+-      node.bit_trail = anchor.bit_trail;
+-      node.type = anchor.type;
+-    }
+-    if (node.is_leaf()) {
+-      /* Cached local leaves contain triangles only. Kernel indices and current
+-       * visibility/sampling come from the same current emitters as normal trees. */
+-      light_tree_leaf_emitters_copy_and_flatten(
+-          flatten, node, knodes, kemitters, next_node_index);
++  const auto flatten_range = [&](const blocked_range<int> &range) {
++    for (int index = range.begin(); index < range.end(); ++index) {
++      const LightTreeCachedNode &stored = cache.nodes[index];
++      LightTreeNode node(stored.measure(), stored.bit_trail);
++      node.object_id = anchor.object_id;
++      int left_child = -1, right_child = -1;
++      if (stored.type & LIGHT_TREE_LEAF) {
++        node.make_leaf(cache.emitter_start + stored.first, stored.second);
++      }
++      else {
++        left_child = first_node + stored.first;
++        right_child = first_node + stored.second;
++      }
++      node.type = stored.type;
++      if (index == 0) {
++        /* Root measures describe the current instance, and flattening may have
++         * moved the reference variant to a different first-encountered instance. */
++        node.measure = anchor.measure;
++        node.bit_trail = anchor.bit_trail;
++        node.type = anchor.type;
++      }
++      if (node.is_leaf()) {
++        /* Cached local leaves contain disjoint triangle ranges. They never
++         * recurse, reserve nodes or mutate the shared instance-reference map.
++         * Current IDs, visibility and sampling still come from the live scene. */
++        const auto &leaf = node.get_leaf();
++        for (int i = 0; i < leaf.num_emitters; ++i) {
++          const int emitter_index = leaf.first_emitter_index + i;
++          light_tree_triangle_emitter_copy_to_device(
++              flatten, flatten.emitters[emitter_index], node.bit_trail,
++              emitter_index, kemitters[emitter_index]);
++        }
++      }
++      light_tree_node_copy_to_device(knodes[first_node + index], node, left_child, right_child);
+     }
+-    light_tree_node_copy_to_device(knodes[first_node + index], node, left_child, right_child);
++  };
++  const char *serial_flag = std::getenv("CYCLES_HOUDINI_SERIAL_LIGHT_TREE_FLATTEN");
++  const bool force_serial = serial_flag && std::strcmp(serial_flag, "1") == 0;
++  if (cache.num_nodes >= 4096 && !force_serial) {
++    /* Reserve the whole range before dispatch. Borrowed cache records and
++     * scene fields remain immutable until all tasks join here. Use Cycles'
++     * existing task arena/thread limit; small ranges avoid dispatch overhead. */
++    flatten.parallel_cached_nodes += cache.num_nodes;
++    ++flatten.parallel_cached_ranges;
++    parallel_for(blocked_range<int>(0, cache.num_nodes, 1024), flatten_range);
++  }
++  else {
++    flatten_range(blocked_range<int>(0, cache.num_nodes));
+   }
+   return first_node;
+ }
+@@ -1131,6 +1171,7 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   const double started = profiling ? time_dt() : 0;
+   double construction_seconds = 0, flatten_seconds = 0, upload_seconds = 0, work_end = 0;
+   size_t profile_nodes = 0, profile_emitters = 0, profile_instance_swaps = 0;
++  size_t profile_parallel_cached_nodes = 0, profile_parallel_cached_ranges = 0;
+   /* Declared before the tree: this runs after tree retirement, whose many
+    * transient node allocations were previously hidden in the overall timer. */
+   const scoped_callback_timer phase_timer([&](double /*unused*/) {
+@@ -1140,11 +1181,13 @@ void LightManager::device_update_tree(Device * /*unused*/,
+                    "CH_LIGHT_TREE_PHASES {\"complete\":%s,\"nodes\":%zu,\"emitters\":%zu,"
+                    "\"construction_seconds\":%.9f,\"flatten_seconds\":%.9f,"
+                    "\"upload_seconds\":%.9f,\"retirement_seconds\":%.9f,\"total_seconds\":%.9f,"
+-                   "\"instance_swaps\":%zu}\n",
++                   "\"instance_swaps\":%zu,\"parallel_cached_nodes\":%zu,"
++                   "\"parallel_cached_ranges\":%zu}\n",
+                    work_end > 0 && !progress.get_cancel() ? "true" : "false",
+                    profile_nodes, profile_emitters, construction_seconds, flatten_seconds,
+                    upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started,
+-                   profile_instance_swaps);
++                   profile_instance_swaps, profile_parallel_cached_nodes,
++                   profile_parallel_cached_ranges);
+     }
+   });
+ 
+@@ -1242,6 +1285,8 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   dscene->object_lookup_offset.copy_to_device();
+   dscene->triangle_to_tree.copy_to_device();
+   profile_instance_swaps = flatten.instance_swaps;
++  profile_parallel_cached_nodes = flatten.parallel_cached_nodes;
++  profile_parallel_cached_ranges = flatten.parallel_cached_ranges;
+   if (profiling) {
+     work_end = time_dt();
+     upload_seconds = work_end - upload_at;

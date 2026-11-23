@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "scope": "Eight explicitly approved one-off feasibility/inspection probes retired from the production test tree. Hashes cover original raw bytes at 73600da, before later formatting. No runtime or active test references remain outside the retired pair; no tests were launched for this reversible source retirement.",
+  "recovery_command": "git show <recovery_commit>:<recovery_path>",
+  "retired": {
+    "subdivision_options_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/subdivision_options_probe.py",
+      "sha256": "bd91245c442fa120cca061c35d3f7960569bd462ca90bab9ecfcc5ade524fd2d",
+      "reason": "One-off installed Subdivide SOP menu/value inspection. It prints observations and has no regression assertions; no active runtime or runner consumes it.",
+      "replacements": [
+        "tests/houdini_subdivision_smoke.py",
+        "tests/subdivision_test_setup.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "performance_geometry_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/performance_geometry_probe.py",
+      "sha256": "572cebaed906f1873f617c614d2826902387285a8dffa902163158def16e586c",
+      "reason": "One-off Grid SOP convention discovery. It records result=inspected, topology/menu observations and no assertions, rather than testing renderer behavior.",
+      "replacements": [
+        "tests/benchmark_grid_comparison.py",
+        "tests/benchmark_native_latency.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "create_soho_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/create_soho_probe.py",
+      "sha256": "d3477caae4a80057491ae81101585d2f1f855b4f2c6cefb31658396eea0e301f",
+      "reason": "Stage-1 feasibility experiment constructs an ad-hoc SOHO HDA through Hscript and invokes the companion observation program. The production ROP path now has dedicated lifecycle, action and camera regressions.",
+      "replacements": [
+        "tests/houdini_background_final_smoke.py",
+        "tests/houdini_rop_actions_gui_smoke.py",
+        "tests/camera_conventions_probe.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "soho_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/soho_probe.py",
+      "sha256": "f49b14b3778c157191a18238bae0aab9fc1341326075f71e311974bf6ac6e306",
+      "reason": "Companion observation-only SOHO program for create_soho_probe.py; its sole incoming reference is retired with that experiment. It writes lifecycle metadata without regression assertions.",
+      "replacements": [
+        "tests/houdini_background_final_smoke.py",
+        "tests/camera_conventions_probe.py",
+        "tests/soho_camera_probe.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_offline_datablock_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_offline_datablock_probe.py",
+      "sha256": "d9b9f28cc6fed02546c147d33ce9075c4a2e871f6ba65df9d2e6cae2d76e80d0",
+      "reason": "Explicit three-process serialization prototype using the custom cycles.offline.prototype data block and manually loaded CPIO. Production archive round-trip fixtures exercise the actual archive schema and recovery behavior.",
+      "replacements": [
+        "tests/houdini_offline_scene_smoke.py",
+        "tests/houdini_offline_extended_smoke.py",
+        "tests/offline_archive_test.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_offline_recovery_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_offline_recovery_probe.py",
+      "sha256": "976851703cbe6eb70bfbf835a97abbb979dc6a5e5b9eddbe1d154205e4e73fb9",
+      "reason": "One-off HOM rename/reference and intentional type-replacement API investigation. It records observations with zero assertions and unconditionally reports passed; it is not a production recovery regression.",
+      "replacements": [
+        "tests/houdini_offline_structure_smoke.py",
+        "tests/houdini_offline_scene_smoke.py",
+        "tests/houdini_offline_extended_smoke.py",
+        "tests/offline_archive_test.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_background_final_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_background_final_probe.py",
+      "sha256": "00597cc1f18a898457d8a611368a7212874d13be985d12f3ac4d5fd91b4b164d",
+      "reason": "Explicit observation of the inherited reserved background button. Its only assertion bounds elapsed time; separate_process is computed but not asserted. Dedicated production batch and GUI fixtures test actual process isolation, controls and cleanup.",
+      "replacements": [
+        "tests/houdini_background_final_smoke.py",
+        "tests/houdini_background_final_gui_smoke.py",
+        "tests/houdini_background_final_gui_cleanup_smoke.py",
+        "tests/houdini_background_jobs_gui_smoke.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_artist_ui_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_artist_ui_probe.py",
+      "sha256": "8a094f8127b64e9696d22213b956034e37b384a8229e87ef3e3a7326924542f4",
+      "reason": "One-off courtyard screenshot/window/menu observation with no assertions. The artist workflow and ROP layout regressions assert actual UI behavior and icon/layout contracts.",
+      "replacements": [
+        "tests/houdini_artist_workflow_smoke.py",
+        "tests/houdini_rop_layout_gui_smoke.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    }
+  }
+}

@@ -1,0 +1,32 @@
+From bb8ee76eecb430cda91383806b862690b8ed08db Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:41 +0100
+Subject: [PATCH] volume zero throughput
+
+Locked-Patch: patches/0069-volume-zero-throughput.patch
+Locked-Patch-SHA256: 48f34ac096593db5eee3a43daa614e8490ab62cfa532a7bb41590253de00adcc
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_volume_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 0dfe21a7768b284927b4ec64ed0af46ecf09b17e
+Previous-Patch: patches/0069-volume-zero-throughput.patch
+Previous-Patch-SHA256: 48f34ac096593db5eee3a43daa614e8490ab62cfa532a7bb41590253de00adcc
+Rationale: Zero-throughput volume direct-light paths should terminate without invalid sampling/weight propagation; the guard is generic estimator hygiene.
+Contract: volume zero throughput
+Tests: tests/houdini_volume_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/integrator/shade_volume.h b/src/kernel/integrator/shade_volume.h
+index 6e999bfd97377c91b142ec67edf8aeca059ac6b0..9508be62eb0e8d63f75e3d38cb0a4a8a527ef67c 100644
+--- a/src/kernel/integrator/shade_volume.h
++++ b/src/kernel/integrator/shade_volume.h
+@@ -2458,7 +2458,8 @@ ccl_device_forceinline void integrate_volume_direct_light(
+ {
+   PROFILING_INIT(kg, PROFILING_SHADE_VOLUME_DIRECT_LIGHT);
+ 
+-  if (!kernel_data.integrator.use_direct_light || ls.emitter_id == EMITTER_NONE) {
++  if (!kernel_data.integrator.use_direct_light || ls.emitter_id == EMITTER_NONE ||
++      is_zero(throughput)) {
+     return;
+   }
+ 

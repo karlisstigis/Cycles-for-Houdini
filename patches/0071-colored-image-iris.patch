@@ -1,0 +1,386 @@
+From 9c865647cf218d5adfc20ea8e602eb82d73245c4 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:41 +0100
+Subject: [PATCH] colored image iris
+
+Locked-Patch: patches/0071-colored-image-iris.patch
+Locked-Patch-SHA256: b470b91fe99ec8650c17d24fa0455c590e7afc10cc1b9b128fd5f21cbc8b6859
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_image_iris_color_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: bdfd5e4fdd86e23c4938e9f1f701f5252f40839e
+Previous-Patch: patches/0071-colored-image-iris.patch
+Previous-Patch-SHA256: b470b91fe99ec8650c17d24fa0455c590e7afc10cc1b9b128fd5f21cbc8b6859
+Rationale: Colored Image Iris extends aperture sampling with RGB throughput weights and resource layout, depending on 0070's sampler and host color handling.
+Contract: colored image iris
+Tests: tests/houdini_image_iris_color_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/camera/camera.h b/src/kernel/camera/camera.h
+index 30f078d8a95e6dfebd189a7738dde84daf1e4e8f..2b46b4d3bfe1f629d4a596f1c09f4265d7b40b10 100644
+--- a/src/kernel/camera/camera.h
++++ b/src/kernel/camera/camera.h
+@@ -10,6 +10,7 @@
+ #include "kernel/sample/mapping.h"
+ #include "kernel/util/differential.h"
+ #include "kernel/util/lookup_table.h"
++#include "kernel/util/colorspace.h"
+ #ifdef WITH_IMAGE_IRIS
+ #  include "kernel/camera/image_iris.h"
+ #endif
+@@ -95,9 +96,11 @@ struct ImageIrisKernelTable {
+ ccl_device float2 camera_sample_aperture(KernelGlobals kg, const float blades,
+                                        const float rotation,
+                                        const float inverse_ratio,
+-                                       const float2 rand)
++                                       const float2 rand,
++                                       ccl_private Spectrum *weight = nullptr)
+ {
+   float2 bokeh;
++  if (weight != nullptr) *weight = one_spectrum();
+ 
+ #ifdef WITH_IMAGE_IRIS
+ #  ifndef __KERNEL_GPU__
+@@ -109,6 +112,10 @@ ccl_device float2 camera_sample_aperture(KernelGlobals kg, const float blades,
+ #  endif
+     const float2 uv = image_iris_sample(ImageIrisKernelTable{kg, kernel_data.cam.image_iris_offset},
+                                        kernel_data.cam.image_iris_method, rand);
++    if (weight != nullptr && kernel_data.cam.image_iris_color) {
++      *weight = rgb_to_spectrum(image_iris_weight(
++          ImageIrisKernelTable{kg, kernel_data.cam.image_iris_offset}, uv));
++    }
+     /* Image rows run downward; camera lens Y and raster Y point upward. */
+     const float2 p = make_float2(2.0f * uv.x - 1.0f, 1.0f - 2.0f * uv.y);
+     const float cosine = cosf(rotation), sine = sinf(rotation);
+@@ -136,6 +143,7 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+                                               const float2 rand_lens,
+                                               ccl_private Ray *ray)
+ {
++  Spectrum weight = one_spectrum();
+   /* create ray form raster position */
+   const ProjectionTransform rastertocamera = kernel_data.cam.rastertocamera;
+   const float3 raster = make_float3(raster_xy);
+@@ -176,7 +184,7 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+   if (aperturesize > 0.0f) {
+     /* sample point on aperture */
+     const float2 lens_uv = camera_sample_aperture(kg, kernel_data.cam.blades, optics.z,
+-                                                 1.0f / optics.w, rand_lens) * aperturesize;
++                                                 1.0f / optics.w, rand_lens, &weight) * aperturesize;
+ 
+     /* compute point on plane of focus */
+     /* Divide by focus before normalizing: a valid large focus distance must
+@@ -276,7 +284,7 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+   ray->tmin = 0.0f;
+   ray->tmax = (intrinsic.projection.y - intrinsic.projection.x) * z_inv;
+ 
+-  return one_spectrum();
++  return weight;
+ }
+ 
+ /* Orthographic Camera */
+@@ -285,6 +293,7 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+                                                const float2 rand_lens,
+                                                ccl_private Ray *ray)
+ {
++  Spectrum weight = one_spectrum();
+   /* create ray form raster position */
+   const ProjectionTransform rastertocamera = kernel_data.cam.rastertocamera;
+   const auto intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion),
+@@ -304,7 +313,7 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+   if (aperturesize > 0.0f) {
+     /* sample point on aperture */
+     const float2 lens_uv = camera_sample_aperture(kg, kernel_data.cam.blades, optics.z,
+-                                                 1.0f / optics.w, rand_lens) * aperturesize;
++                                                 1.0f / optics.w, rand_lens, &weight) * aperturesize;
+ 
+     /* compute point on plane of focus */
+     const float3 lens_uvw = make_float3(lens_uv);
+@@ -346,7 +355,7 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+   ray->tmin = 0.0f;
+   ray->tmax = intrinsic.projection.y - intrinsic.projection.x;
+ 
+-  return one_spectrum();
++  return weight;
+ }
+ 
+ /* Custom Camera */
+@@ -501,6 +510,7 @@ ccl_device_inline Spectrum camera_sample_panorama(KernelGlobals kg, ccl_constant
+                                                   const float2 rand_lens,
+                                                   ccl_private Ray *ray)
+ {
++  Spectrum weight = one_spectrum();
+   /* Create ray from raster position. */
+   float3 P = zero_float3();
+   const auto intrinsic = camera_intrinsic_at(cam, intrinsic_motion, cam->shuttertime == -1.0f ? -1.0f : ray->time);
+@@ -529,7 +539,7 @@ ccl_device_inline Spectrum camera_sample_panorama(KernelGlobals kg, ccl_constant
+   if (aperturesize > 0.0f) {
+     /* Sample a point on the aperture. */
+     const float2 lens_uv = camera_sample_aperture(kg, cam->blades, optics.z,
+-                                                 1.0f / optics.w, rand_lens) * aperturesize;
++                                                 1.0f / optics.w, rand_lens, &weight) * aperturesize;
+ 
+     /* Compute the intersection of the original ray with the focal plane. */
+     const float3 Dfocus = normalize(D);
+@@ -566,7 +576,7 @@ ccl_device_inline Spectrum camera_sample_panorama(KernelGlobals kg, ccl_constant
+   ray->P += clip_delta * ray->D;
+   ray->dP += clip_delta * ray->dD;
+   ray->tmax = intrinsic.projection.y - intrinsic.projection.x;
+-  return one_spectrum();
++  return weight;
+ }
+ 
+ /* Common */
+diff --git a/src/kernel/camera/image_iris.h b/src/kernel/camera/image_iris.h
+index ebdd3b12688e67e6dd39d26f525d1af3bcb22caf..a7b3a4bf62c1ba9ec00014a1d035c4de72021256 100644
+--- a/src/kernel/camera/image_iris.h
++++ b/src/kernel/camera/image_iris.h
+@@ -3,9 +3,11 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+-/* Packed resource: width, height, padded hierarchy side, reserved, pixel offset,
++/* Packed resource: width, height, padded hierarchy side, RGB offset, pixel offset,
+  * conditional CDF offset, marginal CDF offset, hierarchy offset. The hierarchy
+  * stores square levels root first. Image vertices define bilinear cells.
++ * RGB offset zero denotes scalar gray transmission. Optional RGB vertices use
++ * the same common scale as the density and are appended after the hierarchy.
+  * Both mappings consume only the camera's original two lens dimensions. */
+ ccl_device_inline float image_iris_linear_sample(const float u, const float a, const float b)
+ {
+@@ -87,4 +89,36 @@ ccl_device_inline float2 image_iris_sample(const Table &table,
+                      (float(y) + v) / float(cells_y));
+ }
+ 
++template<typename Table>
++ccl_device_inline float3 image_iris_weight(const Table &table, const float2 uv)
++{
++  const int rgb_offset = int(table(3));
++  if (rgb_offset == 0) return one_float3();
++  const int width = int(table(0)), height = int(table(1));
++  const float px = saturatef(uv.x) * float(width - 1);
++  const float py = saturatef(uv.y) * float(height - 1);
++  const int x = min(int(px), width - 2), y = min(int(py), height - 2);
++  const float u = px - float(x), v = py - float(y);
++  const int pixel = y * width + x;
++  const int a = rgb_offset + 3 * pixel, b = a + 3;
++  const int c = a + 3 * width, d = c + 3;
++  const float3 ra = make_float3(table(a), table(a + 1), table(a + 2));
++  const float3 rb = make_float3(table(b), table(b + 1), table(b + 2));
++  const float3 rc = make_float3(table(c), table(c + 1), table(c + 2));
++  const float3 rd = make_float3(table(d), table(d + 1), table(d + 2));
++  const int density = int(table(4)) + pixel;
++  const float ya = table(density), yb = table(density + 1);
++  const float yc = table(density + width), yd = table(density + width + 1);
++  const float3 rgb = mix(mix(ra, rb, u), mix(rc, rd, u), v);
++  const float luminance = mix(mix(ya, yb, u), mix(yc, yd, u), v);
++  /* Density is proportional to luminance. RGB / luminance keeps the natural
++   * filter tint while applying one common exposure compensation, never a
++   * separate white balance for each channel. Alpha is already in both tables.
++   * Exact zero-density endpoints can occur after inverse-CDF float rounding:
++   * use the finite cell mean rather than divide by zero or invent channels. */
++  if (luminance > 0.0f) return rgb / luminance;
++  const float mean_luminance = ya + yb + yc + yd;
++  return mean_luminance > 0.0f ? (ra + rb + rc + rd) / mean_luminance : zero_float3();
++}
++
+ CCL_NAMESPACE_END
+diff --git a/src/kernel/film/data_passes.h b/src/kernel/film/data_passes.h
+index 3d1339baea4ffccde5df9bdda33e90bbf026abf6..b0226630b0125a3d301edf68eb4f74c7c2899dd2 100644
+--- a/src/kernel/film/data_passes.h
++++ b/src/kernel/film/data_passes.h
+@@ -97,7 +97,7 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
+ 
+   if (kernel_data.film.cryptomatte_passes) {
+     const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
+-    const float matte_weight = average(throughput) *
++    const float matte_weight = film_camera_coverage_weight(state, average(throughput)) *
+                                (1.0f - average(surface_shader_transparency(sd)));
+     if (matte_weight > 0.0f) {
+       ccl_global float *cryptomatte_buffer = buffer + kernel_data.film.pass_cryptomatte;
+@@ -161,7 +161,8 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
+     /* Modulate by transparency */
+     const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
+     const Spectrum alpha = surface_shader_alpha(sd);
+-    const float mist_output = (1.0f - mist) * average(throughput * alpha);
++    const float mist_output = (1.0f - mist) *
++                              film_camera_coverage_weight(state, average(throughput * alpha));
+ 
+     /* Note that the final value in the render buffer we want is 1 - mist_output,
+      * to avoid having to tracking this in the Integrator state we do the negation
+diff --git a/src/kernel/film/light_passes.h b/src/kernel/film/light_passes.h
+index 7e76c4e68fdef79b85d52ec9d10a3b4f5f6983d3..0d24c3858550b02be566bbfd0fa25a1898922b13 100644
+--- a/src/kernel/film/light_passes.h
++++ b/src/kernel/film/light_passes.h
+@@ -331,7 +331,7 @@ ccl_device_forceinline void film_write_shadow_catcher_bounce_data(
+    * transparency to the matte. */
+   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
+   film_write_pass_float(buffer + kernel_data.film.pass_shadow_catcher_matte + 3,
+-                        average(throughput));
++                        film_camera_coverage_weight(state, average(throughput)));
+ }
+ 
+ #endif /* __SHADOW_CATCHER__ */
+diff --git a/src/kernel/film/write.h b/src/kernel/film/write.h
+index cfbdeadce6b331a26425992fb38d68a17b2c5d4f..504205c643a8e93d87656e8da0998d22ef5889e8 100644
+--- a/src/kernel/film/write.h
++++ b/src/kernel/film/write.h
+@@ -19,6 +19,22 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++/* The colored iris uses a common exposure gain for radiance. Scalar coverage
++ * must not inherit that initial RGB gain: empty transparent backgrounds retain
++ * alpha zero and opaque hits retain geometric coverage in alpha, Cryptomatte,
++ * Mist and shadow-catcher mattes. Subsequent colored material/volume
++ * transmission remains filtered by the camera response. The path scalar is
++ * copied with the state when shadow-catcher paths split. Radiance is unchanged. */
++ccl_device_inline float film_camera_coverage_weight(ConstIntegratorState state,
++                                                   const float weight)
++{
++#ifdef WITH_IMAGE_IRIS
++  return weight * INTEGRATOR_STATE(state, path, image_iris_transparency_scale);
++#else
++  return weight;
++#endif
++}
++
+ /* Get pointer to pixel in render buffer. */
+ 
+ ccl_device_forceinline ccl_global float *film_pass_pixel_render_buffer(
+diff --git a/src/kernel/integrator/init_from_camera.h b/src/kernel/integrator/init_from_camera.h
+index 948a83a74b93eb31eef7848af0b9620e974eb601..9e275f44d1d83292f63332c78250810ae1d31f7b 100644
+--- a/src/kernel/integrator/init_from_camera.h
++++ b/src/kernel/integrator/init_from_camera.h
+@@ -139,6 +139,20 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
+     }
+   }
+ 
++#ifdef WITH_IMAGE_IRIS
++  if (kernel_data.cam.image_iris_color && kernel_data.cam.image_iris_method != 0 &&
++      kernel_data.cam.image_iris_offset >= 0 && kernel_data.cam.type != CAMERA_CUSTOM)
++  {
++    /* These standard camera models return only the normalized iris RGB gain.
++     * Normalize its scalar transparency separately so aperture tint does not
++     * change geometric/achromatic coverage. Do not normalize custom camera T,
++     * which can encode an intentional physical sensor or exposure response. */
++    const float iris_average = average(T);
++    INTEGRATOR_STATE_WRITE(state, path, image_iris_transparency_scale) =
++        iris_average > 0.0f ? 1.0f / iris_average : 1.0f;
++  }
++#endif
++
+   return true;
+ }
+ 
+diff --git a/src/kernel/integrator/path_state.h b/src/kernel/integrator/path_state.h
+index 2585b2375f6699f033db16439c2914014b2b3b79..5cce14054aad5319e2fcb55f09289f8fb6cbad0e 100644
+--- a/src/kernel/integrator/path_state.h
++++ b/src/kernel/integrator/path_state.h
+@@ -64,6 +64,12 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
+   INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = FLT_MAX;
+   INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = 1.0f;
+   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
++#ifdef WITH_IMAGE_IRIS
++  /* Baking and cameras without colored image transmission retain their exact
++   * existing transparency behavior. Camera initialization overrides this only
++   * for the native iris gain, never an arbitrary custom-camera sensitivity. */
++  INTEGRATOR_STATE_WRITE(state, path, image_iris_transparency_scale) = 1.0f;
++#endif
+   INTEGRATOR_STATE_WRITE(state, path, optical_depth) = 0.0f;
+ #if defined(__PATH_GUIDING__)
+   if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+diff --git a/src/kernel/integrator/shade_background.h b/src/kernel/integrator/shade_background.h
+index 22c27954974ec52a63b71d7e2bb262aa5e590492..f5d77ca8fcf3aba047c4d79d2b05dfd435e906ce 100644
+--- a/src/kernel/integrator/shade_background.h
++++ b/src/kernel/integrator/shade_background.h
+@@ -107,7 +107,8 @@ ccl_device_inline ShaderEvalResult integrate_background(
+                                              (path_flag & PATH_RAY_TRANSPARENT_BACKGROUND);
+ 
+   if (is_transparent_background_ray) {
+-    transparent = average(INTEGRATOR_STATE(state, path, throughput));
++    transparent = film_camera_coverage_weight(
++        state, average(INTEGRATOR_STATE(state, path, throughput)));
+ 
+ #ifdef __PASSES__
+     eval_background = (kernel_data.film.light_pass_flag & PASSMASK(BACKGROUND));
+diff --git a/src/kernel/integrator/shade_surface.h b/src/kernel/integrator/shade_surface.h
+index f2607902c4ce555e37a5d8fdbef1fbaac5c23dc9..f3c0efaca3c92b550ef57daff4178564cbcbc08f 100644
+--- a/src/kernel/integrator/shade_surface.h
++++ b/src/kernel/integrator/shade_surface.h
+@@ -109,7 +109,8 @@ ccl_device_forceinline bool integrate_surface_holdout(KernelGlobals kg,
+   {
+     const Spectrum holdout_weight = surface_shader_apply_holdout(sd);
+     const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
+-    const float transparent = average(holdout_weight * throughput);
++    const float transparent = film_camera_coverage_weight(
++        state, average(holdout_weight * throughput));
+     film_write_holdout(kg, state, path_flag, transparent, render_buffer);
+     if (isequal(holdout_weight, one_spectrum())) {
+       return false;
+diff --git a/src/kernel/integrator/state_template.h b/src/kernel/integrator/state_template.h
+index eeeca4d8d70c7ac76809c2ec7c5403f831f48789..f58b5487529b6bcdcbfbae7dacbd0e947a9c94e4 100644
+--- a/src/kernel/integrator/state_template.h
++++ b/src/kernel/integrator/state_template.h
+@@ -63,6 +63,12 @@ KERNEL_STRUCT_MEMBER(path,
+                      KERNEL_FEATURE_PATH_TRACING)
+ /* Throughput. */
+ KERNEL_STRUCT_MEMBER(path, PackedSpectrum, throughput, KERNEL_FEATURE_PATH_TRACING)
++#ifdef WITH_IMAGE_IRIS
++/* Remove only the initial RGB iris gain from scalar transparency. Subsequent
++ * colored material/volume transmission remains weighted by the filtered camera;
++ * this is not a reconstruction of an unfiltered material's RGB opacity. */
++KERNEL_STRUCT_MEMBER(path, float, image_iris_transparency_scale, KERNEL_FEATURE_PATH_TRACING)
++#endif
+ /* Factor to multiple with throughput to get remove any guiding PDFS.
+  * Such throughput without guiding PDFS is used for Russian roulette termination. */
+ KERNEL_STRUCT_MEMBER(path, float, unguided_throughput, KERNEL_FEATURE_PATH_GUIDING)
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index a64718740b0e2e3ec813fc759b29f6f8b83207d2..f27c922d13bbb695cf42912d3614674a61332dd1 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1234,7 +1234,8 @@ struct KernelCamera {
+   /* Optional image iris. Keep camera layout identical across feature builds. */
+   int image_iris_offset;
+   int image_iris_method;
+-  int image_iris_pad[2];
++  int image_iris_color;
++  int image_iris_pad;
+ 
+   /* depth of field */
+   float aperturesize;
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index 434ff251efa4979928b28190f037509e7534561e..5e70e8b6b7ead7704973759d8c7d579a6e5c6a58 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -103,6 +103,7 @@ NODE_DEFINE(Camera)
+   SOCKET_FLOAT_ARRAY(intrinsic_motion, "Projection Intrinsic Motion", array<float>());
+   SOCKET_FLOAT_ARRAY(image_iris, "Image Iris", array<float>());
+   SOCKET_INT(image_iris_method, "Image Iris Sampling", 0);
++  SOCKET_BOOLEAN(image_iris_color, "Use Image Color", false);
+   SOCKET_UINT(blades, "Blades", 0);
+   SOCKET_FLOAT(bladesrotation, "Blades Rotation", 0.0f);
+ 
+@@ -675,9 +676,11 @@ void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scen
+   }
+   kernel_camera.image_iris_offset = (int)image_iris_table_offset;
+   kernel_camera.image_iris_method = image_iris_table_offset == TABLE_OFFSET_INVALID ? 0 : image_iris_method;
++  kernel_camera.image_iris_color = image_iris_color;
+ #else
+   kernel_camera.image_iris_offset = -1;
+   kernel_camera.image_iris_method = 0;
++  kernel_camera.image_iris_color = 0;
+ #endif
+ 
+   dscene->data.cam = kernel_camera;
+diff --git a/src/scene/camera.h b/src/scene/camera.h
+index 010723d045800ac53213913dcf6a0d82ebd536c7..6047369a07772bddb069a91f07adb2e65d30c75c 100644
+--- a/src/scene/camera.h
++++ b/src/scene/camera.h
+@@ -85,6 +85,7 @@ class Camera : public Node {
+   /* Optional normalized image aperture distribution; zero selects analytic DOF. */
+   NODE_SOCKET_API_ARRAY(array<float>, image_iris)
+   NODE_SOCKET_API(int, image_iris_method)
++  NODE_SOCKET_API(bool, image_iris_color)
+   size_t image_iris_table_offset;
+   bool need_image_iris_update;
+   bool need_shutter_table_update;

@@ -1,0 +1,313 @@
+diff --git a/src/scene/light_tree.cpp b/src/scene/light_tree.cpp
+--- a/src/scene/light_tree.cpp
++++ b/src/scene/light_tree.cpp
+@@ -378,19 +378,27 @@
+ 
+ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+ {
++  const char *disable_empty_skip = std::getenv("CYCLES_HOUDINI_DISABLE_EMPTY_LIGHT_TREE_SPLIT_SKIP");
++  skip_duplicate_splits_ = !(disable_empty_skip && std::strcmp(disable_empty_skip, "1") == 0);
++  const char *detail_flag = std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE_DETAIL");
++  if (detail_flag && std::strcmp(detail_flag, "1") == 0) {
++    build_profile_ = make_unique<LightTreeBuildProfile>();
++  }
+   const char *profile_flag = std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
+   const bool profiling = profile_flag && std::strcmp(profile_flag, "1") == 0;
+   const double began = profiling ? time_dt() : 0;
+   double planned = 0, extracted = 0, local_built = 0, stored = 0, measured = 0;
+   bool completed = false;
+   const scoped_callback_timer phases([&](double elapsed) {
++    if (build_profile_) build_profile_->write(completed && !progress_.get_cancel(), num_nodes.load(), skip_duplicate_splits_);
+     if (profiling) {
+       std::fprintf(stderr,
+-                   "CH_LIGHT_TREE_BUILD_PHASES {\"complete\":%s,\"planning_seconds\":%.9f,"
++                   "CH_LIGHT_TREE_BUILD_PHASES {\"complete\":%s,\"duplicate_split_skip\":%s,\"planning_seconds\":%.9f,"
+                    "\"extraction_seconds\":%.9f,\"local_build_seconds\":%.9f,"
+                    "\"snapshot_seconds\":%.9f,\"measure_seconds\":%.9f,"
+                    "\"outer_seconds\":%.9f,\"total_seconds\":%.9f}\n",
+                    completed && !progress_.get_cancel() ? "true" : "false",
++                   skip_duplicate_splits_ ? "true" : "false",
+                    planned > 0 ? planned - began : 0,
+                    extracted > 0 ? extracted - planned : 0,
+                    local_built > 0 ? local_built - extracted : 0,
+@@ -623,6 +631,7 @@
+     node = inner;
+   }
+   else {
++    const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Allocation, start, end);
+     inner->get_inner().children[child] = create_node(LightTreeMeasure::empty, bit_trail);
+     node = inner->get_inner().children[child].get();
+   }
+@@ -634,6 +643,7 @@
+   if (should_split(emitters, start, middle, end, node->measure, node->light_link, split_dim)) {
+ 
+     if (split_dim != -1) {
++      const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Partition, start, end);
+       /* Partition the emitters between start and end based on the centroids. */
+       std::nth_element(emitters + start,
+                        emitters + middle,
+@@ -645,6 +655,7 @@
+ 
+     /* Recursively build the left branch. */
+     if (middle - start > MIN_EMITTERS_PER_THREAD) {
++      const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Scheduling, start, middle);
+       task_pool.push([this, node, start, middle, emitters, bit_trail, depth, emitter_offset] {
+         recursive_build(left, node, start, middle, emitters, bit_trail, depth + 1, emitter_offset);
+       });
+@@ -655,6 +666,7 @@
+ 
+     /* Recursively build the right branch. */
+     if (end - middle > MIN_EMITTERS_PER_THREAD) {
++      const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Scheduling, middle, end);
+       task_pool.push([this, node, middle, end, emitters, bit_trail, depth, emitter_offset] {
+         recursive_build(right, node, middle, end, emitters, bit_trail | (1u << depth), depth + 1,
+                          emitter_offset);
+@@ -666,6 +678,7 @@
+     }
+   }
+   else {
++    const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Leaf, start, end);
+     sort_leaf(start, end, emitters);
+     node->make_leaf(start + emitter_offset, end - start);
+   }
+@@ -679,6 +692,7 @@
+                              LightTreeLightLink &light_link,
+                              int &split_dim)
+ {
++  const LightTreeBuildTimer decision_timer(build_profile_.get(), LightTreeBuildStage::Decision, start, end);
+   const int num_emitters = end - start;
+   if (num_emitters < 2) {
+     if (num_emitters) {
+@@ -692,8 +706,11 @@
+   middle = (start + end) / 2;
+ 
+   BoundBox centroid_bbox = BoundBox::empty;
+-  for (int i = start; i < end; i++) {
+-    centroid_bbox.grow((emitters + i)->centroid);
++  {
++    const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Centroids, start, end);
++    for (int i = start; i < end; i++) {
++      centroid_bbox.grow((emitters + i)->centroid);
++    }
+   }
+ 
+   const float3 extent = centroid_bbox.size();
+@@ -706,40 +723,46 @@
+     std::array<LightTreeBucket, LightTreeBucket::num_buckets> buckets;
+     float inv_extent;
+ 
+-    if (centroid_bbox.size()[dim] == 0.0f) {
+-      /* If the centroid bounding box is 0 along a given dimension and the node measure is
+-       * already computed, skip it. */
+-      if (dim != 0) {
+-        continue;
+-      }
+-
+-      /* Degenerate case, everything in the same bucket. */
+-      inv_extent = FLT_MAX;
+-      for (int i = start; i < end; i++) {
+-        buckets[0].add(emitters[i]);
+-      }
+-    }
+-    else {
+-      /* Fill in buckets with emitters. */
+-      inv_extent = 1 / (centroid_bbox.size()[dim]);
+-      for (int i = start; i < end; i++) {
+-        const LightTreeEmitter *emitter = emitters + i;
+-
+-        /* Place emitter into the appropriate bucket, where the centroid box is split into equal
+-         * partitions. */
+-        int bucket_idx = LightTreeBucket::num_buckets *
+-                         (emitter->centroid[dim] - centroid_bbox.min[dim]) * inv_extent;
+-        bucket_idx = clamp(bucket_idx, 0, LightTreeBucket::num_buckets - 1);
+-
+-        buckets[bucket_idx].add(*emitter);
++    {
++      const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Buckets, start, end);
++      if (centroid_bbox.size()[dim] == 0.0f) {
++        /* If the centroid bounding box is 0 along a given dimension and the node measure is
++         * already computed, skip it. */
++        if (dim != 0) {
++          continue;
++        }
++
++        /* Degenerate case, everything in the same bucket. */
++        inv_extent = FLT_MAX;
++        for (int i = start; i < end; i++) {
++          buckets[0].add(emitters[i]);
++        }
++      }
++      else {
++        /* Fill in buckets with emitters. */
++        inv_extent = 1 / (centroid_bbox.size()[dim]);
++        for (int i = start; i < end; i++) {
++          const LightTreeEmitter *emitter = emitters + i;
++
++          /* Place emitter into the appropriate bucket, where the centroid box is split into equal
++           * partitions. */
++          int bucket_idx = LightTreeBucket::num_buckets *
++                           (emitter->centroid[dim] - centroid_bbox.min[dim]) * inv_extent;
++          bucket_idx = clamp(bucket_idx, 0, LightTreeBucket::num_buckets - 1);
++
++          buckets[bucket_idx].add(*emitter);
++        }
+       }
+     }
+ 
+     /* Precompute the left bucket measure cumulatively. */
+     std::array<LightTreeBucket, LightTreeBucket::num_buckets - 1> left_buckets;
+-    left_buckets.front() = buckets.front();
+-    for (int i = 1; i < LightTreeBucket::num_buckets - 1; i++) {
+-      left_buckets[i] = left_buckets[i - 1] + buckets[i];
++    {
++      const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Prefix, start, end);
++      left_buckets.front() = buckets.front();
++      for (int i = 1; i < LightTreeBucket::num_buckets - 1; i++) {
++        left_buckets[i] = left_buckets[i - 1] + buckets[i];
++      }
+     }
+ 
+     if (dim == 0) {
+@@ -765,12 +788,19 @@
+ 
+     /* Precompute the right bucket measure cumulatively. */
+     std::array<LightTreeMeasure, LightTreeBucket::num_buckets - 1> right_measures;
+-    light_tree_right_measures(buckets, right_measures);
++    {
++      const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Prefix, start, end);
++      light_tree_right_measures(buckets, right_measures);
++    }
+ 
+     /* Calculate the cost of splitting at each point between partitions. */
+     const float regularization = max_extent * inv_extent;
++    const LightTreeBuildTimer timer(build_profile_.get(), LightTreeBuildStage::Costs, start, end);
+     for (int split = 0; split < LightTreeBucket::num_buckets - 1; split++) {
+-      if (light_tree_duplicate_split(buckets, split)) continue;
++      /* Crossing an empty bucket changes neither measure nor left count.
++       * The same cost cannot beat its earlier occurrence under the strict
++       * comparison below. Preserve that first occurrence and its tie policy. */
++      if (skip_duplicate_splits_ && light_tree_duplicate_split(buckets, split)) continue;
+       const float left_cost = left_buckets[split].measure.calculate();
+       const float right_cost = right_measures[split].calculate();
+       const float cost = regularization * (left_cost + right_cost);
+diff --git a/src/scene/light_tree.h b/src/scene/light_tree.h
+--- a/src/scene/light_tree.h
++++ b/src/scene/light_tree.h
+@@ -7,6 +7,7 @@
+ #include "scene/light.h"
+ #include "scene/scene.h"
+ #include "scene/light_tree_cache.h"
++#include "scene/light_tree_build_profile.h"
+ 
+ #include "util/boundbox.h"
+ #include "util/task.h"
+@@ -509,6 +510,9 @@
+   size_t emitter_spans() const { return triangle_spans_.size(); }
+ 
+  private:
++  /* The task pool must join before this sampled profiler is destroyed. */
++  unique_ptr<LightTreeBuildProfile> build_profile_;
++  bool skip_duplicate_splits_ = true;
+   /* Thread. */
+   TaskPool task_pool;
+   /* Do not spawn a thread if less than this amount of emitters are to be processed. */
+diff --git a/src/scene/light_tree_build_profile.h b/src/scene/light_tree_build_profile.h
+new file mode 100644
+--- /dev/null
++++ b/src/scene/light_tree_build_profile.h
+@@ -0,0 +1,95 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++
++#include "util/time.h"
++#include "util/types.h"
++#include <array>
++#include <atomic>
++#include <cstdint>
++#include <cstdio>
++#include <iomanip>
++#include <locale>
++#include <sstream>
++
++CCL_NAMESPACE_BEGIN
++
++enum class LightTreeBuildStage { Decision, Centroids, Buckets, Prefix, Costs, Partition, Allocation, Leaf, Scheduling, Count };
++
++/* Optional CPU-work attribution, not elapsed wall time. Large ranges are timed
++ * completely; a deterministic 1/256 sample bounds timing/atomic overhead for
++ * small nodes. Decision includes its centroid/bucket/prefix/cost sub-stages. */
++struct LightTreeBuildProfile {
++  struct Stage {
++    std::atomic<uint64_t> nanoseconds{0}, estimated_nanoseconds{0};
++    std::atomic<uint64_t> samples{0}, represented_calls{0}, represented_emitters{0};
++  };
++  std::array<Stage, int(LightTreeBuildStage::Count)> stages;
++  static constexpr int full_range_min = 1024;
++  static constexpr uint small_weight = 256;
++
++  static uint weight(const int start, const int end)
++  {
++    if (end <= start) return 0;
++    if (end - start >= full_range_min) return 1;
++    uint hash = uint(start) * 0x9e3779b9u ^ uint(end) * 0x85ebca6bu;
++    hash ^= hash >> 16; hash *= 0x7feb352du;
++    hash ^= hash >> 15; hash *= 0x846ca68bu; hash ^= hash >> 16;
++    return (hash & (small_weight - 1)) == 0 ? small_weight : 0;
++  }
++
++  void record(const LightTreeBuildStage kind, const uint sample_weight,
++              const uint emitters, const uint64_t ns)
++  {
++    if (!sample_weight) return;
++    auto &s = stages[int(kind)];
++    s.nanoseconds.fetch_add(ns, std::memory_order_relaxed);
++    s.estimated_nanoseconds.fetch_add(ns * sample_weight, std::memory_order_relaxed);
++    s.samples.fetch_add(1, std::memory_order_relaxed);
++    s.represented_calls.fetch_add(sample_weight, std::memory_order_relaxed);
++    s.represented_emitters.fetch_add(uint64_t(emitters) * sample_weight, std::memory_order_relaxed);
++  }
++
++  void write(const bool complete, const int nodes, const bool duplicate_skip) const noexcept
++  {
++    try {
++      static const char *names[] = {"decision", "centroids", "buckets", "prefix", "costs", "partition", "allocation", "leaf", "scheduling"};
++      std::ostringstream out; out.imbue(std::locale::classic()); out << std::setprecision(9);
++      out << "CH_LIGHT_TREE_BUILD_DETAIL {\"complete\":" << (complete ? "true" : "false")
++          << ",\"duplicate_split_skip\":" << (duplicate_skip ? "true" : "false")
++          << ",\"nodes_created\":" << nodes << ",\"full_range_min\":" << full_range_min
++          << ",\"small_sample_weight\":" << small_weight << ",\"stages\":{";
++      for (size_t index = 0; index < stages.size(); ++index) {
++        const auto &s = stages[index]; if (index) out << ',';
++        out << '"' << names[index] << "\":{\"sampled_seconds\":"
++            << double(s.nanoseconds.load(std::memory_order_relaxed)) * 1e-9
++            << ",\"estimated_seconds\":" << double(s.estimated_nanoseconds.load(std::memory_order_relaxed)) * 1e-9
++            << ",\"samples\":" << s.samples.load(std::memory_order_relaxed)
++            << ",\"represented_calls\":" << s.represented_calls.load(std::memory_order_relaxed)
++            << ",\"represented_emitters\":" << s.represented_emitters.load(std::memory_order_relaxed) << '}';
++      }
++      out << "}}"; std::fprintf(stderr, "%s\n", out.str().c_str());
++    }
++    catch (...) { /* Diagnostic allocation must not change the render result. */ }
++  }
++};
++
++class LightTreeBuildTimer {
++  LightTreeBuildProfile *profile_;
++  LightTreeBuildStage kind_;
++  uint weight_ = 0, emitters_ = 0;
++  double began_ = 0;
++ public:
++  LightTreeBuildTimer(LightTreeBuildProfile *profile, const LightTreeBuildStage kind,
++                     const int start, const int end) : profile_(profile), kind_(kind)
++  {
++    if (profile_ && (weight_ = LightTreeBuildProfile::weight(start, end))) {
++      emitters_ = uint(end - start); began_ = time_dt();
++    }
++  }
++  ~LightTreeBuildTimer()
++  {
++    if (weight_) profile_->record(kind_, weight_, emitters_, uint64_t((time_dt() - began_) * 1e9));
++  }
++};
++
++CCL_NAMESPACE_END

@@ -1,0 +1,26 @@
+= Cycles camera properties =
+
+Choose the camera on the Cycles ROP for disk rendering. The camera's Cycles tab extends the native projection, focus and shutter controls.
+
+== Depth of field ==
+
+Enable Depth of Field and set Focus Distance to the subject distance. Reducing F-Stop increases defocus. Newly added Cycles focus and f-stop controls reference the corresponding Houdini camera parameters. Use the Viewer's focus tool to pick a rendered surface.
+
+Without an aperture image, zero blades gives a circular aperture and three or more form a polygon. Rotation turns the aperture and Ratio stretches it. Out-of-focus highlights show its shape most clearly.
+
+== Image Iris ==
+
+Enable Image Iris inside Depth of Field and select an aperture image. Bright areas transmit more light through that part of the lens. Leave Use Color off for a neutral aperture or turn it on to use the linear RGB transmission for colored bokeh. Blades has no effect on the image aperture. CDF and Hierarchical sample the same aperture and can produce different noise at finite samples.
+
+== Projection ==
+
+Use Houdini follows the native perspective or orthographic lens. Panoramic exposes the Cycles projection choices. Equirectangular limits are in degrees. Fisheye parameters depend on the lens model. In Central Cylindrical projection, height and radius use the same units.
+
+== Motion blur ==
+
+The ROP enables motion blur and sets the shutter interval. Shutter Curve weights exposure across that interval. A top-to-bottom rolling shutter offsets exposure by image row.
+
+@related
+    [Cycles light properties|/cycles/lights]
+    [Cycles Render|Node:out/cycles_ipr]
+    [Cycles Viewer|/cycles/viewer]

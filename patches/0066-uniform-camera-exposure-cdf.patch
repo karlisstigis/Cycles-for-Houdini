@@ -1,0 +1,93 @@
+From 633facc552197465c71dcb3938b1af52427c3fb8 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:40 +0100
+Subject: [PATCH] uniform camera exposure cdf
+
+Locked-Patch: patches/0066-uniform-camera-exposure-cdf.patch
+Locked-Patch-SHA256: 9be21965c5e8bd7a01b7647a4a8589ab34caa820d1c38a7f1543c0b46305c65a
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_camera_sampling_gui_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: d3e28e12cd42a7b59a5e85e9c5e37182ff55eef3
+Previous-Patch: patches/0066-uniform-camera-exposure-cdf.patch
+Previous-Patch-SHA256: 9be21965c5e8bd7a01b7647a4a8589ab34caa820d1c38a7f1543c0b46305c65a
+Rationale: The generic midpoint CDF contracts uniform camera exposure and shifts its mean; endpoint knots should preserve the full intended shutter interval.
+Contract: uniform camera exposure cdf
+Tests: tests/houdini_camera_sampling_gui_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index aab2133e4eeb2eff93a982233d25b60d372c64f0..a8a6659b477abc750bb78859d0de11bd7d06b385 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -3,6 +3,7 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include <algorithm>
++#include <cmath>
+ 
+ #include "scene/camera.h"
+ #include "scene/mesh.h"
+@@ -44,6 +45,34 @@ float camera_shutter_curve_eval(float x, const array<float> &shutter_curve)
+   return shutter_curve[shutter_curve.size() - 1];
+ }
+ 
++void camera_shutter_curve_table(const array<float> &shutter_curve, vector<float> &table)
++{
++  static_assert(SHUTTER_TABLE_SIZE >= 2);
++  const bool uniform = shutter_curve.empty() ||
++                       (shutter_curve[0] > 0.0f && std::isfinite(shutter_curve[0]) &&
++                        std::all_of(shutter_curve.begin(), shutter_curve.end(), [&](const float value) {
++                          return value == shutter_curve[0];
++                        }));
++  if (uniform) {
++    /* The generic midpoint CDF table contracts the default camera exposure
++     * interval and shifts its mean. Camera lookup interpolates endpoint knots,
++     * so a constant positive PDF needs an identity table over the full shutter. */
++    table.resize(SHUTTER_TABLE_SIZE);
++    for (int i = 0; i < SHUTTER_TABLE_SIZE; ++i) {
++      table[i] = float(i) / float(SHUTTER_TABLE_SIZE - 1);
++    }
++    return;
++  }
++  /* Preserve authored nonuniform exposure and all generic film-filter CDFs. */
++  util_cdf_inverted(
++      SHUTTER_TABLE_SIZE,
++      0.0f,
++      1.0f,
++      [&](const float x) { return camera_shutter_curve_eval(x, shutter_curve); },
++      false,
++      table);
++}
++
+ NODE_DEFINE(Camera)
+ {
+   NodeType *type = NodeType::add("camera", create);
+@@ -573,13 +602,7 @@ void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scen
+   scene->lookup_tables->remove_table(&shutter_table_offset);
+   if (kernel_camera.shuttertime != -1.0f) {
+     vector<float> shutter_table;
+-    util_cdf_inverted(
+-        SHUTTER_TABLE_SIZE,
+-        0.0f,
+-        1.0f,
+-        [this](const float x) { return camera_shutter_curve_eval(x, shutter_curve); },
+-        false,
+-        shutter_table);
++    camera_shutter_curve_table(shutter_curve, shutter_table);
+     shutter_table_offset = scene->lookup_tables->add_table(dscene, shutter_table);
+     kernel_camera.shutter_table_offset = (int)shutter_table_offset;
+   }
+diff --git a/src/scene/camera.h b/src/scene/camera.h
+index 130364a72430396ef1eef2a2c602f0aa58d2ba6c..37c32cf8dcfecd716e733ce5ba81afee82bdfaf6 100644
+--- a/src/scene/camera.h
++++ b/src/scene/camera.h
+@@ -38,6 +38,8 @@ class OSLCameraParamQuery {
+ 
+ /* Host exposure lookup, including exact open/close endpoints. */
+ float camera_shutter_curve_eval(float x, const array<float> &shutter_curve);
++/* Camera-only inverse exposure CDF; constant positive exposure is exactly uniform. */
++void camera_shutter_curve_table(const array<float> &shutter_curve, vector<float> &table);
+ 
+ class Camera : public Node {
+  public:

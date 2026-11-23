@@ -1,0 +1,53 @@
+diff --git a/src/scene/light_tree.cpp b/src/scene/light_tree.cpp
+--- a/src/scene/light_tree.cpp
++++ b/src/scene/light_tree.cpp
+@@ -764,17 +764,15 @@
+     }
+ 
+     /* Precompute the right bucket measure cumulatively. */
+-    std::array<LightTreeBucket, LightTreeBucket::num_buckets - 1> right_buckets;
+-    right_buckets.back() = buckets.back();
+-    for (int i = LightTreeBucket::num_buckets - 3; i >= 0; i--) {
+-      right_buckets[i] = right_buckets[i + 1] + buckets[i + 1];
+-    }
++    std::array<LightTreeMeasure, LightTreeBucket::num_buckets - 1> right_measures;
++    light_tree_right_measures(buckets, right_measures);
+ 
+     /* Calculate the cost of splitting at each point between partitions. */
+     const float regularization = max_extent * inv_extent;
+     for (int split = 0; split < LightTreeBucket::num_buckets - 1; split++) {
++      if (light_tree_duplicate_split(buckets, split)) continue;
+       const float left_cost = left_buckets[split].measure.calculate();
+-      const float right_cost = right_buckets[split].measure.calculate();
++      const float right_cost = right_measures[split].calculate();
+       const float cost = regularization * (left_cost + right_cost);
+ 
+       if (cost < total_cost && cost < min_cost) {
+diff --git a/src/scene/light_tree.h b/src/scene/light_tree.h
+--- a/src/scene/light_tree.h
++++ b/src/scene/light_tree.h
+@@ -258,6 +258,24 @@
+ 
+ LightTreeBucket operator+(const LightTreeBucket &a, const LightTreeBucket &b);
+ 
++/* Right prefixes contribute only their measure to splitting costs. Keep the
++ * original right-to-left arithmetic, without copying/merging unused links. */
++inline void light_tree_right_measures(
++    const std::array<LightTreeBucket, LightTreeBucket::num_buckets> &buckets,
++    std::array<LightTreeMeasure, LightTreeBucket::num_buckets - 1> &right)
++{
++  right.back() = buckets.back().measure;
++  for (int index = LightTreeBucket::num_buckets - 3; index >= 0; --index) {
++    right[index] = right[index + 1] + buckets[index + 1].measure;
++  }
++}
++
++inline bool light_tree_duplicate_split(
++    const std::array<LightTreeBucket, LightTreeBucket::num_buckets> &buckets, const int split)
++{
++  return split > 0 && buckets[split].count == 0;
++}
++
+ /* Light Tree Node */
+ struct LightTreeNode {
+   LightTreeMeasure measure;

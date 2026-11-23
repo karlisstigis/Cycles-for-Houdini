@@ -1,0 +1,9 @@
+{
+  "declared_before_supplemental_measurements": true,
+  "reason": "Attribute the bundled improvement to the cold split loops versus the caching/flattening/upload family, and supply a pristine control with identical non-tree libraries/backend.",
+  "arms": "reference vs reference-split on original four-palette scene; pristine vs pristine-split on uniform dense shared-mesh scene. Split arms contain only measure-only right prefixes and duplicate empty-bucket cost skipping from 0062, no cache, profiling, or material semantic changes.",
+  "pairs": "If both primary regression median interval lower endpoints clear 50ms, collect 3 original-scene attribution triples as diagnostics only. Otherwise collect 9 original-scene triples (reference/reference-split/patched) to distinguish a practical split. One focused pristine-uniform pair plus fresh endpoint correctness; no second full stock matrix.",
+  "rule": "Same K28 both-edit 50 ms rule and exact median interval [ordered saving 2, ordered saving 8] as protocol.json. No discarded timings or optional stopping.",
+  "comparison_to_cached_family": "Compare patched with reference-split only using genuinely paired contemporaneous trials if those are captured. Do not subtract separately obtained medians and call them paired evidence.",
+  "limits": "No per-patch claim for dependent cache representations from a single aggregate bundle comparison. Two physical cores constrain the parallel flattening scope. No policy or patch disposition changes."
+}

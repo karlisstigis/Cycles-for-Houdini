@@ -1,0 +1,433 @@
+From c7f4b48b2d9778d2c3439efcb44e746fa70f7c0b Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:38 +0100
+Subject: [PATCH] retained light tree uploads
+
+Locked-Patch: patches/0054-retained-light-tree-uploads.patch
+Locked-Patch-SHA256: 44cd78a29d465a145ccc6a7024886d6fc03e2a29744c340795e07e5b1eba7ec8
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: e6a983a7dc528b653821ca22c90785848d77c3fc
+Previous-Patch: patches/0054-retained-light-tree-uploads.patch
+Previous-Patch-SHA256: 44cd78a29d465a145ccc6a7024886d6fc03e2a29744c340795e07e5b1eba7ec8
+Rationale: Retained light-tree device allocations avoid full upload when host cache results are unchanged; allocation/layout changes must still force correct transfer.
+Contract: retained light tree uploads
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index 76bc570e982fe6d8b6aaa301f8e2150d3e2093c3..2f6b2dc4558856a3b2e3914b0bd05f3b8d4d785f 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -30,6 +30,8 @@
+ #include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
++#include <atomic>
++#include <type_traits>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -760,6 +762,11 @@ void LightManager::device_update_distribution(Device * /*unused*/,
+ }
+ 
+ /* Arguments for functions to convert the light tree to the kernel representation. */
++struct LightTreeInstanceRoot {
++  uint bit_trail;
++  int reference;
++};
++
+ struct LightTreeFlatten {
+   const Scene *scene;
+   const LightTreeEmitter *emitters;
+@@ -772,13 +779,38 @@ struct LightTreeFlatten {
+   size_t instance_swaps = 0;
+   size_t parallel_cached_nodes = 0;
+   size_t parallel_cached_ranges = 0;
++  bool compare_nodes = false;
++  bool compare_emitters = false;
++  mutable std::atomic<bool> nodes_changed{true};
++  mutable std::atomic<bool> emitters_changed{true};
+ };
+ 
+-static void light_tree_node_copy_to_device(KernelLightTreeNode &knode,
++template<typename T>
++static void light_tree_store(T &destination,
++                              const T &prepared,
++                              const bool compare,
++                              std::atomic<bool> &changed)
++{
++  static_assert(std::is_trivially_copyable_v<T>);
++  if (compare && std::memcmp(&destination, &prepared, sizeof(T)) == 0) {
++    return;
++  }
++  std::memcpy(&destination, &prepared, sizeof(T));
++  if (compare) {
++    changed.store(true, std::memory_order_relaxed);
++  }
++}
++
++static void light_tree_node_copy_to_device(const LightTreeFlatten &flatten,
++                                           KernelLightTreeNode &destination,
+                                            const LightTreeNode &node,
+                                            const int left_child,
+-                                           const int right_child)
++                                           const int right_child,
++                                           const LightTreeInstanceRoot *instance = nullptr)
+ {
++  KernelLightTreeNode knode;
++  /* Canonical padding and inactive union bytes make exact comparison safe. */
++  std::memset(&knode, 0, sizeof(knode));
+   /* Convert node to kernel representation. */
+   knode.energy = node.measure.energy;
+ 
+@@ -802,26 +834,37 @@ static void light_tree_node_copy_to_device(KernelLightTreeNode &knode,
+     knode.inner.left_child = left_child;
+     knode.inner.right_child = right_child;
+   }
++  if (instance) {
++    knode.bit_trail = instance->bit_trail;
++    if (instance->reference >= 0) {
++      knode.instance.reference = instance->reference;
++    }
++  }
++  light_tree_store(destination, knode, flatten.compare_nodes, flatten.nodes_changed);
+ }
+ 
+ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+                                      const LightTreeNode &anchor,
+                                      KernelLightTreeNode *knodes,
+                                      KernelLightTreeEmitter *kemitters,
+-                                     int &next_node_index);
++                                     int &next_node_index,
++                                     const LightTreeInstanceRoot *instance = nullptr);
+ 
+ static int light_tree_flatten(LightTreeFlatten &flatten,
+                               const LightTreeNode *node,
+                               KernelLightTreeNode *knodes,
+                               KernelLightTreeEmitter *kemitters,
+-                              int &next_node_index);
++                              int &next_node_index,
++                              const LightTreeInstanceRoot *instance = nullptr);
+ 
+ static void light_tree_triangle_emitter_copy_to_device(const LightTreeFlatten &flatten,
+                                                        const LightTreeEmitter &emitter,
+                                                        const uint bit_trail,
+                                                        const int emitter_index,
+-                                                       KernelLightTreeEmitter &kemitter)
++                                                       KernelLightTreeEmitter &destination)
+ {
++  KernelLightTreeEmitter kemitter;
++  std::memset(&kemitter, 0, sizeof(kemitter));
+   assert(emitter.is_triangle());
+   Object *object = flatten.scene->objects[emitter.object_id];
+   Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+@@ -836,6 +879,7 @@ static void light_tree_triangle_emitter_copy_to_device(const LightTreeFlatten &f
+   kemitter.object_id = emitter.object_id;
+   kemitter.triangle.emission_sampling = shader->emission_sampling;
+   kemitter.bit_trail = bit_trail;
++  light_tree_store(destination, kemitter, flatten.compare_emitters, flatten.emitters_changed);
+   flatten.triangle_array[emitter.prim_id + flatten.object_lookup_offset[emitter.object_id]] =
+       emitter_index;
+ }
+@@ -850,14 +894,16 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+   for (int i = 0; i < node.get_leaf().num_emitters; i++) {
+     const int emitter_index = i + node.get_leaf().first_emitter_index;
+     const LightTreeEmitter &emitter = flatten.emitters[emitter_index];
+-    KernelLightTreeEmitter &kemitter = kemitters[emitter_index];
++    KernelLightTreeEmitter &destination = kemitters[emitter_index];
+ 
+     if (emitter.is_triangle()) {
+       light_tree_triangle_emitter_copy_to_device(
+-          flatten, emitter, node.bit_trail, emitter_index, kemitter);
++          flatten, emitter, node.bit_trail, emitter_index, destination);
+       continue;
+     }
+ 
++    KernelLightTreeEmitter kemitter;
++    std::memset(&kemitter, 0, sizeof(kemitter));
+     kemitter.energy = emitter.measure.energy;
+     kemitter.theta_o = emitter.measure.bcone.theta_o;
+     kemitter.theta_e = emitter.measure.bcone.theta_e;
+@@ -883,7 +929,8 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+       LightTreeNode *reference_node = instance_node->get_reference();
+ 
+       auto map_it = flatten.instances.find(reference_node);
+-      if (map_it == flatten.instances.end()) {
++      const int reference_index = map_it == flatten.instances.end() ? -1 : map_it->second;
++      if (reference_index < 0) {
+         if (instance_node != reference_node) {
+           /* Flatten the node with the subtree first so the subsequent instances know the index.
+            */
+@@ -894,20 +941,18 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+         instance_node->type &= ~LIGHT_TREE_INSTANCE;
+       }
+ 
++      /* Include final instance fields in the write, before comparing with the
++       * previous uploaded row. Do not compare a provisional root then mutate it. */
++      const LightTreeInstanceRoot instance{node.bit_trail, reference_index};
+       kemitter.mesh.node_id = light_tree_flatten(
+-          flatten, instance_node, knodes, kemitters, next_node_index);
++          flatten, instance_node, knodes, kemitters, next_node_index, &instance);
+ 
+-      KernelLightTreeNode &kinstance_node = knodes[kemitter.mesh.node_id];
+-      kinstance_node.bit_trail = node.bit_trail;
+-
+-      if (map_it != flatten.instances.end()) {
+-        kinstance_node.instance.reference = map_it->second;
+-      }
+-      else {
++      if (reference_index < 0) {
+         flatten.instances[reference_node] = kemitter.mesh.node_id;
+       }
+     }
+     kemitter.bit_trail = node.bit_trail;
++    light_tree_store(destination, kemitter, flatten.compare_emitters, flatten.emitters_changed);
+   }
+ }
+ 
+@@ -915,7 +960,8 @@ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+                                      const LightTreeNode &anchor,
+                                      KernelLightTreeNode *knodes,
+                                      KernelLightTreeEmitter *kemitters,
+-                                     int &next_node_index)
++                                     int &next_node_index,
++                                     const LightTreeInstanceRoot *instance)
+ {
+   const auto &cache = anchor.get_cached();
+   const int first_node = next_node_index;
+@@ -953,7 +999,12 @@ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+               emitter_index, kemitters[emitter_index]);
+         }
+       }
+-      light_tree_node_copy_to_device(knodes[first_node + index], node, left_child, right_child);
++      light_tree_node_copy_to_device(flatten,
++                                      knodes[first_node + index],
++                                      node,
++                                      left_child,
++                                      right_child,
++                                      index == 0 ? instance : nullptr);
+     }
+   };
+   const char *serial_flag = std::getenv("CYCLES_HOUDINI_SERIAL_LIGHT_TREE_FLATTEN");
+@@ -976,11 +1027,12 @@ static int light_tree_flatten(LightTreeFlatten &flatten,
+                               const LightTreeNode *node,
+                               KernelLightTreeNode *knodes,
+                               KernelLightTreeEmitter *kemitters,
+-                              int &next_node_index)
++                              int &next_node_index,
++                              const LightTreeInstanceRoot *instance)
+ {
+   /* Convert both inner nodes and primitives to device representation. */
+   if (node->is_cached()) {
+-    return light_tree_cached_flatten(flatten, *node, knodes, kemitters, next_node_index);
++    return light_tree_cached_flatten(flatten, *node, knodes, kemitters, next_node_index, instance);
+   }
+   const int node_index = next_node_index++;
+   int left_child = -1;
+@@ -1006,7 +1058,7 @@ static int light_tree_flatten(LightTreeFlatten &flatten,
+     assert(node->is_instance());
+   }
+ 
+-  light_tree_node_copy_to_device(knodes[node_index], *node, left_child, right_child);
++  light_tree_node_copy_to_device(flatten, knodes[node_index], *node, left_child, right_child, instance);
+ 
+   return node_index;
+ }
+@@ -1142,7 +1194,7 @@ static std::pair<int, LightTreeMeasure> light_tree_specialize_nodes_flatten(
+   if (knodes.size() <= node_index) {
+     knodes.resize(node_index + 1);
+   }
+-  light_tree_node_copy_to_device(knodes[node_index], new_node, left_child, right_child);
++  light_tree_node_copy_to_device(flatten, knodes[node_index], new_node, left_child, right_child);
+ 
+   if (node->light_link.shareable) {
+     node->light_link.shared_node_index = node_index;
+@@ -1151,12 +1203,16 @@ static std::pair<int, LightTreeMeasure> light_tree_specialize_nodes_flatten(
+   return std::make_pair(node_index, new_node.measure);
+ }
+ 
+-void LightManager::device_update_tree(Device * /*unused*/,
++void LightManager::device_update_tree(Device *device,
+                                       DeviceScene *dscene,
+                                       Scene *scene,
+                                       Progress &progress)
+ {
+   KernelIntegrator *kintegrator = &dscene->data.integrator;
++  const bool previous_buffers_valid = tree_buffers_valid;
++  /* Cancellation may leave CPU rows partially replaced. Only completed uploads
++   * can certify their equality with device data on a later update. */
++  tree_buffers_valid = false;
+ 
+   if (!kintegrator->use_light_tree) {
+     mesh_light_tree_cache->clear();
+@@ -1172,6 +1228,8 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   double construction_seconds = 0, flatten_seconds = 0, upload_seconds = 0, work_end = 0;
+   size_t profile_nodes = 0, profile_emitters = 0, profile_instance_swaps = 0;
+   size_t profile_parallel_cached_nodes = 0, profile_parallel_cached_ranges = 0;
++  bool profile_nodes_compared = false, profile_emitters_compared = false;
++  bool profile_nodes_upload_requested = false, profile_emitters_upload_requested = false;
+   /* Declared before the tree: this runs after tree retirement, whose many
+    * transient node allocations were previously hidden in the overall timer. */
+   const scoped_callback_timer phase_timer([&](double /*unused*/) {
+@@ -1182,12 +1240,19 @@ void LightManager::device_update_tree(Device * /*unused*/,
+                    "\"construction_seconds\":%.9f,\"flatten_seconds\":%.9f,"
+                    "\"upload_seconds\":%.9f,\"retirement_seconds\":%.9f,\"total_seconds\":%.9f,"
+                    "\"instance_swaps\":%zu,\"parallel_cached_nodes\":%zu,"
+-                   "\"parallel_cached_ranges\":%zu}\n",
++                   "\"parallel_cached_ranges\":%zu,\"nodes_compared\":%s,\"emitters_compared\":%s,"
++                   "\"nodes_upload_requested\":%s,\"emitters_upload_requested\":%s,"
++                   "\"buffers_valid\":%s}\n",
+                    work_end > 0 && !progress.get_cancel() ? "true" : "false",
+                    profile_nodes, profile_emitters, construction_seconds, flatten_seconds,
+                    upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started,
+                    profile_instance_swaps, profile_parallel_cached_nodes,
+-                   profile_parallel_cached_ranges);
++                   profile_parallel_cached_ranges,
++                   profile_nodes_compared ? "true" : "false",
++                   profile_emitters_compared ? "true" : "false",
++                   profile_nodes_upload_requested ? "true" : "false",
++                   profile_emitters_upload_requested ? "true" : "false",
++                   tree_buffers_valid ? "true" : "false");
+     }
+   });
+ 
+@@ -1216,6 +1281,11 @@ void LightManager::device_update_tree(Device * /*unused*/,
+ 
+   /* Allocate emitters */
+   const size_t num_emitters = light_tree.num_emitters();
++  flatten.compare_emitters = previous_buffers_valid &&
++                             dscene->light_tree_emitters.size() == num_emitters &&
++                             !dscene->light_tree_emitters.need_realloc() &&
++                             dscene->light_tree_emitters.device_pointer != 0;
++  flatten.emitters_changed.store(!flatten.compare_emitters, std::memory_order_relaxed);
+   KernelLightTreeEmitter *kemitters = dscene->light_tree_emitters.alloc(num_emitters);
+ 
+   /* Update integrator state. */
+@@ -1231,6 +1301,11 @@ void LightManager::device_update_tree(Device * /*unused*/,
+ 
+   if (!use_light_linking) {
+     /* Regular light tree without linking. */
++    flatten.compare_nodes = previous_buffers_valid &&
++                            dscene->light_tree_nodes.size() == light_tree.num_nodes &&
++                            !dscene->light_tree_nodes.need_realloc() &&
++                            dscene->light_tree_nodes.device_pointer != 0;
++    flatten.nodes_changed.store(!flatten.compare_nodes, std::memory_order_relaxed);
+     KernelLightTreeNode *knodes = dscene->light_tree_nodes.alloc(light_tree.num_nodes);
+ 
+     if (root) {
+@@ -1279,14 +1354,36 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   /* Copy arrays to device. */
+   const double upload_at = profiling ? time_dt() : 0;
+   flatten_seconds = upload_at - constructed;
+-  dscene->light_tree_nodes.copy_to_device();
+-  dscene->light_tree_emitters.copy_to_device();
+-  dscene->light_to_tree.copy_to_device();
+-  dscene->object_lookup_offset.copy_to_device();
+-  dscene->triangle_to_tree.copy_to_device();
++  profile_nodes_compared = flatten.compare_nodes;
++  profile_emitters_compared = flatten.compare_emitters;
+   profile_instance_swaps = flatten.instance_swaps;
+   profile_parallel_cached_nodes = flatten.parallel_cached_nodes;
+   profile_parallel_cached_ranges = flatten.parallel_cached_ranges;
++  if (progress.get_cancel()) {
++    return;
++  }
++  if (flatten.nodes_changed.load(std::memory_order_relaxed)) {
++    profile_nodes_upload_requested = dscene->light_tree_nodes.size() > 0;
++    dscene->light_tree_nodes.copy_to_device();
++  }
++  else {
++    dscene->light_tree_nodes.clear_modified();
++  }
++  if (flatten.emitters_changed.load(std::memory_order_relaxed)) {
++    profile_emitters_upload_requested = dscene->light_tree_emitters.size() > 0;
++    dscene->light_tree_emitters.copy_to_device();
++  }
++  else {
++    dscene->light_tree_emitters.clear_modified();
++  }
++  dscene->light_to_tree.copy_to_device();
++  dscene->object_lookup_offset.copy_to_device();
++  dscene->triangle_to_tree.copy_to_device();
++  tree_buffers_valid = !progress.get_cancel() && !device->have_error();
++  if (tree_buffers_valid) {
++    dscene->light_tree_nodes.clear_modified();
++    dscene->light_tree_emitters.clear_modified();
++  }
+   if (profiling) {
+     work_end = time_dt();
+     upload_seconds = work_end - upload_at;
+@@ -1610,7 +1707,10 @@ void LightManager::device_update(Device *device,
+   /* Detect which lights are enabled, also determines if we need to update the background. */
+   test_enabled_lights(scene);
+ 
+-  device_free(device, dscene, need_update_background);
++  const char *disable_retained = std::getenv("CYCLES_HOUDINI_DISABLE_RETAINED_LIGHT_UPLOAD");
++  const bool retain_tree_storage = scene->integrator->get_use_light_tree() &&
++                                   !(disable_retained && std::strcmp(disable_retained, "1") == 0);
++  device_free(device, dscene, need_update_background, retain_tree_storage);
+ 
+   device_update_lights(dscene, scene);
+   if (progress.get_cancel()) {
+@@ -1645,10 +1745,14 @@ void LightManager::device_update(Device *device,
+ 
+ void LightManager::device_free(Device * /*unused*/,
+                                DeviceScene *dscene,
+-                               const bool free_background)
++                               const bool free_background,
++                               const bool retain_tree_storage)
+ {
+-  dscene->light_tree_nodes.free();
+-  dscene->light_tree_emitters.free();
++  if (!retain_tree_storage) {
++    tree_buffers_valid = false;
++    dscene->light_tree_nodes.free();
++    dscene->light_tree_emitters.free();
++  }
+   dscene->light_to_tree.free();
+   dscene->object_lookup_offset.free();
+   dscene->triangle_to_tree.free();
+@@ -1660,6 +1764,17 @@ void LightManager::device_free(Device * /*unused*/,
+     dscene->light_background_conditional_cdf.free();
+   }
+   dscene->ies_lights.free();
++  const char *profile_flag = std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
++  if (profile_flag && std::strcmp(profile_flag, "1") == 0) {
++    std::fprintf(stderr,
++                 "CH_LIGHT_TREE_STORAGE {\"retained\":%s,\"nodes\":%zu,\"emitters\":%zu,"
++                 "\"nodes_device\":%s,\"emitters_device\":%s}\n",
++                 retain_tree_storage ? "true" : "false",
++                 dscene->light_tree_nodes.size(),
++                 dscene->light_tree_emitters.size(),
++                 dscene->light_tree_nodes.device_pointer ? "true" : "false",
++                 dscene->light_tree_emitters.device_pointer ? "true" : "false");
++  }
+ }
+ 
+ void LightManager::tag_update(Scene * /*scene*/, uint32_t flag)
+diff --git a/src/scene/light.h b/src/scene/light.h
+index 25c6f6026cf4fe5ba175520522f92c4b88b5b50c..6731d9f823bf043157da5932785b8351209541d0 100644
+--- a/src/scene/light.h
++++ b/src/scene/light.h
+@@ -215,7 +215,10 @@ class LightManager {
+   void remove_ies(const int slot);
+ 
+   void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress &progress);
+-  void device_free(Device *device, DeviceScene *dscene, const bool free_background = true);
++  void device_free(Device *device,
++                   DeviceScene *dscene,
++                   const bool free_background = true,
++                   const bool retain_tree_storage = false);
+ 
+   void tag_update(Scene *scene, const uint32_t flag);
+ 
+@@ -260,6 +263,7 @@ class LightManager {
+   uint32_t update_flags;
+ 
+   unique_ptr<LightTreeMeshCache> mesh_light_tree_cache;
++  bool tree_buffers_valid = false;
+ };
+ 
+ CCL_NAMESPACE_END

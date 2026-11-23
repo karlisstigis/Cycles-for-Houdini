@@ -1,0 +1,7 @@
+{
+ "at_the_limit_refused_with": 260,
+ "error": "An app folder at the limit was refused: {\"result\": \"failed\", \"error\": \"The folder <folder>/installation is too long for Cycles for Houdini: its longest file would get a path of 260 characters and Windows allows 259, so choose a folder at least 1 characters shorter.\"}",
+ "result": "failed",
+ "revision": "a9815af",
+ "run": "y-c1b"
+}

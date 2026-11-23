@@ -1,0 +1,95 @@
+From 0059cb6dac1ead30a25ad1c144244fca373e51dc Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:33 +0100
+Subject: [PATCH] temporal displacement shaders
+
+Locked-Patch: patches/0025-temporal-displacement-shaders.patch
+Locked-Patch-SHA256: 14a1366c04b7b081aa056e7ac4b01a2752d164fcf087b4d2bcf9fdc9fe97cc92
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_temporal_displacement_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 5a63c016c04556719223298e7c9dd659e830bd1e
+Previous-Patch: patches/0025-temporal-displacement-shaders.patch
+Previous-Patch-SHA256: 14a1366c04b7b081aa056e7ac4b01a2752d164fcf087b4d2bcf9fdc9fe97cc92
+Rationale: Motion displacement shader slots allow time-varying shader identities while preserving shader flag bits; the added socket requires adapter ownership.
+Contract: temporal displacement shaders
+Tests: tests/houdini_temporal_displacement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/bake/bake.h b/src/kernel/bake/bake.h
+index 13347be699dc2e67b703902fa8728ab522ff29c1..a1ba7a7fc97915301ce77b3e5f27eb680da9d5da 100644
+--- a/src/kernel/bake/bake.h
++++ b/src/kernel/bake/bake.h
+@@ -32,6 +32,11 @@ ccl_device void kernel_displace_evaluate(KernelGlobals kg,
+ 
+   ShaderData sd;
+   shader_setup_from_displace(kg, &sd, in.object, in.prim, in.u, in.v, in.time);
++  /* Smooth/shadow flags occupy the sign bit of a valid shader ID. */
++  if (in.shader != SHADER_NONE) {
++    sd.shader = in.shader;
++    sd.shader_flag = kernel_data_fetch(shaders, sd.shader & SHADER_MASK).flags;
++  }
+ 
+   /* Evaluate displacement shader. */
+   ConstIntegratorBakeState state;
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index d200d155a2fabcc5d4df4a4066a6de36e8ba2990..e7cb7bf1fa8faf66d9922fb0eb70923cb39d367b 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1781,7 +1781,8 @@ struct KernelShaderEvalInput {
+   int prim;
+   float u, v;
+   float time;
+-  float pad[3];
++  int shader;
++  float pad[2];
+ };
+ static_assert_align(KernelShaderEvalInput, 16);
+ 
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index 435bfd7f284a6a1838de79237eedaf4954c2124a..985552f5848f4a10fd7a8a5fcefc681d4f1a2efe 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -265,6 +265,7 @@ NODE_DEFINE(Mesh)
+   SOCKET_INT_ARRAY(shader, "Shader", array<int>());
+   SOCKET_BOOLEAN_ARRAY(smooth, "Smooth", array<bool>());
+   SOCKET_BOOLEAN(motion_displacement, "Motion Displacement", false);
++  SOCKET_INT_ARRAY(motion_displacement_shader_slots, "Motion Displacement Shader Slots", array<int>());
+ 
+   static NodeEnum subdivision_type_enum;
+   subdivision_type_enum.insert("none", SUBDIVISION_NONE);
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index 8427668821cd8bdeefd7bc659e31fd8623e436df..bf73a703b49a0daec21a4521b4bc397a390fcf11 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -146,6 +146,7 @@ class Mesh : public Geometry {
+   NODE_SOCKET_API_ARRAY(array<int>, shader)
+   NODE_SOCKET_API_ARRAY(array<bool>, smooth)
+   NODE_SOCKET_API(bool, motion_displacement)
++  NODE_SOCKET_API_ARRAY(array<int>, motion_displacement_shader_slots)
+ 
+   /* SubdFaces */
+   NODE_SOCKET_API_ARRAY(array<int>, subd_start_corner)
+diff --git a/src/scene/mesh_displace.cpp b/src/scene/mesh_displace.cpp
+index 3bf8a4f18bf9d352d8e929de6d1185bacb412f74..06deb55af41962d4bbacffa8e2ade3d7c443344a 100644
+--- a/src/scene/mesh_displace.cpp
++++ b/src/scene/mesh_displace.cpp
+@@ -33,6 +33,8 @@ static int fill_shader_input(const Scene *scene,
+ 
+   const int num_triangles = mesh->num_triangles();
+   const int steps = mesh->get_motion_displacement() ? std::max(1u, mesh->get_motion_steps()) : 1;
++  const auto &temporal = mesh->get_motion_displacement_shader_slots();
++  const size_t palette_size = temporal.empty() ? 0 : temporal.size() / steps;
+   for (int step = 0; step < steps; step++) {
+     std::fill(done.begin(), done.end(), false);
+     for (int i = 0; i < num_triangles; i++) {
+@@ -81,6 +83,9 @@ static int fill_shader_input(const Scene *scene,
+         in.u = u;
+         in.v = v;
+         in.time = steps == 1 ? 0.5f : float(step) / float(steps - 1);
++        in.shader = palette_size ? scene->shader_manager->get_shader_id(
++                                       static_cast<Shader *>(mesh_used_shaders[temporal[step * palette_size + shader_index]]), true) :
++                                   SHADER_NONE;
+         d_input_data[d_input_size++] = in;
+       }
+     }

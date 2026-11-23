@@ -1,0 +1,108 @@
+From a14c68c88e467c475f955f2dfe3c89cfbb28a083 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:43 +0100
+Subject: [PATCH] Use explicit indices for the Blender 5.3 attribute-buffer
+ enum class and retain subdivision reuse with the corrected tessellation API
+ spelling.
+
+Locked-Patch: patches/0080-blender53-native-attribute-and-tessellation-api.patch
+Locked-Patch-SHA256: b04f4fe1f016080d764708a4cbe6ada8b7805996a50def45dc4208399aa1d2a8
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/core_subdivision_shading_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 04376919ddbc0572cf759a2130aa8a37001500ef
+Previous-Patch: patches/0080-blender53-native-attribute-and-tessellation-api.patch
+Previous-Patch-SHA256: b04f4fe1f016080d764708a4cbe6ada8b7805996a50def45dc4208399aa1d2a8
+Rationale: Explicit AttrKernelDataType indexing and the tessellation spelling adapt older retained-attribute/subdivision fork work to the pinned 5.3 API.
+Contract: Use explicit indices for the Blender 5.3 attribute-buffer enum class and retain subdivision reuse with the corrected tessellation API spelling.
+Tests: tests/core_subdivision_shading_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.h b/src/scene/geometry.h
+index f04f32f8bec68cc62885043d01951beee44b2e08..a166006537718657a2e2acae5d4ddc74c18d9b53 100644
+--- a/src/scene/geometry.h
++++ b/src/scene/geometry.h
+@@ -305,7 +305,7 @@ class GeometryManager {
+              element == b.element && count == b.count && steps == b.steps;
+     }
+   };
+-  vector<AttributeLayoutSpan> attribute_layout[AttrKernelDataType::NUM + 3];
++  vector<AttributeLayoutSpan> attribute_layout[int(AttrKernelDataType::NUM) + 3];
+   bool attribute_layout_valid = false;
+ 
+   bool displace(Device *device, Scene *scene, Mesh *mesh, Progress &progress);
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index 4e13ac6e643b78da8221308fdc132e9e8bbc2291..dbfb75a4d089010be24631c1da1263dbc77b55d5 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -740,13 +740,13 @@ void GeometryManager::device_update_attributes(Device *device,
+    * take 2x of overall attribute memory usage.
+    */
+   AttributeTableBuilder builder(dscene);
+-  vector<AttributeLayoutSpan> next_layout[AttrKernelDataType::NUM + 3];
++  vector<AttributeLayoutSpan> next_layout[int(AttrKernelDataType::NUM) + 3];
+   const auto layout_index = [](const Geometry *geom, const Attribute *attr) -> int {
+     if (attr->element & ATTR_ELEMENT_VOXEL) {
+       return -1;
+     }
+     if (attr->std == ATTR_STD_POSITION) {
+-      return AttrKernelDataType::NUM + (geom->is_hair() ? 1 : geom->is_pointcloud() ? 2 : 0);
++      return int(AttrKernelDataType::NUM) + (geom->is_hair() ? 1 : geom->is_pointcloud() ? 2 : 0);
+     }
+     return int(Attribute::kernel_type(*attr));
+   };
+@@ -803,8 +803,8 @@ void GeometryManager::device_update_attributes(Device *device,
+     }
+   }
+ 
+-  bool layout_changed[AttrKernelDataType::NUM + 3];
+-  for (int index = 0; index < AttrKernelDataType::NUM + 3; ++index) {
++  bool layout_changed[int(AttrKernelDataType::NUM) + 3];
++  for (int index = 0; index < int(AttrKernelDataType::NUM) + 3; ++index) {
+     layout_changed[index] = !attribute_layout_valid || next_layout[index] != attribute_layout[index];
+   }
+   /* A cancelled upload cannot leave a partially rewritten table certified. */
+@@ -842,7 +842,7 @@ void GeometryManager::device_update_attributes(Device *device,
+       }
+       return dscene->tri_verts.need_realloc();
+     }
+-    return attributes_need_realloc[Attribute::kernel_type(*attr)];
++    return attributes_need_realloc[int(Attribute::kernel_type(*attr))];
+   };
+ 
+   /* Fill in attributes. */
+@@ -934,7 +934,7 @@ void GeometryManager::device_update_attributes(Device *device,
+   if (progress.get_cancel()) {
+     return;
+   }
+-  for (int index = 0; index < AttrKernelDataType::NUM + 3; ++index) {
++  for (int index = 0; index < int(AttrKernelDataType::NUM) + 3; ++index) {
+     attribute_layout[index] = std::move(next_layout[index]);
+   }
+   attribute_layout_valid = true;
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index 5df0b3ea112b4ec74b6b5bdb9c030b123339034b..d66f5823a568b3e5202c84b4e0c655a847c40e26 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -188,7 +188,7 @@ class Mesh : public Geometry {
+   bool can_reuse_displacement()
+   {
+     return validated_displacement_reuse && !position_is_modified() &&
+-           !triangles_is_modified() && !need_tesselation();
++           !triangles_is_modified() && !need_tessellation();
+   }
+   bool interpolate_subdivision_shading();
+   void remap_subdivision_shading_vertices(const int *indices, size_t count);
+diff --git a/src/scene/mesh_subdivision.cpp b/src/scene/mesh_subdivision.cpp
+index 6abd2b74647656b17a11b0169ded196e9c55a558..4e6437953531db60c3b4c10a59914831fd12d10b 100644
+--- a/src/scene/mesh_subdivision.cpp
++++ b/src/scene/mesh_subdivision.cpp
+@@ -209,7 +209,7 @@ void Mesh::remap_subdivision_shading_vertices(const int *indices, const size_t c
+ bool Mesh::interpolate_subdivision_shading()
+ {
+   auto *samples = subdivision_shading_samples.get();
+-  if (!samples || !samples->ready || need_tesselation() ||
++  if (!samples || !samples->ready || need_tessellation() ||
+       samples->vertices.size() != num_verts() || samples->triangles.size() != num_triangles())
+   {
+     return false;

@@ -1,0 +1,35 @@
+From e968ac447f79c8792bdc40001fc2ba995439f838 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:44 +0100
+Subject: [PATCH] Refresh tessellated mesh primitive stride for motion normals
+
+Locked-Patch: patches/0086-tessellated-motion-normal-stride.patch
+Locked-Patch-SHA256: 705036f1404a53636fc4c1ff2e6028e0c67cbf096219fba3f936b52ace91499b
+Contract: Refresh the mesh-union primitive count after tessellation alongside the generic attribute stride so moving authored corner normals use the diced triangle count during true displacement; preserve generic sampled mesh/curve attributes and global geometry offsets.
+Related-Fixture: tests/houdini_sampled_displacement_smoke.py
+
+Rebased-From: b2a9a712f76d938a6b7209324f219d5e223a149a
+Previous-Patch: patches/0086-tessellated-motion-normal-stride.patch
+Previous-Patch-SHA256: 705036f1404a53636fc4c1ff2e6028e0c67cbf096219fba3f936b52ace91499b
+Rationale: The mesh-union normal stride retained its pre-tessellation primitive count while the generic sampled-attribute count was refreshed. This freezes moving authored normals during linear-subdivision displacement.
+Contract: Refresh the mesh-union primitive count after tessellation alongside the generic attribute stride so moving authored corner normals use the diced triangle count during true displacement; preserve generic sampled mesh/curve attributes and global geometry offsets.
+Tests: tests/houdini_sampled_displacement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 4c5af5ac51fc95180269e077eba8ecfc732e2986..81dcf44b0928bd246f31efe51021044298b0d18d 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1407,6 +1407,13 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+       kobject.numprims = numprims;
+       update = true;
+     }
++    /* Motion normals use the mesh union stride, while sampled generic
++     * attributes use numprims. Both must describe the tessellated mesh. */
++    if ((geom->is_mesh() || geom->is_volume()) &&
++        kobject.mesh_volume.num_prims != numprims) {
++      kobject.mesh_volume.num_prims = numprims;
++      update = true;
++    }
+   }
+ 
+   if (update) {

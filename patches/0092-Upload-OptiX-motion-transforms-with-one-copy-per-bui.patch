@@ -1,0 +1,102 @@
+From 917116613d24a27e67781e0d9f697f544ae8ea94 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Sun, 15 Nov 2026 22:04:35 +0000
+Subject: [PATCH 92/93] Upload OptiX motion transforms with one copy per build
+
+Building the OptiX top-level acceleration structure allocated a host buffer
+and issued a separate synchronous cuMemcpyHtoD for every moving object's
+OptixSRTMotionTransform, and pushed and popped the CUDA context for each of
+them. With hundreds of thousands of moving instances this dominated the
+scene BVH stage, and multi-device rendering repeats it per device.
+
+Fill all motion transforms into one host buffer, at the same aligned offsets
+as the existing device allocation, and upload it with a single copy before
+the instance build reads it. Traversable handles are still derived from the
+same device addresses, so the built structure is unchanged.
+
+Rationale: One synchronous copy and context switch per moving instance made the top-level OptiX build scale with driver call latency instead of data size.
+Contract: Motion transform bytes, offsets, alignment and traversable handles are identical to before; only the number of host-to-device copies changes (one per build, none without moving objects).
+Tests: tests/houdini_packed_velocity_smoke.py, tests/houdini_motion_smoke.py, tests/houdini_velocity_motion_smoke.py, tests/houdini_packed_deformation_smoke.py, tests/houdini_sampled_instance_attribute_smoke.py, tests/houdini_multi_gpu_animation_smoke.py
+---
+ src/device/optix/device_impl.cpp | 32 ++++++++++++++++++++------------
+ 1 file changed, 20 insertions(+), 12 deletions(-)
+
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 3787f5e76be36c9c5cf3a05d24f348d45fb1fe24..f8b2a8bab2d51496b92e92c6f2466069efeb418a 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -1814,6 +1814,7 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+ 
+     /* Calculate total motion transform size and allocate memory for them. */
+     size_t motion_transform_offset = 0;
++    array<uint8_t> motion_transform_host;
+     if (pipeline_options.usesMotionBlur) {
+       size_t total_motion_transform_size = 0;
+       for (Object *const ob : bvh->objects) {
+@@ -1829,8 +1830,13 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+ 
+       assert(bvh_optix->motion_transform_data->device == this);
+       bvh_optix->motion_transform_data->alloc_to_device(total_motion_transform_size);
++      /* Fill all motion transforms on the host and upload them with a single copy, instead of
++       * one small synchronous copy per object. */
++      motion_transform_host.resize(total_motion_transform_size);
+     }
+ 
++    const CUDAContextScope scope(this);
++
+     for (Object *ob : bvh->objects) {
+       /* Skip non-traceable objects. */
+       if (!ob->is_traceable()) {
+@@ -1910,18 +1916,16 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+         size_t motion_transform_size = sizeof(OptixSRTMotionTransform) +
+                                        motion_keys * sizeof(OptixSRTData);
+ 
+-        const CUDAContextScope scope(this);
+-
+         motion_transform_offset = align_up(motion_transform_offset,
+                                            OPTIX_TRANSFORM_BYTE_ALIGNMENT);
++        assert(motion_transform_offset + motion_transform_size <= motion_transform_host.size());
+         CUdeviceptr motion_transform_gpu = bvh_optix->motion_transform_data->device_pointer +
+                                            motion_transform_offset;
+-        motion_transform_offset += motion_transform_size;
+ 
+-        /* Allocate host side memory for motion transform and fill it with transform data. */
+-        array<uint8_t> motion_transform_storage(motion_transform_size);
++        /* Fill host side memory for motion transform with transform data. */
+         OptixSRTMotionTransform *motion_transform = reinterpret_cast<OptixSRTMotionTransform *>(
+-            motion_transform_storage.data());
++            motion_transform_host.data() + motion_transform_offset);
++        motion_transform_offset += motion_transform_size;
+         motion_transform->child = handle;
+         motion_transform->motionOptions.numKeys = ob->get_motion().size();
+         motion_transform->motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
+@@ -1964,12 +1968,8 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+           srt_data[i].tz = decomp[i].y.z;
+         }
+ 
+-        /* Upload motion transform to GPU. */
+-        cuMemcpyHtoD(motion_transform_gpu, motion_transform, motion_transform_size);
+-        motion_transform = nullptr;
+-        motion_transform_storage.clear();
+-
+-        /* Get traversable handle to motion transform. */
++        /* Get traversable handle to motion transform. The data is uploaded below, before the
++         * acceleration structure build reads it. */
+         optixConvertPointerToTraversableHandle(context,
+                                                motion_transform_gpu,
+                                                OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM,
+@@ -1985,6 +1985,14 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+       }
+     }
+ 
++    /* Upload motion transforms. */
++    if (motion_transform_offset > 0) {
++      cuda_assert(cuMemcpyHtoD(bvh_optix->motion_transform_data->device_pointer,
++                               motion_transform_host.data(),
++                               motion_transform_offset));
++    }
++    motion_transform_host.clear();
++
+     /* Upload instance descriptions. */
+     instances.resize(num_instances);
+     instances.copy_to_device();

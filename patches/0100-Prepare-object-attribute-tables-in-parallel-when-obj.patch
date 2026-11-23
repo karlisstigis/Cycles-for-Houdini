@@ -1,0 +1,360 @@
+From 6a251e71b0a832132dfae0336e1fb1a3de63dfcf Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Tue, 17 Nov 2026 03:11:46 +0000
+Subject: [PATCH] Prepare object attribute tables in parallel when objects
+ change
+
+The attribute tables reuse the previous object attribute requests only
+while every object would produce the same requests, which requires the
+same object count. When instances are added or removed between frames, as
+when particles die, every object was converted to its own attribute set,
+reserved and added one after the other: about 0.7 seconds for 380,000
+instanced particles, on every such frame.
+
+When the geometry part of the tables kept its layout, build the requests
+and layout spans the conversion would make directly from the object
+parameters: per-block sizes, a prefix sum in object order, then every
+object fills its own requests, spans and values in parallel at the offsets
+adding them in object order would assign. Objects whose parameters the
+conversion would not store one to one (repeated names, unexpected motion
+samples or value sizes), and objects with a sampled parameter held for
+displacement, keep the conversion. The environment variable
+CYCLES_FULL_OBJECT_ATTRIBUTE_UPDATE forces the full conversion as a
+reference.
+
+Looking up attribute ids for the attribute map took the shader manager's
+lock for every object attribute whose name differed from the previous one;
+a small per-range cache of recent names keeps the same ids without it.
+
+Rationale: Adding or removing instances rebuilt all object attribute requests, layout and values serially through per-object attribute sets, and the attribute map serialised on a lock.
+Contract: Object attribute requests, offsets, layout spans, table sizes and contents, the attribute map and object attribute offsets are identical to the full conversion for any change of objects.
+Tests: tests/houdini_packed_instance_attribute_smoke.py, tests/houdini_sampled_instance_attribute_smoke.py, tests/houdini_particle_attribute_smoke.py
+---
+ src/scene/geometry_attributes.cpp | 261 ++++++++++++++++++++++++++++--
+ 1 file changed, 245 insertions(+), 16 deletions(-)
+
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index 25a2dca4c31d8764c47917807409e2e241b58aa9..a2b9eeebabb0c5711d38c0dbe4a40088ed43665e 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -171,6 +171,16 @@ static bool emit_attribute_mapping(AttributeMap *attr_map,
+   return emit_attribute_map_entry(attr_map, index, id, req.type, req.desc);
+ }
+ 
++/* Recently looked up attribute ids of one range of objects. Objects usually repeat the same
++ * few names, and each lookup otherwise takes the shader manager's lock. */
++struct AttributeIdCache {
++  static constexpr int size = 8;
++  ustring names[size];
++  uint64_t ids[size] = {};
++  int count = 0;
++  int next = 0;
++};
++
+ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+                                             DeviceScene *dscene,
+                                             Scene *scene,
+@@ -271,10 +281,7 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+ 
+   /* Each object writes only its own map entries, at offsets assigned above. Object
+    * attribute names are requested by their geometry, so their ids already exist. */
+-  const auto emit_object = [&](const size_t i,
+-                               ustring &cached_name,
+-                               uint64_t &cached_id,
+-                               bool &cached) {
++  const auto emit_object = [&](const size_t i, AttributeIdCache &cache) {
+     bool modified = false;
+     Object *object = scene->objects[i];
+     AttributeRequestSet &attributes = object_attributes[i];
+@@ -286,12 +293,18 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+       for (AttributeRequest &req : attributes.requests) {
+         uint64_t id;
+         if (req.std == ATTR_STD_NONE) {
+-          if (!cached || req.name != cached_name) {
+-            cached_id = scene->shader_manager->get_attribute_id(req.name);
+-            cached_name = req.name;
+-            cached = true;
++          int k = 0;
++          while (k < cache.count && cache.names[k] != req.name) {
++            k++;
++          }
++          if (k == cache.count) {
++            k = cache.next;
++            cache.names[k] = req.name;
++            cache.ids[k] = scene->shader_manager->get_attribute_id(req.name);
++            cache.next = (cache.next + 1) % AttributeIdCache::size;
++            cache.count = std::min(cache.count + 1, AttributeIdCache::size);
+           }
+-          id = cached_id;
++          id = cache.ids[k];
+         }
+         else {
+           id = scene->shader_manager->get_attribute_id(req.std);
+@@ -309,12 +322,10 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+   std::atomic<bool> objects_modified = false;
+   parallel_for(blocked_range<size_t>(0, scene->objects.size(), 1024),
+                [&](const blocked_range<size_t> &r) {
+-                 ustring cached_name;
+-                 uint64_t cached_id = 0;
+-                 bool cached = false;
++                 AttributeIdCache cache;
+                  bool range_modified = false;
+                  for (size_t i = r.begin(); i != r.end(); i++) {
+-                   range_modified |= emit_object(i, cached_name, cached_id, cached);
++                   range_modified |= emit_object(i, cache);
+                  }
+                  if (range_modified) {
+                    objects_modified = true;
+@@ -923,6 +934,187 @@ static void write_object_attribute_values(DeviceScene *dscene,
+   }
+ }
+ 
++/* Whether the full conversion can store a parameter of this type as an object attribute. */
++static bool object_attribute_type_supported(const TypeDesc type)
++{
++  return type == TypeFloat || type == TypeColor || type == TypePoint || type == TypeVector ||
++         type == TypeNormal || type == TypeMatrix || type == TypeFloat2 || type == TypeFloat4 ||
++         type == TypeRGBA || type == TypeQuaternion || type == TypePackedSphericalHarmonicsRest;
++}
++
++/* Visit the attributes the full conversion would store for an object, in its order: the
++ * object's parameters whose names its geometry requests and does not provide itself.
++ * Returns false where the full conversion would not store exactly one attribute per such
++ * parameter with the parameter's own value size (repeated names, unexpected motion samples
++ * or value sizes) or where a sampled parameter is held for displacement, so the caller
++ * converts the objects as before. */
++template<typename F>
++static bool visit_object_attribute_params(const Object &object,
++                                          const vector<ustring> &names,
++                                          const F &visit)
++{
++  const size_t num_params = object.attributes.size();
++  for (size_t j = 0; j < num_params; j++) {
++    const ParamValue &param = object.attributes[j];
++    if (std::find(names.begin(), names.end(), param.name()) == names.end()) {
++      continue;
++    }
++    for (size_t k = 0; k < j; k++) {
++      if (object.attributes[k].name() == param.name()) {
++        return false;
++      }
++    }
++    if (!object_attribute_type_supported(param.type())) {
++      return false;
++    }
++
++    const ParamValue *sampled = nullptr;
++    for (const ParamValue &value : object.attribute_motion) {
++      if (value.name() == param.name()) {
++        sampled = &value;
++        break;
++      }
++    }
++    int steps = 0;
++    uint object_motion = 0;
++    if (sampled) {
++      steps = sampled->nvalues();
++      if (sampled->type() != param.type() || steps < 3 || steps > 129 || (steps & 1) == 0) {
++        return false;
++      }
++      /* A displacement hold is left to the full conversion. */
++      if (std::find(object.attribute_motion_displacement_hold.begin(),
++                    object.attribute_motion_displacement_hold.end(),
++                    param.name()) != object.attribute_motion_displacement_hold.end())
++      {
++        return false;
++      }
++      object_motion = uint(steps) >> 1;
++    }
++
++    size_t units_per_step = 1;
++    const int table = object_attribute_table(param.type(), units_per_step);
++    const size_t step_bytes = object_attribute_table_unit(table) * units_per_step;
++    if (size_t(param.datasize()) != step_bytes) {
++      return false;
++    }
++    visit(param, table, units_per_step * (steps + 1), steps, object_motion);
++  }
++  return true;
++}
++
++/* Build the object attribute requests and layout spans that converting every object to an
++ * attribute set and reserving and adding them in object order would produce, without that
++ * conversion: per-block sizes, a prefix sum in object order, then every object fills its own
++ * slots. Returns false, without changing anything, if any object needs the full conversion. */
++template<typename LayoutSpan>
++static bool prepare_object_attribute_requests(
++    const Scene *scene,
++    const vector<vector<ustring>> &object_names,
++    const size_t geometry_reserve[int(AttrKernelDataType::NUM)],
++    vector<AttributeRequestSet> &object_attributes,
++    vector<LayoutSpan> next_layout[],
++    size_t object_reserve[int(AttrKernelDataType::NUM)])
++{
++  constexpr int num_tables = int(AttrKernelDataType::NUM);
++  struct Totals {
++    size_t units[num_tables] = {};
++    size_t spans[num_tables] = {};
++  };
++  const size_t num_objects = scene->objects.size();
++  const size_t block_size = 1024;
++  const size_t num_blocks = (num_objects + block_size - 1) / block_size;
++
++  /* Sizes of each block of objects, and whether every object can be converted here. */
++  vector<Totals> blocks(num_blocks);
++  std::atomic<bool> supported = true;
++  parallel_for(blocked_range<size_t>(0, num_blocks, 1), [&](const blocked_range<size_t> &r) {
++    for (size_t b = r.begin(); b != r.end(); b++) {
++      Totals &totals = blocks[b];
++      const size_t end = std::min(num_objects, (b + 1) * block_size);
++      for (size_t i = b * block_size; i < end && supported.load(std::memory_order_relaxed); i++) {
++        const Object &object = *scene->objects[i];
++        const Geometry *geom = object.get_geometry();
++        if (geom == nullptr || geom->index >= scene->geometry.size() ||
++            scene->geometry[geom->index] != geom ||
++            !visit_object_attribute_params(
++                object,
++                object_names[geom->index],
++                [&](const ParamValue &, const int table, const size_t units, int, uint) {
++                  totals.units[table] += units;
++                  totals.spans[table] += 1;
++                }))
++        {
++          supported = false;
++        }
++      }
++    }
++  });
++  if (!supported) {
++    return false;
++  }
++
++  /* Block starts in object order. */
++  Totals sum;
++  for (Totals &totals : blocks) {
++    const Totals block = totals;
++    totals = sum;
++    for (int table = 0; table < num_tables; table++) {
++      sum.units[table] += block.units[table];
++      sum.spans[table] += block.spans[table];
++    }
++  }
++
++  size_t geometry_spans[num_tables];
++  for (int table = 0; table < num_tables; table++) {
++    object_reserve[table] = sum.units[table];
++    geometry_spans[table] = next_layout[table].size();
++    next_layout[table].resize(geometry_spans[table] + sum.spans[table]);
++  }
++  object_attributes.clear();
++  object_attributes.resize(num_objects);
++
++  parallel_for(blocked_range<size_t>(0, num_blocks, 1), [&](const blocked_range<size_t> &r) {
++    for (size_t b = r.begin(); b != r.end(); b++) {
++      size_t offset[num_tables];
++      size_t span[num_tables];
++      for (int table = 0; table < num_tables; table++) {
++        offset[table] = geometry_reserve[table] + blocks[b].units[table];
++        span[table] = geometry_spans[table] + blocks[b].spans[table];
++      }
++      const size_t end = std::min(num_objects, (b + 1) * block_size);
++      for (size_t i = b * block_size; i < end; i++) {
++        const Object &object = *scene->objects[i];
++        vector<AttributeRequest> &requests = object_attributes[i].requests;
++        visit_object_attribute_params(object,
++                                      object_names[object.get_geometry()->index],
++                                      [&](const ParamValue &param,
++                                          const int table,
++                                          const size_t units,
++                                          const int steps,
++                                          const uint object_motion) {
++                                        AttributeRequest req(param.name());
++                                        req.type = param.type();
++                                        req.desc.element = ATTR_ELEMENT_OBJECT;
++                                        req.desc.offset = int(offset[table]);
++                                        req.desc.object_motion = object_motion;
++                                        requests.push_back(req);
++                                        next_layout[table][span[table]++] = LayoutSpan{
++                                            &object,
++                                            ATTR_STD_NONE,
++                                            param.name(),
++                                            param.type(),
++                                            ATTR_ELEMENT_OBJECT,
++                                            1,
++                                            steps ? steps + 1 : 1};
++                                        offset[table] += units;
++                                      });
++      }
++    }
++  });
++  return true;
++}
++
+ void GeometryManager::device_update_attributes(Device *device,
+                                                DeviceScene *dscene,
+                                                Scene *scene,
+@@ -1076,16 +1268,36 @@ void GeometryManager::device_update_attributes(Device *device,
+       table_sizes[index] += object_attribute_reserve[index];
+     }
+   }
++  /* Reference switch: always convert every object as before. */
++  const bool full_object_attributes = getenv("CYCLES_FULL_OBJECT_ATTRIBUTE_UPDATE") != nullptr;
+   const bool reuse_object_attributes =
+-      geometry_layout_kept && object_attribute_requests_unchanged(
+-                                  scene, object_names, object_attribute_requests, table_sizes);
++      !full_object_attributes && geometry_layout_kept &&
++      object_attribute_requests_unchanged(
++          scene, object_names, object_attribute_requests, table_sizes);
+ 
+   size_t object_reserve[int(AttrKernelDataType::NUM)] = {};
+   bool object_tables_kept[int(AttrKernelDataType::NUM)] = {};
++  bool fast_object_attributes = false;
+   if (reuse_object_attributes) {
+     builder.allocation_kept(object_attribute_reserve, object_tables_kept);
+     builder.reserve_sizes(object_attribute_reserve);
+   }
++  else if (!full_object_attributes && geometry_layout_kept && [&]() {
++             size_t geometry_reserve[int(AttrKernelDataType::NUM)];
++             builder.reserved_sizes(geometry_reserve);
++             return prepare_object_attribute_requests(scene,
++                                                      object_names,
++                                                      geometry_reserve,
++                                                      object_attributes,
++                                                      next_layout,
++                                                      object_reserve);
++           }())
++  {
++    /* Objects were added, removed or changed their attributes while the geometry part kept
++     * its layout: requests and layout as the conversion below would make them. */
++    fast_object_attributes = true;
++    builder.reserve_sizes(object_reserve);
++  }
+   else {
+     object_attributes.resize(scene->objects.size());
+     object_attribute_values.reserve(scene->objects.size());
+@@ -1234,7 +1446,24 @@ void GeometryManager::device_update_attributes(Device *device,
+     }
+   }
+ 
+-  for (size_t i = 0; !reuse_object_attributes && i < scene->objects.size(); i++) {
++  if (fast_object_attributes) {
++    /* Write every object's values at the offsets prepared above, as adding them would. */
++    size_t sizes[int(AttrKernelDataType::NUM)];
++    builder.reserved_sizes(sizes);
++    const bool none_kept[int(AttrKernelDataType::NUM)] = {};
++    bool modified[int(AttrKernelDataType::NUM)];
++    write_object_attribute_values(
++        dscene, scene, object_names, object_attributes, sizes, none_kept, modified);
++    builder.tag_modified(modified);
++    if (progress.get_cancel()) {
++      return;
++    }
++  }
++
++  for (size_t i = 0;
++       !reuse_object_attributes && !fast_object_attributes && i < scene->objects.size();
++       i++)
++  {
+     Object *object = scene->objects[i];
+     AttributeRequestSet &attributes = object_attributes[i];
+     AttributeSet &values = object_attribute_values[i];

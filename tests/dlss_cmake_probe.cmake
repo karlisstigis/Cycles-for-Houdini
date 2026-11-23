@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+get_filename_component(CH_TEST_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(CYCLES_HOUDINI_INTEGRATION_ROOT "${CH_TEST_ROOT}")
+set(DLSS_SDK_ROOT "${CH_TEST_ROOT}/third_party/dlss")
+list(PREPEND CMAKE_MODULE_PATH "${CH_TEST_ROOT}/cmake")
+find_package(DLSS REQUIRED)
+if(NOT DLSS_FOUND)
+  message(FATAL_ERROR "DLSS SDK not detected")
+endif()
+message(STATUS "DLSS header-only CUDA SDK validated: ${DLSS_INCLUDE_DIR}")

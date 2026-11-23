@@ -1,0 +1,110 @@
+From 3e9910a4b133b1d11975b309c69338c589f2e32c Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 03:13:50 +0000
+Subject: [PATCH 106/107] Update only the object table and lights when only
+ light objects change
+
+Light objects are not traceable and their geometry has no bounds, yet a change of a light object tagged the geometry manager, which rebuilt the scene acceleration structure and recomputed bounds and attributes for every light move. Such changes now update the object table and the light manager only; the object attribute offsets that writing the object table resets are restored from the current attribute map. CYCLES_LIGHT_OBJECT_GEOMETRY_UPDATE tags the geometry manager as before, as a reference.
+
+Rationale: A light move rebuilt the scene acceleration structure and recomputed bounds and attributes although lights are in no acceleration structure; about 200 of 400 ms per light move on a large instanced scene.
+Contract: Changes of light objects (not additions or removals) no longer tag the geometry manager; the object table, object attribute offsets and the light manager are updated as before; other objects, additions and removals are unchanged; CYCLES_LIGHT_OBJECT_GEOMETRY_UPDATE restores the previous tagging.
+Tests: tests/houdini_light_update_smoke.py
+---
+ src/scene/geometry.h |  6 ++++++
+ src/scene/object.cpp | 25 ++++++++++++++++++++++---
+ src/scene/object.h   |  4 +++-
+ 3 files changed, 31 insertions(+), 4 deletions(-)
+
+diff --git a/src/scene/geometry.h b/src/scene/geometry.h
+index 85605dea8ce176c7b559e6a88736ddf7099d7298..b2c510fd04b535c802b3474e6c309cac64d1156f 100644
+--- a/src/scene/geometry.h
++++ b/src/scene/geometry.h
+@@ -283,6 +283,12 @@ class GeometryManager {
+   /* Updates */
+   void tag_update(Scene *scene, const uint32_t flag);
+ 
++  /* Whether the attribute tables and map of the last completed attribute update are current. */
++  bool attribute_tables_valid() const
++  {
++    return attribute_layout_valid;
++  }
++
+   bool need_update() const;
+ 
+   /* Statistics */
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 2cec689bdfaa023e9a27b21dcad538e249af40ad..7bbc9bd30d2d0c8de70163b0fc0399ecb65e4b90 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -32,6 +32,7 @@
+ #include "kernel/geom/attribute.h"
+ #include <atomic>
+ #include <stdexcept>
++#include <cstdlib>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -303,7 +304,13 @@ void Object::tag_update(Scene *scene)
+   }
+ 
+   scene->camera->need_flags_update = true;
+-  scene->object_manager->tag_update(scene, flag);
++  /* Light objects are not traceable (see is_traceable) and their geometry has no bounds, so a
++   * change of a light object needs no acceleration structure, bounds or attribute update: only
++   * the object table and the light manager. CYCLES_LIGHT_OBJECT_GEOMETRY_UPDATE tags the
++   * geometry manager as before, as a reference. */
++  static const bool light_geometry_update = getenv("CYCLES_LIGHT_OBJECT_GEOMETRY_UPDATE") != nullptr;
++  const bool light_only = geometry && geometry->is_light() && !light_geometry_update;
++  scene->object_manager->tag_update(scene, flag, !light_only);
+ }
+ 
+ bool Object::use_motion() const
+@@ -1134,6 +1141,18 @@ void ObjectManager::device_update(Device *device,
+   for (Object *object : scene->objects) {
+     object->clear_modified();
+   }
++
++  /* The object table was written again above, which resets the attribute offsets of the objects.
++   * They are restored by the geometry manager's attribute update; when only light objects
++   * changed it does not run, so restore them here from the current attribute map. */
++  if (!scene->geometry_manager->need_update()) {
++    if (scene->geometry_manager->attribute_tables_valid()) {
++      device_update_geom_offsets(device, dscene, scene);
++    }
++    else {
++      scene->geometry_manager->tag_update(scene, GeometryManager::OBJECT_MANAGER);
++    }
++  }
+ }
+ 
+ void ObjectManager::device_update_flags(Device * /*unused*/,
+@@ -1519,12 +1538,12 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, P
+   }
+ }
+ 
+-void ObjectManager::tag_update(Scene *scene, const uint32_t flag)
++void ObjectManager::tag_update(Scene *scene, const uint32_t flag, const bool notify_geometry)
+ {
+   update_flags |= flag;
+ 
+   /* avoid infinite loops if the geometry manager tagged us for an update */
+-  if ((flag & GEOMETRY_MANAGER) == 0) {
++  if ((flag & GEOMETRY_MANAGER) == 0 && notify_geometry) {
+     uint32_t geometry_flag = GeometryManager::OBJECT_MANAGER;
+ 
+     /* Also notify in case added or removed objects were instances, as no Geometry might have been
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 5b4474b8a88635b9e707e3cb9986d1c02c09db37..5597d1502b096aedaea12c43c55ac0210327f0bd 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -200,7 +200,9 @@ class ObjectManager {
+ 
+   void device_free(Device *device, DeviceScene *dscene, bool force_free);
+ 
+-  void tag_update(Scene *scene, const uint32_t flag);
++  /* notify_geometry false: the change concerns light objects only, which are not in any
++   * acceleration structure, so the geometry manager is not tagged. */
++  void tag_update(Scene *scene, const uint32_t flag, const bool notify_geometry = true);
+ 
+   bool need_update() const;
+ 

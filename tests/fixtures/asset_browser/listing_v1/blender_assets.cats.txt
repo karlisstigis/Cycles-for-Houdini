@@ -1,0 +1,5 @@
+# test catalogs
+VERSION 1
+
+d7a2f3c1-0d5e-4c4b-9a8e-1f2e3d4c5b6a:Materials/Metal:Materials-Metal
+a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d:Props:Props

@@ -1,0 +1,162 @@
+From e8e58e66c678cf7bcacba76c09e582d0c962f069 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:42 +0100
+Subject: [PATCH] subdivision count overflow
+
+Locked-Patch: patches/0075-subdivision-count-overflow.patch
+Locked-Patch-SHA256: 2cc5a57cb9a46cd8d9a37400051066c47ccff58e207cf4bfcca1531c297be522
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/core_subdivision_count_overflow_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 3fc27c4115324f19b0c2542b67a8f8245c6337d0
+Previous-Patch: patches/0075-subdivision-count-overflow.patch
+Previous-Patch-SHA256: 2cc5a57cb9a46cd8d9a37400051066c47ccff58e207cf4bfcca1531c297be522
+Rationale: Subdivision count additions must reject signed-int overflow before allocation/index publication; oversized meshes otherwise produce unsafe geometry state.
+Contract: subdivision count overflow
+Tests: tests/core_subdivision_count_overflow_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index a45df5b63d9c52a8ed2bae93e4f92f2dce8a8fa0..562101dcbddefbdaaea00551bba296247589822a 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -2,6 +2,9 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <limits>
++#include <stdexcept>
++
+ #include "scene/camera.h"
+ #include "scene/mesh.h"
+ 
+@@ -23,6 +26,13 @@ DiagSplit::DiagSplit(const SubdParams &params_) : params(params_) {}
+ 
+ int DiagSplit::alloc_verts(int num)
+ {
++  if (num < 0 || num > std::numeric_limits<int>::max() - num_verts) {
++    if (params.progress) {
++      params.progress->set_error("Subdivision vertex indexing limit exceeded");
++      return 0;
++    }
++    throw std::overflow_error("Subdivision vertex indexing limit exceeded");
++  }
+   const int index = num_verts;
+   num_verts += num;
+   return index;
+@@ -70,14 +80,24 @@ void DiagSplit::alloc_subpatch(SubPatch &&sub)
+   if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+     return;
+   }
++  const int64_t triangles = sub.calc_num_triangles();
++  const int64_t inner_verts = sub.calc_num_inner_verts();
+   if (params.triangle_limit &&
+-      uint64_t(num_triangles) + sub.calc_num_triangles() > params.triangle_limit) {
++      uint64_t(num_triangles) + triangles > params.triangle_limit) {
+     if (params.progress) {
+       params.progress->set_error("Subdivision triangle budget exceeded for " +
+                                  params.mesh->name.string());
+     }
+     return;
+   }
++  if (triangles > std::numeric_limits<int>::max() - num_triangles ||
++      inner_verts > std::numeric_limits<int>::max() - num_verts) {
++    if (params.progress) {
++      params.progress->set_error("Subdivision tessellation indexing limit exceeded");
++      return;
++    }
++    throw std::overflow_error("Subdivision tessellation indexing limit exceeded");
++  }
+   assert(sub.edges[0].edge->T >= 1);
+   assert(sub.edges[1].edge->T >= 1);
+   assert(sub.edges[2].edge->T >= 1);
+@@ -85,9 +105,9 @@ void DiagSplit::alloc_subpatch(SubPatch &&sub)
+     assert(sub.edges[3].edge->T >= 1);
+   }
+ 
+-  sub.inner_grid_vert_offset = alloc_verts(sub.calc_num_inner_verts());
++  sub.inner_grid_vert_offset = alloc_verts(int(inner_verts));
+   sub.triangles_offset = num_triangles;
+-  num_triangles += sub.calc_num_triangles();
++  num_triangles += int(triangles);
+ 
+   subpatches.push_back(std::move(sub));
+ }
+diff --git a/src/subd/subpatch.h b/src/subd/subpatch.h
+index d5e90da3fd5e9714ef90c3a7a89c29e6b60376b3..9813ed1afd9b2321d3574e46c2e74c2fafb66fa3 100644
+--- a/src/subd/subpatch.h
++++ b/src/subd/subpatch.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
++
+ #include "util/hash.h"
+ #include "util/math_float2.h"
+ 
+@@ -169,10 +171,10 @@ class SubPatch {
+   {
+   }
+ 
+-  int calc_num_inner_verts() const
++  int64_t calc_num_inner_verts() const
+   {
+     if (shape == TRIANGLE) {
+-      const int M = max(max(edges[0].edge->T, edges[1].edge->T), edges[2].edge->T);
++      const int64_t M = max(max(edges[0].edge->T, edges[1].edge->T), edges[2].edge->T);
+       if (M <= 2) {
+         /* No inner grid. */
+         return 0;
+@@ -181,15 +183,15 @@ class SubPatch {
+       return M * (M - 1) / 2;
+     }
+ 
+-    const int Mu = max(edges[0].edge->T, edges[2].edge->T);
+-    const int Mv = max(edges[3].edge->T, edges[1].edge->T);
++    const int64_t Mu = max(edges[0].edge->T, edges[2].edge->T);
++    const int64_t Mv = max(edges[3].edge->T, edges[1].edge->T);
+     return (Mu - 1) * (Mv - 1);
+   }
+ 
+-  int calc_num_triangles() const
++  int64_t calc_num_triangles() const
+   {
+     if (shape == TRIANGLE) {
+-      const int M = max(max(edges[0].edge->T, edges[1].edge->T), edges[2].edge->T);
++      const int64_t M = max(max(edges[0].edge->T, edges[1].edge->T), edges[2].edge->T);
+       if (M == 1) {
+         return 1;
+       }
+@@ -197,15 +199,15 @@ class SubPatch {
+         return edges[0].edge->T + edges[1].edge->T + edges[2].edge->T - 2;
+       }
+ 
+-      const int inner_M = M - 2;
+-      const int inner_triangles = inner_M * inner_M;
+-      const int edge_triangles = edges[0].edge->T + edges[1].edge->T + edges[2].edge->T +
++      const int64_t inner_M = M - 2;
++      const int64_t inner_triangles = inner_M * inner_M;
++      const int64_t edge_triangles = edges[0].edge->T + edges[1].edge->T + edges[2].edge->T +
+                                  inner_M * 3;
+       return inner_triangles + edge_triangles;
+     }
+ 
+-    const int Mu = max(edges[0].edge->T, edges[2].edge->T);
+-    const int Mv = max(edges[3].edge->T, edges[1].edge->T);
++    const int64_t Mu = max(edges[0].edge->T, edges[2].edge->T);
++    const int64_t Mv = max(edges[3].edge->T, edges[1].edge->T);
+ 
+     if (Mu == 1) {
+       return edges[3].edge->T + edges[1].edge->T;
+@@ -214,8 +216,8 @@ class SubPatch {
+       return edges[0].edge->T + edges[2].edge->T;
+     }
+ 
+-    const int inner_triangles = (Mu - 2) * (Mv - 2) * 2;
+-    const int edge_triangles = edges[0].edge->T + edges[2].edge->T + edges[3].edge->T +
++    const int64_t inner_triangles = (Mu - 2) * (Mv - 2) * 2;
++    const int64_t edge_triangles = edges[0].edge->T + edges[2].edge->T + edges[3].edge->T +
+                                edges[1].edge->T + ((Mu - 2) * 2) + ((Mv - 2) * 2);
+ 
+     return inner_triangles + edge_triangles;

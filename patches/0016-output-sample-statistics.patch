@@ -1,0 +1,60 @@
+From 3bca15fa9b415312d8f19bc6c40d0f079c3621bf Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:31 +0100
+Subject: [PATCH] output sample statistics
+
+Locked-Patch: patches/0016-output-sample-statistics.patch
+Locked-Patch-SHA256: f6d00c8af08bc0c43c88f3ddb62436d7257c88ba43fc5a444211c2525695eba0
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_progressive_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: e75e964ee45f457e7e949485f25efc1cec48dfdf
+Previous-Patch: patches/0016-output-sample-statistics.patch
+Previous-Patch-SHA256: f6d00c8af08bc0c43c88f3ddb62436d7257c88ba43fc5a444211c2525695eba0
+Rationale: Output sample counts belong to the tile interface when consumers need unnormalized passes or diagnostics; the default zero preserves older drivers.
+Contract: output sample statistics
+Tests: tests/houdini_progressive_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/path_trace_tile.cpp b/src/integrator/path_trace_tile.cpp
+index 31b7c48ba6a1a56235e08d8bafc3275a5647292d..4ae059f43ae9a1c885ed3835a92d363f84af6e58 100644
+--- a/src/integrator/path_trace_tile.cpp
++++ b/src/integrator/path_trace_tile.cpp
+@@ -22,6 +22,11 @@ PathTraceTile::PathTraceTile(PathTrace &path_trace)
+ {
+ }
+ 
++int PathTraceTile::get_num_samples() const
++{
++  return path_trace_.get_num_render_tile_samples();
++}
++
+ bool PathTraceTile::get_pass_pixels(const string_view pass_name,
+                                     const int num_channels,
+                                     float *pixels) const
+diff --git a/src/integrator/path_trace_tile.h b/src/integrator/path_trace_tile.h
+index 5247e89ba1c9e4aa1857648ccd1b13afd24347f3..c9cf6df2c54ebb18f64417e83527e42b0db837b6 100644
+--- a/src/integrator/path_trace_tile.h
++++ b/src/integrator/path_trace_tile.h
+@@ -17,6 +17,7 @@ class PathTrace;
+ class PathTraceTile : public OutputDriver::Tile {
+  public:
+   PathTraceTile(PathTrace &path_trace);
++  int get_num_samples() const override;
+ 
+   bool get_pass_pixels(const string_view pass_name,
+                        const int num_channels,
+diff --git a/src/session/output_driver.h b/src/session/output_driver.h
+index e326bb521191d0138546e2b6c71735256d17060d..335f659d4513656d028857bfde9c47e280311e8a 100644
+--- a/src/session/output_driver.h
++++ b/src/session/output_driver.h
+@@ -40,6 +40,9 @@ class OutputDriver {
+     const string layer;
+     const string view;
+ 
++    /* Optional sample statistics for host diagnostics and unnormalized passes. */
++    virtual int get_num_samples() const { return 0; }
++
+     virtual bool get_pass_pixels(const string_view pass_name,
+                                  const int num_channels,
+                                  float *pixels) const = 0;

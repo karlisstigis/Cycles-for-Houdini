@@ -1,0 +1,90 @@
+Cycles Tools shelf and node icons: origin and licence
+=====================================================
+
+This folder mixes icons from three sources. The rest of Cycles for Houdini is
+Apache-2.0 (see LICENSE at the top of the package); these icons are NOT.
+
+1. Blender interface icons (unmodified or modified)
+   Source: Blender, release/datafiles/icons_svg, compared against tag v5.3.0
+   (https://projects.blender.org/blender/blender). Copyright the Blender
+   authors. The SVG files in Blender carry no licence line of their own; they
+   are part of the Blender source code, which Blender's licence page
+   (https://www.blender.org/about/license/) says is licensed by default under
+   the GNU General Public License version 2 or later. Blender is distributed
+   as a whole under GPL version 3 or later.
+   Licence used here: GNU GPL version 2 or (at your option) any later version
+   (SPDX: GPL-2.0-or-later). Full texts: licenses/GPL-2.0-or-later.txt and
+   licenses/GPL-3.0-or-later.txt in this folder.
+   Date of the changes: 2026. The changed files have been in this repository
+   since 9 November 2026; the asset browser icon since 13 November 2026.
+   Changes made here: shapes flattened to plain filled paths (Houdini's Qt SVG
+   renderer), recoloured white, scaled into a 24-unit box and drawn on a dark
+   rounded square (#3A3A3A); where noted, a plus badge was added.
+
+2. Drawings described as new when the set was supplied
+   The supplied notice called four icons "new drawings in the same style". Who
+   drew them is not recorded. Two of them visibly reuse parts of Blender icons,
+   so they are treated as category 1 (GPL-2.0-or-later) until their author
+   confirms otherwise.
+
+3. New drawings made for this project (the viewer icon set, the render view
+   icon, the waste bin and the sun), CC0 1.0 (see cycles_viewer/LICENSE).
+
+Per-file list (Blender icon names are file names in release/datafiles/icons_svg)
+
+| File | Origin | Licence |
+| --- | --- | --- |
+| cycles_add_camera_tab.svg | Blender outliner_ob_camera, plus badge added | GPL-2.0-or-later |
+| cycles_add_native_light_tab.svg | Blender outliner_ob_light, plus badge added | GPL-2.0-or-later |
+| cycles_add_object_tab.svg | Blender object_data (same shape as object_datamode), plus badge added | GPL-2.0-or-later |
+| cycles_area_light.svg | Blender light_area | GPL-2.0-or-later |
+| cycles_disk_light.svg | Described as a new drawing; same line design as Blender light_area with the rectangle drawn as an ellipse | GPL-2.0-or-later (treated as modified Blender icon) |
+| cycles_environment_light.svg | Blender world (same shape as world_data) | GPL-2.0-or-later |
+| cycles_import_blend.svg | Blender file_blend; page outline keeps Blender's 60% opacity as fill opacity | GPL-2.0-or-later |
+| cycles_ipr.svg | Blender scene; sub-paths keep Blender's 20% and 80% fill opacity | GPL-2.0-or-later |
+| cycles_light_material.svg | Described as a new drawing; the bulb base is Blender outliner_ob_light | GPL-2.0-or-later (treated as modified Blender icon) |
+| cycles_material_preview.svg | Blender shading_texture | GPL-2.0-or-later |
+| cycles_point_light.svg | Blender light_point | GPL-2.0-or-later |
+| cycles_remove_tabs.svg | New drawing (waste bin) made for this project, 2026 | CC0-1.0, to the extent that any rights in it exist; see note A |
+| cycles_render_rop.svg | Blender render_still | GPL-2.0-or-later |
+| cycles_render_view.svg | Original drawing made for this project, 2026, released by the project's author | CC0-1.0 |
+| cycles_sky_world.svg | Blender mat_sphere_sky | GPL-2.0-or-later |
+| cycles_spot_light.svg | Blender light_spot | GPL-2.0-or-later |
+| cycles_sun_light.svg | New drawing (sun) made for this project, 2026 | CC0-1.0, to the extent that any rights in it exist; see note A |
+| cycles_viewer/plain/*.svg, cycles_viewer/badge/*.svg (54 files) | Original drawings made for this project, 2026, released by the project's author | CC0-1.0 |
+
+The Windows installer icon (../branding/installer.ico) is rendered from
+cycles_render_rop.svg. The raster conversion uses a transparent 256-pixel
+square and saves seven icon sizes. The derived installer icon is also under
+GPL-2.0-or-later.
+
+To regenerate it from the public source, run this from the project folder
+with PyMuPDF 2.1 (which uses MuPDF 1.28.6) and Pillow 12.3.0:
+
+    python scripts/export-branding.py --icon-only --output _work/branding
+
+The icon recipe uses only cycles_render_rop.svg. On Windows it reproduces the
+RGBA pixels at all seven sizes. The encoded ICO bytes can differ. The wordmark
+source artwork is used by the separate full branding export.
+
+Note A: these two drawings were made for this project in 2026 and are
+released under CC0 1.0 (see cycles_viewer/LICENSE for the text), to the
+extent that any rights in them exist.
+
+The project logo (../branding/cycles-houdini-logo.svg and .png) is an
+original drawing made for this project, 2026, released under CC0 1.0 by the
+project's author on 21 November 2026. The
+installer's welcome and header images (../branding/installer-welcome.png,
+installer-header.png) are generated from that logo by
+scripts/export-branding.py and are covered by the same release. CC0 concerns
+copyright only.
+
+How the origins were found: every icon was rendered and compared shape by
+shape with the 799 icons of Blender v5.3.0 release/datafiles/icons_svg; the
+named Blender icons match at 95-100% overlap.
+
+About CC BY-SA 4.0: in February 2019 the designer of Blender's 2.80 icon
+sheet wrote on Blender's developer forum that his icon sheet was available
+under CC BY-SA 4.0. That statement covers his sheet as it was then; it has not
+been checked icon by icon against these files, so this notice relies on the
+GPL, under which Blender itself distributes them.

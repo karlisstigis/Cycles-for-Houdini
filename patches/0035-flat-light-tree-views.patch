@@ -1,0 +1,501 @@
+From 54ea33217ba8aed008ddd6ab3abee25e240f8535 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:34 +0100
+Subject: [PATCH] flat light tree views
+
+Locked-Patch: patches/0035-flat-light-tree-views.patch
+Locked-Patch-SHA256: b46c05e8f6e790ece8090e13b6f2581fea3cd703238fa69841e43029a5458784
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: cf530418eb07eaff9a688a1369ff29b2f73913ec
+Previous-Patch: patches/0035-flat-light-tree-views.patch
+Previous-Patch-SHA256: b46c05e8f6e790ece8090e13b6f2581fea3cd703238fa69841e43029a5458784
+Rationale: Flat immutable cached tree views eliminate repeated recursive object reconstruction while preserving exact emitter/node ordering.
+Contract: flat light tree views
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 203d33972e56ea3c8d09dcf0cd21b6196ff7e957..e6b1e737d1e51e5bbdf763ebf5febbf687eced26 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1247,7 +1247,8 @@ void GeometryManager::device_update(Device *device,
+     /* Capture edits after tessellation, displacement and static transforms,
+      * before the engine clears their dirty flags. Revisions are unique across
+      * lifetimes, so allocator address reuse cannot resurrect a retired tree. */
+-    if (geom->is_mesh() && (geom->is_modified() || geom->position_is_modified())) {
++    if ((geom->is_mesh() || geom->is_volume()) &&
++        (geom->is_modified() || geom->position_is_modified())) {
+       geom->light_tree_revision = next_light_tree_revision();
+     }
+     geom->clear_modified();
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index f911e44a499584de3d6bfa272b2f0208512e90e9..877a20533a0a2ad4c68954463cbdf9ab6d39a44f 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -768,6 +768,7 @@ struct LightTreeFlatten {
+ 
+   /* Map from instance node to its node index. */
+   std::unordered_map<LightTreeNode *, int> instances;
++  size_t instance_swaps = 0;
+ };
+ 
+ static void light_tree_node_copy_to_device(KernelLightTreeNode &knode,
+@@ -800,6 +801,12 @@ static void light_tree_node_copy_to_device(KernelLightTreeNode &knode,
+   }
+ }
+ 
++static int light_tree_cached_flatten(LightTreeFlatten &flatten,
++                                     const LightTreeNode &anchor,
++                                     KernelLightTreeNode *knodes,
++                                     KernelLightTreeEmitter *kemitters,
++                                     int &next_node_index);
++
+ static int light_tree_flatten(LightTreeFlatten &flatten,
+                               const LightTreeNode *node,
+                               KernelLightTreeNode *knodes,
+@@ -863,6 +870,7 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+            */
+           std::swap(instance_node->type, reference_node->type);
+           std::swap(instance_node->variant_type, reference_node->variant_type);
++          ++flatten.instance_swaps;
+         }
+         instance_node->type &= ~LIGHT_TREE_INSTANCE;
+       }
+@@ -884,6 +892,46 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+   }
+ }
+ 
++static int light_tree_cached_flatten(LightTreeFlatten &flatten,
++                                     const LightTreeNode &anchor,
++                                     KernelLightTreeNode *knodes,
++                                     KernelLightTreeEmitter *kemitters,
++                                     int &next_node_index)
++{
++  const auto &cache = anchor.get_cached();
++  const int first_node = next_node_index;
++  next_node_index += cache.num_nodes;
++  for (int index = 0; index < cache.num_nodes; ++index) {
++    const LightTreeCachedNode &stored = cache.nodes[index];
++    LightTreeNode node(stored.measure(), stored.bit_trail);
++    node.object_id = anchor.object_id;
++    int left_child = -1, right_child = -1;
++    if (stored.type & LIGHT_TREE_LEAF) {
++      node.make_leaf(cache.emitter_start + stored.first, stored.second);
++    }
++    else {
++      left_child = first_node + stored.first;
++      right_child = first_node + stored.second;
++    }
++    node.type = stored.type;
++    if (index == 0) {
++      /* Root measures describe the current instance, and flattening may have
++       * moved the reference variant to a different first-encountered instance. */
++      node.measure = anchor.measure;
++      node.bit_trail = anchor.bit_trail;
++      node.type = anchor.type;
++    }
++    if (node.is_leaf()) {
++      /* Cached local leaves contain triangles only. Kernel indices and current
++       * visibility/sampling come from the same current emitters as normal trees. */
++      light_tree_leaf_emitters_copy_and_flatten(
++          flatten, node, knodes, kemitters, next_node_index);
++    }
++    light_tree_node_copy_to_device(knodes[first_node + index], node, left_child, right_child);
++  }
++  return first_node;
++}
++
+ static int light_tree_flatten(LightTreeFlatten &flatten,
+                               const LightTreeNode *node,
+                               KernelLightTreeNode *knodes,
+@@ -891,6 +939,9 @@ static int light_tree_flatten(LightTreeFlatten &flatten,
+                               int &next_node_index)
+ {
+   /* Convert both inner nodes and primitives to device representation. */
++  if (node->is_cached()) {
++    return light_tree_cached_flatten(flatten, *node, knodes, kemitters, next_node_index);
++  }
+   const int node_index = next_node_index++;
+   int left_child = -1;
+   int right_child = -1;
+@@ -1079,7 +1130,7 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   const bool profiling = profile_flag && std::strcmp(profile_flag, "1") == 0;
+   const double started = profiling ? time_dt() : 0;
+   double construction_seconds = 0, flatten_seconds = 0, upload_seconds = 0, work_end = 0;
+-  size_t profile_nodes = 0, profile_emitters = 0;
++  size_t profile_nodes = 0, profile_emitters = 0, profile_instance_swaps = 0;
+   /* Declared before the tree: this runs after tree retirement, whose many
+    * transient node allocations were previously hidden in the overall timer. */
+   const scoped_callback_timer phase_timer([&](double /*unused*/) {
+@@ -1088,10 +1139,12 @@ void LightManager::device_update_tree(Device * /*unused*/,
+       std::fprintf(stderr,
+                    "CH_LIGHT_TREE_PHASES {\"complete\":%s,\"nodes\":%zu,\"emitters\":%zu,"
+                    "\"construction_seconds\":%.9f,\"flatten_seconds\":%.9f,"
+-                   "\"upload_seconds\":%.9f,\"retirement_seconds\":%.9f,\"total_seconds\":%.9f}\n",
++                   "\"upload_seconds\":%.9f,\"retirement_seconds\":%.9f,\"total_seconds\":%.9f,"
++                   "\"instance_swaps\":%zu}\n",
+                    work_end > 0 && !progress.get_cancel() ? "true" : "false",
+                    profile_nodes, profile_emitters, construction_seconds, flatten_seconds,
+-                   upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started);
++                   upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started,
++                   profile_instance_swaps);
+     }
+   });
+ 
+@@ -1188,6 +1241,7 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   dscene->light_to_tree.copy_to_device();
+   dscene->object_lookup_offset.copy_to_device();
+   dscene->triangle_to_tree.copy_to_device();
++  profile_instance_swaps = flatten.instance_swaps;
+   if (profiling) {
+     work_end = time_dt();
+     upload_seconds = work_end - upload_at;
+diff --git a/src/scene/light_tree.cpp b/src/scene/light_tree.cpp
+index dddd1383d7e9f8976ea7fb27ccd7fd581c81eb34..2abc1db72ce6ba0667e6e415bab68d26db732459 100644
+--- a/src/scene/light_tree.cpp
++++ b/src/scene/light_tree.cpp
+@@ -419,7 +419,9 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+ 
+     LightTreeNode *reference = std::get<0>(unique_mesh.find(mesh)->second);
+-    emitter.measure = emitter.root->measure = reference->measure;
++    /* Keep the shared reference local until every parallel instance measure is
++     * calculated. Root measures are assigned in the serial loop below. */
++    emitter.measure = reference->measure;
+ 
+     /* Transform measure. The measure is only directly transformable if the transformation has
+      * uniform scaling, otherwise recount all the triangles in the mesh with transformation. */
+diff --git a/src/scene/light_tree.h b/src/scene/light_tree.h
+index 3557c174ec27331d89bb3416b9e3e679269fef63..4b5d6a1ddd1051addb0fa53ce2b4dbcef9f8e990 100644
+--- a/src/scene/light_tree.h
++++ b/src/scene/light_tree.h
+@@ -130,6 +130,7 @@ struct LightTreeMeasure {
+ LightTreeMeasure operator+(const LightTreeMeasure &a, const LightTreeMeasure &b);
+ 
+ struct LightTreeNode;
++struct LightTreeCachedNode;
+ 
+ /* Light Linking. */
+ struct LightTreeLightLink {
+@@ -271,7 +272,13 @@ struct LightTreeNode {
+     LightTreeNode *reference = nullptr;
+   };
+ 
+-  std::variant<Leaf, Inner, Instance> variant_type;
++  struct Cached {
++    const LightTreeCachedNode *nodes = nullptr;
++    int num_nodes = 0;
++    int emitter_start = 0;
++  };
++
++  std::variant<Leaf, Inner, Instance, Cached> variant_type;
+ 
+   LightTreeNode(const LightTreeMeasure &measure, const uint &bit_trial)
+       : measure(measure), bit_trail(bit_trial), variant_type(Inner())
+@@ -317,6 +324,16 @@ struct LightTreeNode {
+     return std::get<Instance>(variant_type);
+   }
+ 
++  __forceinline const Cached &get_cached() const
++  {
++    return std::get<Cached>(variant_type);
++  }
++
++  __forceinline bool is_cached() const
++  {
++    return std::holds_alternative<Cached>(variant_type);
++  }
++
+   void make_leaf(const int first_emitter_index, const int num_emitters)
+   {
+     variant_type = Leaf();
+diff --git a/src/scene/light_tree_cache.cpp b/src/scene/light_tree_cache.cpp
+index 45a70c147f64d56a40afa83635ab0b641d32f688..2f2dcd5b825caac87998fb0beabce657db68ad19 100644
+--- a/src/scene/light_tree_cache.cpp
++++ b/src/scene/light_tree_cache.cpp
+@@ -14,6 +14,29 @@
+ #include <unordered_map>
+ 
+ CCL_NAMESPACE_BEGIN
++
++void LightTreeCachedNode::set_measure(const LightTreeMeasure &measure)
++{
++  for (int n = 0; n < 3; ++n) {
++    minimum[n] = measure.bbox.min[n];
++    maximum[n] = measure.bbox.max[n];
++    axis[n] = measure.bcone.axis[n];
++  }
++  theta_o = measure.bcone.theta_o;
++  theta_e = measure.bcone.theta_e;
++  energy = measure.energy;
++}
++
++LightTreeMeasure LightTreeCachedNode::measure() const
++{
++  LightTreeMeasure result;
++  result.bbox.min = make_float3(minimum[0], minimum[1], minimum[2]);
++  result.bbox.max = make_float3(maximum[0], maximum[1], maximum[2]);
++  result.bcone = OrientationBounds(make_float3(axis[0], axis[1], axis[2]), theta_o, theta_e);
++  result.energy = energy;
++  return result;
++}
++
+ namespace {
+ constexpr size_t cache_budget = 256ull * 1024 * 1024;
+ constexpr size_t cache_entry_limit = 1024;
+@@ -65,36 +88,7 @@ MeshKey mesh_key(Scene *scene, Mesh *mesh, int object_id)
+   return key;
+ }
+ 
+-struct CachedNode {
+-  /* Store scalar components explicitly. float3 alignment and an untagged
+-   * union's unused indices otherwise cost almost another node per node.
+-   * This is exact float storage, not quantization of lighting bounds. */
+-  float minimum[3], maximum[3], axis[3], theta_o, theta_e, energy;
+-  uint bit_trail;
+-  int type, first, second;
+-
+-  void set_measure(const LightTreeMeasure &measure)
+-  {
+-    for (int n = 0; n < 3; ++n) {
+-      minimum[n] = measure.bbox.min[n];
+-      maximum[n] = measure.bbox.max[n];
+-      axis[n] = measure.bcone.axis[n];
+-    }
+-    theta_o = measure.bcone.theta_o;
+-    theta_e = measure.bcone.theta_e;
+-    energy = measure.energy;
+-  }
+-
+-  LightTreeMeasure measure() const
+-  {
+-    LightTreeMeasure result;
+-    result.bbox.min = make_float3(minimum[0], minimum[1], minimum[2]);
+-    result.bbox.max = make_float3(maximum[0], maximum[1], maximum[2]);
+-    result.bcone = OrientationBounds(make_float3(axis[0], axis[1], axis[2]), theta_o, theta_e);
+-    result.energy = energy;
+-    return result;
+-  }
+-};
++using CachedNode = LightTreeCachedNode;
+ static_assert(sizeof(CachedNode) == 64);
+ 
+ /* These are all triangle fields consumed by flattening after construction.
+@@ -111,6 +105,7 @@ struct LightTreeMeshCache::Entry {
+   vector<CachedNode> nodes;
+   vector<CachedTriangle> triangles;
+   uint64_t stamp = 0;
++  uint64_t borrowed_build = 0;
+   size_t bytes() const
+   {
+     return sizeof(*this) + key.shaders.capacity() * sizeof(ShaderKey) +
+@@ -121,7 +116,9 @@ struct LightTreeMeshCache::Entry {
+ struct LightTreeMeshCache::Impl {
+   std::unordered_map<Mesh *, Entry> entries;
+   size_t bytes = 0, hits = 0, misses = 0, evictions = 0;
++  size_t admission_skips = 0, view_nodes = 0;
+   double emitter_seconds = 0, clone_seconds = 0, store_seconds = 0;
++  double view_seconds = 0;
+   uint64_t stamp = 0, build = 0;
+   bool enabled = !environment_flag("CYCLES_HOUDINI_DISABLE_LIGHT_TREE_CACHE");
+   bool profiling = environment_flag("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
+@@ -149,6 +146,8 @@ void LightTreeMeshCache::begin_build()
+   ++impl_->build;
+   impl_->hits = impl_->misses = impl_->evictions = 0;
+   impl_->emitter_seconds = impl_->clone_seconds = impl_->store_seconds = 0;
++  impl_->admission_skips = impl_->view_nodes = 0;
++  impl_->view_seconds = 0;
+ }
+ 
+ const LightTreeMeshCache::Entry *LightTreeMeshCache::find(Scene *scene, Mesh *mesh, int object_id)
+@@ -159,11 +158,25 @@ const LightTreeMeshCache::Entry *LightTreeMeshCache::find(Scene *scene, Mesh *me
+   }
+   auto found = i.entries.find(mesh);
+   if (found != i.entries.end()) {
+-    if (found->second.key == mesh_key(scene, mesh, object_id)) {
++    const MeshKey current = mesh_key(scene, mesh, object_id);
++    if (found->second.key == current) {
+       found->second.stamp = ++i.stamp;
++      found->second.borrowed_build = i.build;
+       ++i.hits;
+       return &found->second;
+     }
++    if (i.profiling) {
++      const MeshKey &old = found->second.key;
++      std::fprintf(stderr,
++                   "CH_LIGHT_TREE_INVALIDATION {\"build\":%llu,\"revision_changed\":%s,"
++                   "\"shape_counts_changed\":%s,\"palette_changed\":%s,"
++                   "\"link_changed\":%s,\"applied_transform_changed\":%s}\n",
++                   static_cast<unsigned long long>(i.build), old.revision != current.revision ? "true" : "false",
++                   old.vertices != current.vertices || old.triangles != current.triangles ? "true" : "false",
++                   old.shaders != current.shaders ? "true" : "false",
++                   old.membership != current.membership ? "true" : "false",
++                   old.transformed != current.transformed || old.negative != current.negative ? "true" : "false");
++    }
+     i.erase(found);
+   }
+   ++i.misses;
+@@ -178,6 +191,7 @@ void LightTreeMeshCache::restore(const Entry &entry,
+                                  Progress &progress) const
+ {
+   const double started = impl_->profiling ? time_dt() : 0;
++  assert(entry.borrowed_build == impl_->build);
+   const int start = emitters.size();
+   for (size_t n = 0; n < entry.triangles.size(); ++n) {
+     if ((n & 255) == 0 && progress.get_cancel()) {
+@@ -194,35 +208,22 @@ void LightTreeMeshCache::restore(const Entry &entry,
+     emitter.measure.bcone.theta_e = triangle.theta_e;
+     emitter.centroid = zero_float3();
+   }
+-  const double clone_at = impl_->profiling ? time_dt() : 0;
+-  const auto restore_node = [&](const auto &self, int index, LightTreeNode *target) -> void {
+-    if (progress.get_cancel()) {
+-      return;
+-    }
+-    const auto &node = entry.nodes[index];
+-    target->measure = node.measure();
+-    target->bit_trail = node.bit_trail;
+-    target->object_id = object_id;
+-    /* Local primitives currently share their representative object's mask.
+-     * Store validates this invariant rather than dropping linking metadata. */
+-    target->light_link = entry.triangles.empty() ? LightTreeLightLink() :
+-                                                 LightTreeLightLink(entry.key.membership);
+-    if (node.type & LIGHT_TREE_LEAF) {
+-      target->make_leaf(start + node.first, node.second);
+-    }
+-    else {
+-      target->variant_type = LightTreeNode::Inner();
+-      target->get_inner().children[0] = builder.create_node(LightTreeMeasure::empty, 0);
+-      target->get_inner().children[1] = builder.create_node(LightTreeMeasure::empty, 0);
+-      self(self, node.first, target->get_inner().children[0].get());
+-      self(self, node.second, target->get_inner().children[1].get());
+-    }
+-    target->type = node.type;
+-  };
+-  restore_node(restore_node, 0, root);
++  const double view_at = impl_->profiling ? time_dt() : 0;
++  const auto &node = entry.nodes[0];
++  root->measure = node.measure();
++  root->bit_trail = node.bit_trail;
++  root->object_id = object_id;
++  root->light_link = entry.triangles.empty() ? LightTreeLightLink() :
++                                             LightTreeLightLink(entry.key.membership);
++  root->type = node.type;
++  root->variant_type = LightTreeNode::Cached{entry.nodes.data(), int(entry.nodes.size()), start};
++  /* The root placeholder is already counted. These logical nodes occupy their
++   * normal kernel slots, but require no individual host allocations. */
++  builder.num_nodes += int(entry.nodes.size()) - 1;
++  impl_->view_nodes += entry.nodes.size();
+   if (impl_->profiling) {
+-    impl_->emitter_seconds += clone_at - started;
+-    impl_->clone_seconds += time_dt() - clone_at;
++    impl_->emitter_seconds += view_at - started;
++    impl_->view_seconds += time_dt() - view_at;
+   }
+ }
+ 
+@@ -282,9 +283,20 @@ void LightTreeMeshCache::store(Scene *scene,
+    * capacity plus candidate capacity stays within the same bound. */
+   while (!i.entries.empty() &&
+          (i.bytes + estimate > cache_budget || i.entries.size() >= cache_entry_limit)) {
+-    auto oldest = std::min_element(i.entries.begin(), i.entries.end(), [](const auto &a, const auto &b) {
+-      return a.second.stamp < b.second.stamp;
+-    });
++    auto oldest = i.entries.end();
++    for (auto candidate = i.entries.begin(); candidate != i.entries.end(); ++candidate) {
++      /* A view into these exact vectors is still used by this builder. Decline
++       * admission if necessary; never invalidate a view or exceed the budget.
++       * begin_build runs only after the previous short-lived builder retires. */
++      if (candidate->second.borrowed_build != i.build &&
++          (oldest == i.entries.end() || candidate->second.stamp < oldest->second.stamp)) {
++        oldest = candidate;
++      }
++    }
++    if (oldest == i.entries.end()) {
++      ++i.admission_skips;
++      return;
++    }
+     i.erase(oldest);
+     ++i.evictions;
+   }
+@@ -365,10 +377,12 @@ void LightTreeMeshCache::report(bool complete) const
+                  "CH_LIGHT_TREE_CACHE {\"build\":%llu,\"enabled\":%s,\"complete\":%s,"
+                  "\"hits\":%zu,\"misses\":%zu,\"evictions\":%zu,\"entries\":%zu,"
+                  "\"bytes\":%zu,\"budget_bytes\":%zu,\"emitter_seconds\":%.9f,"
+-                 "\"clone_seconds\":%.9f,\"store_seconds\":%.9f}\n",
++                 "\"clone_seconds\":%.9f,\"store_seconds\":%.9f,\"view_seconds\":%.9f,"
++                 "\"view_nodes\":%zu,\"admission_skips\":%zu}\n",
+                  static_cast<unsigned long long>(i.build), i.enabled ? "true" : "false",
+                  complete ? "true" : "false", i.hits, i.misses, i.evictions, i.entries.size(),
+-                 i.bytes, cache_budget, i.emitter_seconds, i.clone_seconds, i.store_seconds);
++                 i.bytes, cache_budget, i.emitter_seconds, i.clone_seconds, i.store_seconds,
++                 i.view_seconds, i.view_nodes, i.admission_skips);
+   }
+ }
+ 
+diff --git a/src/scene/light_tree_cache.h b/src/scene/light_tree_cache.h
+index 9c23a8d33babc55bfcaeec04fa0e4dfedbc64585..5ce9d62bc78e147b34e8e33f6ba04a97e82b7703 100644
+--- a/src/scene/light_tree_cache.h
++++ b/src/scene/light_tree_cache.h
+@@ -15,9 +15,22 @@ class Progress;
+ class LightTree;
+ struct LightTreeNode;
+ struct LightTreeEmitter;
++struct LightTreeMeasure;
++
++/* Exact scalar records used directly by kernel flattening. They contain no
++ * scene ownership or current kernel indices. */
++struct LightTreeCachedNode {
++  float minimum[3], maximum[3], axis[3], theta_o, theta_e, energy;
++  uint bit_trail;
++  int type, first, second;
++  void set_measure(const LightTreeMeasure &measure);
++  LightTreeMeasure measure() const;
++};
+ 
+ /* Exact, bounded retention of mesh-local construction. No scene node ownership
+- * or kernel indices survive here; current instance state is rebuilt normally. */
++ * or kernel indices survive here; current instance state is rebuilt normally.
++ * A short-lived builder may borrow entries until flattening and destruction.
++ * Borrowed entries cannot be evicted/admitted over during that build. */
+ class LightTreeMeshCache {
+  public:
+   struct Entry;
+diff --git a/src/scene/light_tree_debug.cpp b/src/scene/light_tree_debug.cpp
+index f3c7b24d8aa0ce9dda8e24548d0da0ab9f4fe94a..ab762d592bf143eb3635cb33064cb24540113e6f 100644
+--- a/src/scene/light_tree_debug.cpp
++++ b/src/scene/light_tree_debug.cpp
+@@ -49,6 +49,9 @@ static void recursive_print_node(FILE *file, const LightTreeNode &node)
+   if (node.is_distant()) {
+     label += string_printf("| <f%d> distant", field++);
+   }
++  if (node.is_cached()) {
++    label += string_printf("| <f%d> cached subtree: %d nodes", field++, node.get_cached().num_nodes);
++  }
+ 
+   if (node.light_link.set_membership == ~uint64_t(0)) {
+     label += string_printf("| <f%d> set membership:ALL", field++);
+@@ -75,7 +78,7 @@ static void recursive_print_node(FILE *file, const LightTreeNode &node)
+   fprintf(file, "  shape = \"record\"\n");
+   fprintf(file, "];\n");
+ 
+-  if (node.is_inner()) {
++  if (node.is_inner() && !node.is_cached()) {
+     const LightTreeNode &left_node = *node.get_inner().children[LightTree::left];
+     const LightTreeNode &right_node = *node.get_inner().children[LightTree::right];
+ 
+@@ -156,6 +159,12 @@ static void recursive_print_node_relations(FILE *file,
+ {
+   const string from_node_id = get_node_id(node);
+ 
++  /* Host plots collapse borrowed subtrees; full flattened structure remains
++   * available through the kernel-tree plotter. */
++  if (node.is_cached()) {
++    return;
++  }
++
+   if (node.is_leaf() || node.is_distant()) {
+     const LightTreeEmitter *emitters = tree.get_emitters();
+     for (int i = 0; i < node.get_leaf().num_emitters; i++) {

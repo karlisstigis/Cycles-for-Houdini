@@ -1,0 +1,854 @@
+From bcd2be84f1326cf875288d505ac7e8dd6c998878 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:42 +0100
+Subject: [PATCH] resampled light sampling
+
+Locked-Patch: patches/0073-resampled-light-sampling.patch
+Locked-Patch-SHA256: 6168057095e55f46ef0a1a3317d25314e1b27c5611f7e4abc2e941d7e3ad5c14
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_rls_hair_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 9a6046495e67f65a34d8129ffef090fb85bd3d08
+Previous-Patch: patches/0073-resampled-light-sampling.patch
+Previous-Patch-SHA256: 6168057095e55f46ef0a1a3317d25314e1b27c5611f7e4abc2e941d7e3ad5c14
+Rationale: Resampled light sampling adds a RIS next-event estimator, candidate budgets, importance weighting and clamp semantics across CPU/GPU kernels.
+Contract: resampled light sampling
+Tests: tests/houdini_rls_hair_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/CMakeLists.txt b/src/kernel/CMakeLists.txt
+index a53d8873923b5dd4f97d7a9b551e40640d89542e..954083688b30bc3d12c55830ee04d440707225b7 100644
+--- a/src/kernel/CMakeLists.txt
++++ b/src/kernel/CMakeLists.txt
+@@ -197,6 +197,8 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
+   integrator/megakernel.h
+   integrator/mnee.h
+   integrator/path_state.h
++  integrator/pt_ris_nee.h
++  integrator/pt_ris_nee_common.h
+   integrator/shade_background.h
+   integrator/shade_light.h
+   integrator/shade_shadow.h
+diff --git a/src/kernel/data_template.h b/src/kernel/data_template.h
+index 6088415a916a12f3c52e8c03cb220d0e7820d5b0..ce00bc7023be9e96e380eaa259cb3c4fe0b66f00 100644
+--- a/src/kernel/data_template.h
++++ b/src/kernel/data_template.h
+@@ -237,6 +237,11 @@ KERNEL_STRUCT_MEMBER(integrator, int, use_volume_guiding)
+ KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_direct_light)
+ KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_mis_weights)
+ KERNEL_STRUCT_MEMBER(integrator, int, pad1)
++/* Resampled Light Sampling (RIS next-event estimation). */
++KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_mode)
++KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_ml)
++KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_mb)
++KERNEL_STRUCT_MEMBER(integrator, int, pt_ris_pad)
+ 
+ KERNEL_STRUCT_MEMBER(integrator, float2, pixel_jitter)
+ KERNEL_STRUCT_END(KernelIntegrator)
+diff --git a/src/kernel/film/light_passes.h b/src/kernel/film/light_passes.h
+index 0d24c3858550b02be566bbfd0fa25a1898922b13..5a51d9cbbc040a2ca546840e8641c96998588bc6 100644
+--- a/src/kernel/film/light_passes.h
++++ b/src/kernel/film/light_passes.h
+@@ -147,6 +147,22 @@ ccl_device_forceinline void film_clamp_light(KernelGlobals kg,
+ #endif
+ }
+ 
++/* Clamp the native-equivalent value X*k (threshold c/k) and keep the importance weight.
++ * k = 1 unless Resampled Light Sampling selected the shadow-path sample. */
++ccl_device_forceinline void film_clamp_light_scaled(KernelGlobals kg,
++                                                    ccl_private Spectrum *L,
++                                                    const int bounce,
++                                                    const float k)
++{
++  if (k == 1.0f) {
++    film_clamp_light(kg, L, bounce);
++    return;
++  }
++  *L *= k;
++  film_clamp_light(kg, L, bounce);
++  *L /= k;
++}
++
+ /* --------------------------------------------------------------------
+  * Pass accumulation utilities.
+  */
+@@ -492,7 +508,12 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
+ {
+   /* The throughput for shadow paths already contains the light shader evaluation. */
+   Spectrum contribution = INTEGRATOR_STATE(state, shadow_path, throughput);
+-  film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
++  film_clamp_light_scaled(kg,
++                          &contribution,
++                          INTEGRATOR_STATE(state, shadow_path, bounce),
++                          kernel_data.integrator.pt_ris_mode ?
++                              INTEGRATOR_STATE(state, shadow_path, pt_ris_clamp_scale) :
++                              1.0f);
+ 
+   ccl_global float *buffer = film_pass_pixel_render_buffer_shadow(kg, state, render_buffer);
+ 
+diff --git a/src/kernel/integrator/path_state.h b/src/kernel/integrator/path_state.h
+index 5cce14054aad5319e2fcb55f09289f8fb6cbad0e..c9d07286769c22caf67de70b102fb68ed0034cb3 100644
+--- a/src/kernel/integrator/path_state.h
++++ b/src/kernel/integrator/path_state.h
+@@ -61,6 +61,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
+   INTEGRATOR_STATE_WRITE(state, path, visibility) = PATH_RAY_VISIBILITY_CAMERA;
+   INTEGRATOR_STATE_WRITE(state, path, flag) = PATH_RAY_MIS_SKIP | PATH_RAY_TRANSPARENT_BACKGROUND;
+   INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = 0.0f;
++  INTEGRATOR_STATE_WRITE(state, path, pt_ris_marker) = 0;
+   INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = FLT_MAX;
+   INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = 1.0f;
+   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
+diff --git a/src/kernel/integrator/pt_ris_nee.h b/src/kernel/integrator/pt_ris_nee.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..068a57fd9ddd98dea93751eb3948aaac057e5b27
+--- /dev/null
++++ b/src/kernel/integrator/pt_ris_nee.h
+@@ -0,0 +1,322 @@
++/* SPDX-License-Identifier: Apache-2.0
++ *
++ * Resampled Light Sampling (RIS next-event estimation), Cycles Houdini integration.
++ * Selection part, used by integrate_surface_direct_light(). Candidates: light samples on the
++ * selected light plus BSDF directions intersected with it, resampled by the unshadowed
++ * contribution (Talbot et al. 2005; unbiased contribution weight, balance-heuristic candidate MIS). */
++#pragma once
++/* Included inside CCL_NAMESPACE by shade_surface.h (after pt_ris_nee_common.h). */
++
++struct PTRisResult {
++  int used;        /* 1 when the returned LightSample came from RIS */
++  float mis;       /* NEE partition weight w_N(Y) that replaces the native NEE MIS weight */
++  float clamp_k;   /* shadow film clamp factor 1/r (native-equivalent clamping) */
++};
++
++ccl_device_inline PTRisResult pt_ris_result_none()
++{
++  PTRisResult r;
++  r.used = 0;
++  r.mis = 1.0f;
++  r.clamp_k = 1.0f;
++  return r;
++}
++
++/* Mode of the vertex (see pt_ris_vertex_mode_at). */
++ccl_device_inline int pt_ris_vertex_mode(KernelGlobals kg,
++                                         ConstIntegratorState state,
++                                         const ccl_private ShaderData *sd)
++{
++  if (kernel_data.integrator.pt_ris_mode == 0) {
++    return 0;
++  }
++  /* Huang hair returns a placeholder MIS PDF, not its directional sampling density.
++   * It cannot participate in the RIS candidate mixture. Keep the entire vertex native,
++   * including the forward lamp-hit partition written by integrate_surface_bsdf_bssrdf_bounce.
++   * A mixed material must also fall back: every closure contributes to the candidate PDF. */
++  for (int i = 0; i < sd->num_closure; i++) {
++    if (sd->closure[i].type == CLOSURE_BSDF_HAIR_HUANG_ID) {
++      return 0;
++    }
++  }
++#ifdef __MNEE__
++  /* MNEE already sampled the light at this vertex: native NEE, native forward weights. */
++  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
++      (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
++  {
++    return 0;
++  }
++#endif
++  return pt_ris_vertex_mode_at(kg,
++                               int(INTEGRATOR_STATE(state, path, bounce)),
++                               sd->runtime_flag,
++                               INTEGRATOR_STATE(state, path, flag),
++                               sd->object_flag);
++}
++
++/* BSDF candidate: intersect the chosen lamp only and fill a LightSample like the native
++ * sampler would for that point (pdf with the same transmission convention as the sampler). */
++ccl_device_inline bool pt_ris_bsdf_candidate_on_lamp(KernelGlobals kg,
++                                                     const ccl_global KernelLight *klight,
++                                                     const int lamp,
++                                                     const float3 P,
++                                                     const float3 N,
++                                                     const float3 D,
++                                                     const int runtime_flags,
++                                                     ccl_private LightSample *c)
++{
++  Ray ray ccl_optional_struct_init;
++  ray.P = P;
++  ray.D = D;
++  ray.tmin = 0.0f;
++  ray.tmax = FLT_MAX;
++  float t = 0.0f;
++  LightEval le;
++  const uint32_t pf = (runtime_flags & SR_BSDF_HAS_TRANSMISSION) ? PATH_RAY_MIS_HAD_TRANSMISSION : 0u;
++  if (klight->type == LIGHT_AREA) {
++    if (!area_light_intersect(klight, &ray, &t)) {
++      return false;
++    }
++    le = area_light_eval_from_intersection(klight, P, D, t);
++    c->Ng = klight->area.dir;
++    c->P = P + D * t;
++  }
++  else if (klight->type == LIGHT_POINT || klight->type == LIGHT_SPOT) {
++    const bool hit = (klight->type == LIGHT_SPOT) ? spot_light_intersect(klight, &ray, &t) :
++                                                    point_light_intersect(klight, &ray, &t);
++    if (!hit) {
++      return false;
++    }
++    le = (klight->type == LIGHT_SPOT) ? spot_light_eval_from_intersection(kg, klight, P, D, t, N, pf) :
++                                        point_light_eval_from_intersection(klight, P, D, t, N, pf);
++    c->P = P + D * t;
++    if (klight->spot.is_sphere) {
++      c->Ng = normalize(c->P - klight->co);
++      c->P = c->Ng * klight->spot.radius + klight->co;
++    }
++    else {
++      c->Ng = -D;
++    }
++  }
++  else {
++    return false;
++  }
++  if (!(le.eval_fac > 0.0f) || !(le.pdf > 0.0f)) {
++    return false;
++  }
++  c->type = LightType(klight->type);
++  c->shader = klight->shader_id;
++  c->object = klight->object_id;
++  c->prim = lamp;
++  c->group = object_lightgroup(kg, c->object);
++  c->t = t;
++  c->D = D;
++  c->eval_fac = le.eval_fac;
++  c->pdf = le.pdf;
++  return true;
++}
++
++/* Full one-loop evaluation at direction wo: native mixture eval f (with light
++ * exclusions), native MIS pdf (Cycles one-sample model incl. BSSRDF weight) and the
++ * density of the RIS BSDF-candidate technique (closure pick pi_i, then its pdf). */
++ccl_device_inline void pt_ris_bsdf_eval(KernelGlobals kg,
++                                        ccl_private ShaderData *sd,
++                                        const float3 wo,
++                                        const uint light_shader_flags,
++                                        const float sum_bsdf_weight,
++                                        const float inv_bsdf_count,
++                                        ccl_private BsdfEval *f,
++                                        ccl_private float *pdf_mis,
++                                        ccl_private float *pdf_candidate)
++{
++  bsdf_eval_init(f, zero_spectrum());
++  float sum_pdf = 0.0f, sum_sample_weight = 0.0f, cand = 0.0f;
++  for (int i = 0; i < sd->num_closure; i++) {
++    const ccl_private ShaderClosure *sc = &sd->closure[i];
++    if (!CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
++      continue;
++    }
++    if (CLOSURE_IS_BSDF(sc->type)) {
++      float pdf = 0.0f;
++      const Spectrum eval = bsdf_eval(kg, sd, sc, wo, &pdf);
++      if (pdf != 0.0f) {
++        if (!_surface_shader_exclude(sc->type, light_shader_flags)) {
++          bsdf_eval_accum(f, sc, wo, eval * sc->weight);
++        }
++        sum_pdf += pdf * sc->sample_weight;
++        const float pi = 0.5f * sc->sample_weight / sum_bsdf_weight + 0.5f * inv_bsdf_count;
++        cand += pi * pdf;
++      }
++    }
++    sum_sample_weight += sc->sample_weight;
++  }
++  *pdf_mis = (sum_sample_weight > 0.0f) ? sum_pdf / sum_sample_weight : 0.0f;
++  *pdf_candidate = cand;
++}
++
++/* Light selection exactly as native light_sample_from_position, then RIS over
++ * candidates on the selected light when it is eligible. Falls back to the native
++ * sample on the already selected emitter otherwise. */
++ccl_device bool pt_ris_light_sample_from_position(KernelGlobals kg,
++                                                  IntegratorState state,
++                                                  ccl_private ShaderData *sd,
++                                                  const ccl_private RNGState *rng_state,
++                                                  ccl_private PTRisResult *res,
++                                                  const float3 rand,
++                                                  const float time,
++                                                  const float3 P,
++                                                  const float3 N,
++                                                  const int object_receiver,
++                                                  const int runtime_flags,
++                                                  const int bounce,
++                                                  const uint32_t path_flag,
++                                                  ccl_private LightSample *ls)
++{
++  const int mode = pt_ris_vertex_mode(kg, state, sd);
++  if (mode != 0) {
++    bool picked;
++#  ifdef __LIGHT_TREE__
++    if (kernel_data.integrator.use_light_tree) {
++      picked = light_tree_sample<false>(kg, rand.z, P, N, 0.0f, object_receiver, runtime_flags, ls);
++    }
++    else
++#  endif
++    {
++      picked = light_distribution_sample(kg, rand.z, ls);
++    }
++    if (!picked) {
++      return false;
++    }
++
++    int prim, object_id;
++#  ifdef __LIGHT_TREE__
++    if (kernel_data.integrator.use_light_tree) {
++      const ccl_global KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
++                                                                             ls->emitter_id);
++      prim = kemitter->light.id;
++      object_id = (prim >= 0) ? ls->object : kemitter->object_id;
++    }
++    else
++#  endif
++    {
++      const ccl_global KernelLightDistribution *kdistribution = &kernel_data_fetch(
++          light_distribution, ls->emitter_id);
++      prim = kdistribution->prim;
++      object_id = kdistribution->object_id;
++    }
++
++    const int lamp = ~prim;
++    if (prim >= 0 || !pt_ris_light_eligible(kg, lamp, pt_ris_vertex_caustics_ok(sd->object_flag))) {
++      /* Native single-sample NEE on the emitter selected above (same random numbers). */
++      return light_sample<false>(
++          kg, rand, time, P, N, object_receiver, runtime_flags, bounce, path_flag, ls);
++    }
++    if (!light_link_object_match(kg, object_receiver, object_id) ||
++        light_select_reached_max_bounces(kg, lamp, bounce))
++    {
++      return false;
++    }
++
++    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
++    const float selection = ls->pdf_selection;
++    const bool full = (mode == PT_RIS_MODE_FULL);
++    const int ML = kernel_data.integrator.pt_ris_ml;
++    const int MB = kernel_data.integrator.pt_ris_mb;
++
++    float sum_bsdf_weight = 0.0f;
++    int bsdf_count = 0;
++    for (int i = 0; i < sd->num_closure; i++) {
++      if (CLOSURE_IS_BSDF(sd->closure[i].type) && sd->closure[i].sample_weight > 0.0f) {
++        sum_bsdf_weight += sd->closure[i].sample_weight;
++        bsdf_count++;
++      }
++    }
++    const float inv_bsdf_count = (bsdf_count > 0) ? 1.0f / float(bsdf_count) : 0.0f;
++
++    uint lcg = lcg_state_init(rng_state->rng_pixel,
++                              rng_state->rng_offset,
++                              uint(rng_state->sample),
++                              0x52495331u ^ (uint(bounce) * 0x9e3779b9u));
++
++    LightSample sel = *ls;
++    float sel_phat = 0.0f, sel_mis = 0.0f, wsum = 0.0f;
++    const int total = ML + ((bsdf_count > 0) ? MB : 0);
++    const float mb_eff = (bsdf_count > 0) ? float(MB) : 0.0f;
++
++    for (int j = 0; j < total; j++) {
++      LightSample c = *ls;
++      bool valid;
++      if (j < ML) {
++        const float2 r2 = (j == 0) ? make_float2(rand.x, rand.y) :
++                                     make_float2(lcg_step_float(&lcg), lcg_step_float(&lcg));
++        valid = light_sample<false>(kg, lamp, r2, P, N, runtime_flags, path_flag, &c);
++      }
++      else {
++        /* BSDF candidate: pick a closure with pi_i, sample it, intersect light lamp only. */
++        float u = lcg_step_float(&lcg);
++        const float3 r3 = make_float3(lcg_step_float(&lcg), lcg_step_float(&lcg), lcg_step_float(&lcg));
++        const ccl_private ShaderClosure *sc = nullptr;
++        for (int i = 0; i < sd->num_closure; i++) {
++          const ccl_private ShaderClosure *s = &sd->closure[i];
++          if (!CLOSURE_IS_BSDF(s->type) || !(s->sample_weight > 0.0f)) {
++            continue;
++          }
++          const float pi = 0.5f * s->sample_weight / sum_bsdf_weight + 0.5f * inv_bsdf_count;
++          sc = s;
++          if (u < pi) {
++            break;
++          }
++          u -= pi;
++        }
++        valid = false;
++        if (sc) {
++          Spectrum eval = zero_spectrum();
++          float3 wo;
++          float pdf = 0.0f, eta = 1.0f;
++          float2 rough;
++          const int label = bsdf_sample(kg, sd, sc, r3, &eval, &wo, &pdf, &rough, &eta);
++          if (pdf > 0.0f && !(label & LABEL_SINGULAR) && !(label & LABEL_TRANSPARENT)) {
++            valid = pt_ris_bsdf_candidate_on_lamp(kg, klight, lamp, P, N, normalize(wo), runtime_flags, &c);
++          }
++        }
++      }
++      if (!valid || !(c.eval_fac > 0.0f)) {
++        continue;
++      }
++      BsdfEval f;
++      float pdf_mis, pdf_cand;
++      pt_ris_bsdf_eval(kg, sd, c.D, c.shader, sum_bsdf_weight, inv_bsdf_count, &f, &pdf_mis, &pdf_cand);
++      const float wN = full ? 1.0f : light_sample_mis_weight_nee(kg, selection * c.pdf, pdf_mis);
++      const float phat = reduce_add(fabs(bsdf_eval_sum(&f))) * c.eval_fac * wN;
++      const float denom = float(ML) * c.pdf + mb_eff * pdf_cand;
++      if (!(phat > 0.0f) || !(denom > 0.0f) || !isfinite_safe(phat / denom)) {
++        continue;
++      }
++      const float w = phat / denom;
++      wsum += w;
++      if (lcg_step_float(&lcg) * wsum < w) {
++        sel = c;
++        sel_phat = phat;
++        sel_mis = wN;
++      }
++    }
++
++    if (!(wsum > 0.0f) || !(sel_phat > 0.0f)) {
++      return false;
++    }
++    const float W = wsum / sel_phat;
++    res->used = 1;
++    res->mis = sel_mis;
++    /* r = p_L(Y) * W. Native-partition vertices clamp the native-equivalent value. */
++    res->clamp_k = full ? 1.0f : 1.0f / (sel.pdf * W);
++    if (!isfinite_safe(res->clamp_k) || !(res->clamp_k > 0.0f)) {
++      res->clamp_k = 1.0f;
++    }
++    *ls = sel;
++    ls->pdf_selection = selection;
++    ls->pdf = selection / W;
++    return ls->pdf > 0.0f;
++  }
++  return light_sample_from_position(
++      kg, rand, time, P, N, object_receiver, runtime_flags, bounce, path_flag, ls);
++}
+diff --git a/src/kernel/integrator/pt_ris_nee_common.h b/src/kernel/integrator/pt_ris_nee_common.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..74b28342709ee8707e333ea17741b4c8f7753c3b
+--- /dev/null
++++ b/src/kernel/integrator/pt_ris_nee_common.h
+@@ -0,0 +1,126 @@
++/* SPDX-License-Identifier: Apache-2.0
++ *
++ * Resampled Light Sampling (RIS next-event estimation), Cycles Houdini integration.
++ * Shared part: light eligibility, vertex mode and the forward (BSDF-hit) MIS weight.
++ * Off unless kernel_data.integrator.pt_ris_mode != 0 (Integrator socket pt_ris_nee). CPU and GPU. */
++#pragma once
++CCL_NAMESPACE_BEGIN
++
++#define PT_RIS_MODE_FULL 1   /* bounce 0: NEE-RIS carries all direct light of eligible lights */
++#define PT_RIS_MODE_NATIVE 2 /* native NEE/BSDF partition everywhere */
++
++/* Lights handled by RIS. Everything else keeps native single-sample NEE and native
++ * forward weights (per-light fallback):
++ *  - area lights, and point/spot/sphere lights with radius > 0;
++ *  - MIS on, no per-ray-type exclusions;
++ *  - any emission shader: textured/IES/node emission use the untextured eval_fac in the RIS
++ *    target and are shaded exactly only for the selected sample (native NEE/shadow path);
++ *  - light linking and shadow linking supported (receiver sets via light selection,
++ *    blocker sets via the native shadow ray, dedicated-light forward weight wrapped);
++ *  - MNEE caustic lights: everywhere except at MNEE caster/receiver vertices (native there). */
++/* Caustic (MNEE) lights are covered by RLS only at vertices that are neither MNEE casters nor
++ * receivers; there native NEE (and the native forward weight) is kept for them. */
++ccl_device_inline bool pt_ris_vertex_caustics_ok(const int object_flag)
++{
++  return !(object_flag & (SD_OBJECT_CAUSTICS_CASTER | SD_OBJECT_CAUSTICS_RECEIVER));
++}
++
++ccl_device_inline bool pt_ris_light_eligible(KernelGlobals kg, const int lamp, const bool caustics_ok)
++{
++  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
++  if (klight->type == LIGHT_POINT || klight->type == LIGHT_SPOT) {
++    if (!(klight->spot.radius > 0.0f)) {
++      return false;
++    }
++  }
++  else if (klight->type != LIGHT_AREA) {
++    return false;
++  }
++  const int shader = klight->shader_id;
++  /* Camera and volume-scatter exclusions do not affect surface NEE; diffuse/glossy/transmission
++   * exclusions are honoured by pt_ris_bsdf_eval (closure masking with the light shader flags),
++   * exactly as native NEE does. Only the shadow-catcher exclusion keeps the native path. */
++  if (!(shader & SHADER_USE_MIS) || (shader & SHADER_EXCLUDE_SHADOW_CATCHER)) {
++    return false;
++  }
++#ifdef __MNEE__
++  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) && klight->use_caustics && !caustics_ok) {
++    return false;
++  }
++#endif
++  return true;
++}
++
++/* Partition mode at a surface vertex. Called both at NEE time and when the bounce writes
++ * mis_ray_pdf (bounce not yet incremented), so both sides always agree. */
++ccl_device_inline int pt_ris_vertex_mode_at(KernelGlobals kg,
++                                            const int bounce,
++                                            const int runtime_flag,
++                                            const uint32_t path_flag,
++                                            const int object_flag)
++{
++  const int mode = kernel_data.integrator.pt_ris_mode;
++  if (mode == 0) {
++    return 0;
++  }
++  /* Shadow catcher: its passes are ratios of split-path estimates whose finite-sample value
++   * depends on the estimator, so vertices on catchers and everything after a catcher hit stay
++   * native (identical catcher output); RLS stays active elsewhere. */
++  if ((path_flag & (PATH_RAY_SHADOW_CATCHER_HIT | PATH_RAY_SHADOW_CATCHER_PASS)) ||
++      (object_flag & SD_OBJECT_SHADOW_CATCHER))
++  {
++    return 0;
++  }
++  if (!(kernel_data.integrator.use_direct_light && (runtime_flag & SR_BSDF_HAS_EVAL))) {
++    return 0;
++  }
++  /* Full partition only at the camera vertex and only without a direct clamp; otherwise the
++   * native partition (exact under clamping via the native-equivalent clamp factor). */
++  if (mode == PT_RIS_MODE_FULL && bounce == 0 && kernel_data.integrator.sample_clamp_direct == FLT_MAX) {
++    return PT_RIS_MODE_FULL;
++  }
++  return PT_RIS_MODE_NATIVE;
++}
++
++/* Forward lamp-hit weight. In full mode the vertex that wrote mis_ray_pdf carried all
++ * direct light of eligible lights with nonzero selection pdf through NEE-RIS, so the BSDF
++ * hit gets weight 0 there. Delta bounces keep the native weight. */
++ccl_device_inline float pt_ris_forward_lamp_weight(KernelGlobals kg,
++                                                   IntegratorState state,
++                                                   const PathRayVisibility path_visibility,
++                                                   const uint32_t path_flag,
++                                                   const int object_id,
++                                                   const int lamp,
++                                                   const float3 P,
++                                                   const float native_weight)
++{
++  if (!kernel_data.integrator.pt_ris_mode || !INTEGRATOR_STATE(state, path, pt_ris_marker) ||
++      (path_flag & PATH_RAY_MIS_SKIP) ||
++      !pt_ris_light_eligible(kg, lamp, INTEGRATOR_STATE(state, path, pt_ris_marker) == 1))
++  {
++    return native_weight;
++  }
++  float selection;
++#ifdef __LIGHT_TREE__
++  if (kernel_data.integrator.use_light_tree) {
++    const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
++    const float dt = INTEGRATOR_STATE(state, ray, previous_dt);
++    selection = light_tree_pdf(kg,
++                               P,
++                               N,
++                               dt,
++                               path_visibility,
++                               path_flag,
++                               0,
++                               kernel_data_fetch(light_to_tree, object_id),
++                               light_link_receiver_forward(kg, state));
++  }
++  else
++#endif
++  {
++    selection = light_distribution_pdf_lamp(kg);
++  }
++  return (selection > 0.0f) ? 0.0f : native_weight;
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/integrator/shade_dedicated_light.h b/src/kernel/integrator/shade_dedicated_light.h
+index 695cb2bd097a0ccf3c60776aa925efc712bc8e22..3f121ee323da2ad64d5e89def3947b48552157a7 100644
+--- a/src/kernel/integrator/shade_dedicated_light.h
++++ b/src/kernel/integrator/shade_dedicated_light.h
+@@ -11,6 +11,8 @@
+ 
+ #include "kernel/integrator/shade_surface.h"
+ 
++#include "kernel/integrator/pt_ris_nee_common.h"
++
+ CCL_NAMESPACE_BEGIN
+ 
+ #ifdef __SHADOW_LINKING__
+@@ -45,8 +47,16 @@ ccl_device_inline float shadow_linking_light_sample_mis_weight(
+         kg, state, path_visibility, path_flag, object_id, light_sample_pdf);
+   }
+ 
+-  return light_sample_mis_weight_forward_lamp(
+-      kg, state, path_visibility, path_flag, object_id, light_sample_pdf, P);
++  return pt_ris_forward_lamp_weight(
++      kg,
++      state,
++      path_visibility,
++      path_flag,
++      object_id,
++      light_id,
++      P,
++      light_sample_mis_weight_forward_lamp(
++          kg, state, path_visibility, path_flag, object_id, light_sample_pdf, P));
+ }
+ 
+ /* Setup ray for the shadow path.
+diff --git a/src/kernel/integrator/shade_light.h b/src/kernel/integrator/shade_light.h
+index ed54cf2ba896bc90be6c38212f0bebc126cb5b53..b98ab5fe3c1e92f2d1c66ae5a6a50a1503456d29 100644
+--- a/src/kernel/integrator/shade_light.h
++++ b/src/kernel/integrator/shade_light.h
+@@ -11,11 +11,51 @@
+ #include "kernel/light/light.h"
+ #include "kernel/light/sample.h"
+ 
++#include "kernel/integrator/pt_ris_nee_common.h"
++
+ #include "kernel/geom/object.h"
+ #include "kernel/types.h"
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++/* Resampled Light Sampling: Cycles adds MIS-weighted emission hits to the denoising albedo while
++ * features are still pending. Full mode zeroes the forward weight of eligible lamps, so the albedo
++ * keeps the native weight. */
++ccl_device_inline void pt_ris_albedo_native_delta(KernelGlobals kg,
++                                                  ConstIntegratorState state,
++                                                  const Spectrum L,
++                                                  const float w_native,
++                                                  const float w_used,
++                                                  ccl_global float *ccl_restrict render_buffer)
++{
++#ifdef __DENOISING_FEATURES__
++  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
++  if (!(path_flag & PATH_RAY_DENOISING_FEATURES) ||
++      kernel_data.film.pass_denoising_albedo == PASS_UNUSED ||
++      !(kernel_data.film.light_pass_flag & PASS_ANY))
++  {
++    return;
++  }
++  const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
++  const int clamp_bounce = INTEGRATOR_STATE(state, path, bounce) - 1;
++  Spectrum c_native = throughput * L * w_native;
++  Spectrum c_used = throughput * L * w_used;
++  film_clamp_light(kg, &c_native, clamp_bounce);
++  film_clamp_light(kg, &c_used, clamp_bounce);
++  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
++  film_write_pass_spectrum(buffer + kernel_data.film.pass_denoising_albedo,
++                           INTEGRATOR_STATE(state, path, denoising_feature_throughput) *
++                               (c_native - c_used));
++#else
++  (void)kg;
++  (void)state;
++  (void)L;
++  (void)w_native;
++  (void)w_used;
++  (void)render_buffer;
++#endif
++}
++
+ ccl_device_inline ShaderEvalResult integrate_light_forward(
+     KernelGlobals kg, IntegratorState state, ccl_global float *ccl_restrict render_buffer)
+ {
+@@ -64,14 +104,19 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
+   }
+ 
+   /* MIS weighting. */
+-  const float mis_weight = light_sample_mis_weight_forward_lamp(
++  const float native_mis_weight = light_sample_mis_weight_forward_lamp(
+       kg, state, path_visibility, path_flag, isect.object, light_eval.pdf, ray_P);
++  const float mis_weight = pt_ris_forward_lamp_weight(
++      kg, state, path_visibility, path_flag, isect.object, isect.prim, ray_P, native_mis_weight);
+ 
+   /* Write to render buffer. */
+   guiding_record_surface_emission(kg, state, eval, mis_weight);
+   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect.prim);
+   film_write_surface_emission(
+       kg, state, eval, mis_weight, render_buffer, object_lightgroup(kg, klight->object_id));
++  if (kernel_data.integrator.pt_ris_mode && native_mis_weight != mis_weight) {
++    pt_ris_albedo_native_delta(kg, state, eval, native_mis_weight, mis_weight, render_buffer);
++  }
+   return SHADER_EVAL_OK;
+ }
+ 
+diff --git a/src/kernel/integrator/shade_surface.h b/src/kernel/integrator/shade_surface.h
+index f3c0efaca3c92b550ef57daff4178564cbcbc08f..c3b378553b72575fac4ed9e7d791875c951151fd 100644
+--- a/src/kernel/integrator/shade_surface.h
++++ b/src/kernel/integrator/shade_surface.h
+@@ -13,6 +13,8 @@
+ 
+ #include "kernel/light/sample.h"
+ 
++#include "kernel/integrator/pt_ris_nee_common.h"
++
+ #include "kernel/geom/motion_triangle.h"
+ #include "kernel/geom/triangle.h"
+ 
+@@ -204,6 +206,8 @@ ccl_device int integrate_surface_ray_portal(KernelGlobals kg,
+   return label;
+ }
+ 
++#include "kernel/integrator/pt_ris_nee.h"
++
+ /* Branch off a shadow path and initialize common part of it.
+  * THe common is between the surface shading and configuration of a special shadow ray for the
+  * shadow linking. */
+@@ -336,6 +340,7 @@ ccl_device
+ 
+   LightSample ls ccl_optional_struct_init;
+   int mnee_vertex_count = 0;  // NOLINT
++  PTRisResult pt_ris = pt_ris_result_none();
+ 
+ #ifdef __MNEE__
+   if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
+@@ -352,8 +357,12 @@ ccl_device
+     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
+     const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
+ 
+-    if (!light_sample_from_position(kg,
+-                                    rand_light,
++    if (!pt_ris_light_sample_from_position(kg,
++                                           state,
++                                           sd,
++                                           rng_state,
++                                           &pt_ris,
++                                           rand_light,
+                                     sd->time,
+                                     sd->P,
+                                     sd->N,
+@@ -419,7 +428,8 @@ ccl_device
+   else
+ #endif /* __MNEE__ */
+   {
+-    const float mis_weight = light_sample_mis_weight_nee(kg, ls.pdf, bsdf_pdf);
++    const float mis_weight = pt_ris.used ? pt_ris.mis :
++                                           light_sample_mis_weight_nee(kg, ls.pdf, bsdf_pdf);
+     bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);
+ 
+     /* Path termination for constant light shader. */
+@@ -459,6 +469,10 @@ ccl_device
+       mnee_vertex_count,
+       is_constant_light_shader);
+ 
++  if (pt_ris.used) {
++    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pt_ris_clamp_scale) = pt_ris.clamp_k;
++  }
++
+   if (is_transmission) {
+ #ifdef __VOLUME__
+     volume_stack_enter_exit<true>(kg, shadow_state, sd);
+@@ -617,6 +631,10 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
+   if (!(label & LABEL_TRANSPARENT)) {
+     const float min_ray_pdf = INTEGRATOR_STATE(state, path, min_ray_pdf);
+     INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = mis_pdf;
++    INTEGRATOR_STATE_WRITE(state, path, pt_ris_marker) =
++        (pt_ris_vertex_mode(kg, state, sd) == PT_RIS_MODE_FULL) ?
++            (pt_ris_vertex_caustics_ok(sd->object_flag) ? 1 : 2) :
++            0;
+     INTEGRATOR_STATE_WRITE(state, path, mis_origin_n) = sd->N;
+     INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = fminf(unguided_bsdf_pdf, min_ray_pdf);
+ 
+diff --git a/src/kernel/integrator/shade_volume.h b/src/kernel/integrator/shade_volume.h
+index 9508be62eb0e8d63f75e3d38cb0a4a8a527ef67c..fb99f9f79c06d12019c254ce5cd48ee5ce7f6d0d 100644
+--- a/src/kernel/integrator/shade_volume.h
++++ b/src/kernel/integrator/shade_volume.h
+@@ -2703,6 +2703,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
+ 
+   /* Update path state */
+   INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = phase_pdf;
++  INTEGRATOR_STATE_WRITE(state, path, pt_ris_marker) = 0;
+   const float3 previous_P = ray->P + ray->D * ray->tmin;
+   INTEGRATOR_STATE_WRITE(state, path, mis_origin_n) = sd->P - previous_P;
+   INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = fminf(
+diff --git a/src/kernel/integrator/shadow_state_template.h b/src/kernel/integrator/shadow_state_template.h
+index 3f071aee69dbef57aad5d114643cbda431bf05c4..aa1a434d3c206cfab86d6e732620069a71ab7d40 100644
+--- a/src/kernel/integrator/shadow_state_template.h
++++ b/src/kernel/integrator/shadow_state_template.h
+@@ -11,6 +11,8 @@ KERNEL_STRUCT_MEMBER(shadow_path, uint32_t, render_pixel_index, KERNEL_FEATURE_P
+ KERNEL_STRUCT_MEMBER(shadow_path, uint32_t, sample, KERNEL_FEATURE_PATH_TRACING)
+ /* Random number generator per-pixel info. */
+ KERNEL_STRUCT_MEMBER(shadow_path, uint32_t, rng_pixel, KERNEL_FEATURE_PATH_TRACING)
++/* Resampled Light Sampling: clamp factor for native-equivalent clamping. */
++KERNEL_STRUCT_MEMBER(shadow_path, float, pt_ris_clamp_scale, KERNEL_FEATURE_PATH_TRACING)
+ /* Random number dimension offset. */
+ KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, rng_offset, KERNEL_FEATURE_PATH_TRACING)
+ /* Current ray bounce depth. */
+diff --git a/src/kernel/integrator/state_flow.h b/src/kernel/integrator/state_flow.h
+index c8939b2a9292bce41f8d9b3b8a170ad4f6b2db67..876f160fa4740ac05fb4282ebd245d96889b7f33 100644
+--- a/src/kernel/integrator/state_flow.h
++++ b/src/kernel/integrator/state_flow.h
+@@ -125,6 +125,7 @@ ccl_device_forceinline IntegratorShadowState integrator_shadow_path_init(
+       &kernel_integrator_state.next_shadow_path_index[0], 1);
+   atomic_fetch_and_add_uint32(&kernel_integrator_state.queue_counter->num_queued[next_kernel], 1);
+   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, queued_kernel) = next_kernel;
++  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pt_ris_clamp_scale) = 1.0f;
+ #  if defined(__PATH_GUIDING__)
+   if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = nullptr;
+@@ -266,6 +267,7 @@ integrator_shadow_path_init(ccl_attr_maybe_unused KernelGlobals kg,
+ {
+   IntegratorShadowState shadow_state = (is_ao) ? &state->ao : &state->shadow;
+   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, queued_kernel) = next_kernel;
++  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pt_ris_clamp_scale) = 1.0f;
+ #  if defined(__PATH_GUIDING__)
+   if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
+     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = nullptr;
+diff --git a/src/kernel/integrator/state_template.h b/src/kernel/integrator/state_template.h
+index f58b5487529b6bcdcbfbae7dacbd0e947a9c94e4..0f1532892e66531ddcab2c8594140b1e2207ad0c 100644
+--- a/src/kernel/integrator/state_template.h
++++ b/src/kernel/integrator/state_template.h
+@@ -33,6 +33,8 @@ KERNEL_STRUCT_MEMBER(path, uint16_t, portal_bounce, KERNEL_FEATURE_NODE_PORTAL)
+ KERNEL_STRUCT_MEMBER(path, uint16_t, queued_kernel, KERNEL_FEATURE_PATH_TRACING)
+ /* Random number generator per-pixel info. */
+ KERNEL_STRUCT_MEMBER(path, uint32_t, rng_pixel, KERNEL_FEATURE_PATH_TRACING)
++/* Resampled Light Sampling: partition marker of the vertex that wrote mis_ray_pdf. */
++KERNEL_STRUCT_MEMBER(path, uint8_t, pt_ris_marker, KERNEL_FEATURE_PATH_TRACING)
+ /* Random number dimension offset. */
+ KERNEL_STRUCT_MEMBER(path, uint16_t, rng_offset, KERNEL_FEATURE_PATH_TRACING)
+ /* enum PathRayVisibilityFlag, limited to bits from PATH_RAY_VISIBILITY_ALL */
+diff --git a/src/scene/integrator.cpp b/src/scene/integrator.cpp
+index 7fbf9e5a622ea234f25b1a690c19e887578ca437..8088ee2d627494541c8822d444ee8cb22a3d46cb 100644
+--- a/src/scene/integrator.cpp
++++ b/src/scene/integrator.cpp
+@@ -193,6 +193,10 @@ NODE_DEFINE(Integrator)
+   SOCKET_ENUM(denoiser_quality, "Denoiser Quality", denoiser_quality_enum, DENOISER_QUALITY_HIGH);
+   SOCKET_FLOAT(denoiser_upscale_factor, "Denoiser Upscale Factor", 1.0f);
+ 
++  SOCKET_INT(pt_ris_nee, "Resampled Light Sampling", 0);
++  SOCKET_INT(pt_ris_light_candidates, "Resampled Light Candidates", 4);
++  SOCKET_INT(pt_ris_bsdf_candidates, "Resampled BSDF Candidates", 2);
++
+   return type;
+ }
+ 
+@@ -305,6 +309,16 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
+ 
+   const GuidingParams guiding_params = get_guiding_params(device);
+   kintegrator->use_guiding = guiding_params.use;
++
++  /* Resampled Light Sampling (RIS next-event estimation). Off while baking. */
++  {
++    const int ml = get_pt_ris_light_candidates();
++    const int mb = get_pt_ris_bsdf_candidates();
++    kintegrator->pt_ris_mode = (get_pt_ris_nee() != 0 && !scene->bake_manager->get_baking()) ? 1 : 0;
++    kintegrator->pt_ris_ml = (ml < 1) ? 1 : (ml > 16) ? 16 : ml;
++    kintegrator->pt_ris_mb = (mb < 0) ? 0 : (mb > 16) ? 16 : mb;
++    kintegrator->pt_ris_pad = 0;
++  }
+   kintegrator->train_guiding = kintegrator->use_guiding;
+   kintegrator->use_surface_guiding = guiding_params.use_surface_guiding;
+   kintegrator->use_volume_guiding = guiding_params.use_volume_guiding;
+diff --git a/src/scene/integrator.h b/src/scene/integrator.h
+index 5a838557a538db3483d9f975a6f1c747a483bede..a73b22bbecba4682ad0866827a8c802e8b1f0fb9 100644
+--- a/src/scene/integrator.h
++++ b/src/scene/integrator.h
+@@ -129,6 +129,13 @@ class Integrator : public Node {
+   NODE_SOCKET_API(DenoiserQuality, denoiser_quality);
+   NODE_SOCKET_API(float, denoiser_upscale_factor);
+ 
++  /* Resampled Light Sampling (RIS next-event estimation), Cycles Houdini integration. */
++  NODE_SOCKET_API(int, pt_ris_nee)
++  NODE_SOCKET_API(int, pt_ris_light_candidates)
++  NODE_SOCKET_API(int, pt_ris_bsdf_candidates)
++#define CYCLES_HOUDINI_HAS_PT_RIS_NEE 1
++#define CYCLES_HOUDINI_HAS_PT_RIS_CANDIDATES 1
++
+   enum : uint32_t {
+     AO_PASS_MODIFIED = (1 << 0),
+     OBJECT_MANAGER = (1 << 1),

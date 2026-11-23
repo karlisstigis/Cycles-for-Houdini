@@ -1,0 +1,58 @@
+From 9a8942ffb243e8ce2c6d3e3cf1e99537548c780d Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:30 +0100
+Subject: [PATCH] Process RGB while preserving texture coverage through
+ arbitrary OCIO transforms, and invalidate derivatives produced by the earlier
+ alpha-changing route.
+
+Locked-Patch: patches/0013-texture-coverage-alpha.patch
+Locked-Patch-SHA256: 13e3458892a22711e0aa7e7ae010c278e2895eb5ca4c36fdb5680e2d580b726c
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_texture_alpha_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 91da715cae5c435e2cfa8721fa097936f4ef396c
+Previous-Patch: patches/0013-texture-coverage-alpha.patch
+Previous-Patch-SHA256: 13e3458892a22711e0aa7e7ae010c278e2895eb5ca4c36fdb5680e2d580b726c
+Rationale: Coverage alpha should survive arbitrary RGB color transforms, and obsolete derived textures must be invalidated after correcting that route.
+Contract: Process RGB while preserving texture coverage through arbitrary OCIO transforms, and invalidate derivatives produced by the earlier alpha-changing route.
+Tests: tests/houdini_texture_alpha_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/util/colorspace.cpp b/src/util/colorspace.cpp
+index fa540c9d5171ac3e68b133fa7132bcd6752c25b2..57e6d026b23011b697d4e5568e4555371a8a9afe 100644
+--- a/src/util/colorspace.cpp
++++ b/src/util/colorspace.cpp
+@@ -567,7 +567,17 @@ inline void processor_apply_pixels_rgba(const OCIO::Processor *processor,
+     }
+ 
+     if (processor) {
+-      const OCIO::PackedImageDesc desc((float *)float_pixels.data(), num_rows * width, 1, 4);
++      /* Texture coverage is separate from color. Give OCIO a three-channel
++       * view of the interleaved float4 buffer, preserving artist-authored
++       * alpha even when a colorspace contains an RGBA matrix transform. */
++      const OCIO::PackedImageDesc desc((float *)float_pixels.data(),
++                                       num_rows * width,
++                                       1,
++                                       3,
++                                       OCIO::BIT_DEPTH_F32,
++                                       sizeof(float),
++                                       sizeof(float4),
++                                       num_rows * width * sizeof(float4));
+       device_processor->apply(desc);
+     }
+ 
+diff --git a/src/util/image_maketx.cpp b/src/util/image_maketx.cpp
+index bf0d7edfca032590c98da54e1da68a85cc5f9836..a861e0e47d6c9ab39e396a5cedcab9b7c1ee8f0c 100644
+--- a/src/util/image_maketx.cpp
++++ b/src/util/image_maketx.cpp
+@@ -382,6 +382,10 @@ static std::string unique_filename_tx(const string &filepath,
+ 
+   md5.append("alpha:" + alpha_type_string(alpha_type));
+ 
++  /* Older OCIO derivatives may contain transformed coverage. Never reuse
++   * those files after making input color conversion RGB-only. */
++  md5.append("color_conversion:rgb_only/1");
++
+   md5.append("format:" + format_type_string(format_type));
+ 
+   /* For absolute texture cache path, include the full file path. This requires

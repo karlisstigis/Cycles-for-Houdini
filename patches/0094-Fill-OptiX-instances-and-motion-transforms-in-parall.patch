@@ -1,0 +1,332 @@
+From f98d12fa81e73bf2d508494a49754ff7be084563 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Sun, 15 Nov 2026 22:45:20 +0000
+Subject: [PATCH] Fill OptiX instances and motion transforms in parallel
+
+After batching the motion transform upload, the remaining host cost of
+the OptiX top-level build is filling one OptixInstance and, for moving
+objects, decomposing the motion and writing its OptixSRTMotionTransform,
+serially for every object and again for every device.
+
+Assign instance slots and motion transform offsets in object order first,
+then fill them with parallel_for; each object writes only its own instance
+and motion transform. Traversable handles are converted afterwards on the
+calling thread, so no OptiX call is made from worker threads. Instance
+order, offsets and contents are unchanged.
+
+Rationale: Per-object instance and motion transform preparation remained serial per device and dominated the top-level build with hundreds of thousands of moving instances.
+Contract: Instance descriptions, motion transform bytes, offsets and traversable handles are identical to the serial loop; OptiX API calls stay on the calling thread.
+Tests: tests/houdini_packed_velocity_smoke.py, tests/houdini_motion_smoke.py, tests/houdini_velocity_motion_smoke.py, tests/houdini_packed_deformation_smoke.py, tests/houdini_sampled_instance_attribute_smoke.py, tests/houdini_multi_gpu_animation_smoke.py
+---
+ src/device/optix/device_impl.cpp | 264 +++++++++++++++++--------------
+ 1 file changed, 144 insertions(+), 120 deletions(-)
+
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index f8b2a8bab2d51496b92e92c6f2466069efeb418a..2cae454eb30e7359d0880a90bfb02d4f989b4924 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -23,6 +23,7 @@
+ #  include "util/path.h"
+ #  include "util/progress.h"
+ #  include "util/task.h"
++#  include "util/tbb.h"
+ #  include "util/time.h"
+ 
+ #  define __KERNEL_OPTIX__
+@@ -1835,8 +1836,15 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+       motion_transform_host.resize(total_motion_transform_size);
+     }
+ 
+-    const CUDAContextScope scope(this);
+-
++    /* Assign instance slots and motion transform offsets in object order, then fill them in
++     * parallel: each object only writes its own instance and motion transform. */
++    struct InstanceSlot {
++      Object *ob;
++      OptixTraversableHandle handle;
++      size_t motion_transform_offset;
++    };
++    vector<InstanceSlot> slots;
++    slots.reserve(bvh->objects.size());
+     for (Object *ob : bvh->objects) {
+       /* Skip non-traceable objects. */
+       if (!ob->is_traceable()) {
+@@ -1844,144 +1852,160 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+       }
+ 
+       BVHOptiX *const blas = static_cast<BVHOptiX *>(ob->get_geometry()->bvh.get());
+-      OptixTraversableHandle handle = blas->traversable_handle;
++      const OptixTraversableHandle handle = blas->traversable_handle;
+       if (handle == 0) {
+         continue;
+       }
+ 
+-      OptixInstance &instance = instances[num_instances++];
+-      memset(&instance, 0, sizeof(instance));
+-
+-      /* Clear transform to identity matrix. */
+-      instance.transform[0] = 1.0f;
+-      instance.transform[5] = 1.0f;
+-      instance.transform[10] = 1.0f;
+-
+-      /* Set user instance ID to object index. */
+-      instance.instanceId = ob->get_device_index();
++      size_t offset = SIZE_MAX;
++      if (pipeline_options.usesMotionBlur && ob->use_motion()) {
++        const size_t motion_keys = max(ob->get_motion().size(), (size_t)2) - 2;
++        const size_t motion_transform_size = sizeof(OptixSRTMotionTransform) +
++                                             motion_keys * sizeof(OptixSRTData);
++        offset = align_up(motion_transform_offset, OPTIX_TRANSFORM_BYTE_ALIGNMENT);
++        motion_transform_offset = offset + motion_transform_size;
++        assert(motion_transform_offset <= motion_transform_host.size());
++      }
++      slots.push_back({ob, handle, offset});
++    }
++    num_instances = (unsigned int)slots.size();
++
++    parallel_for(blocked_range<size_t>(0, slots.size(), 64), [&](const blocked_range<size_t> &r) {
++      for (size_t slot_index = r.begin(); slot_index != r.end(); slot_index++) {
++        const InstanceSlot &slot = slots[slot_index];
++        Object *ob = slot.ob;
++        const OptixTraversableHandle handle = slot.handle;
++        OptixInstance &instance = instances[slot_index];
++        memset(&instance, 0, sizeof(instance));
++
++        /* Clear transform to identity matrix. */
++        instance.transform[0] = 1.0f;
++        instance.transform[5] = 1.0f;
++        instance.transform[10] = 1.0f;
++
++        /* Set user instance ID to object index. */
++        instance.instanceId = ob->get_device_index();
++
++        /* Add some of the object visibility bits to the mask.
++         * __prim_visibility contains the combined visibility bits of all instances, so is not
++         * reliable if they differ between instances. But the OptiX visibility mask can only
++         * contain 8 bits, so have to trade-off here and select just a few important ones.
++         */
++        instance.visibilityMask = ob->visibility_for_tracing() & 0xFF;
+ 
+-      /* Add some of the object visibility bits to the mask.
+-       * __prim_visibility contains the combined visibility bits of all instances, so is not
+-       * reliable if they differ between instances. But the OptiX visibility mask can only contain
+-       * 8 bits, so have to trade-off here and select just a few important ones.
+-       */
+-      instance.visibilityMask = ob->visibility_for_tracing() & 0xFF;
++        /* Have to have at least one bit in the mask, or else instance would always be culled. */
++        if (0 == instance.visibilityMask) {
++          instance.visibilityMask = 0xFF;
++        }
+ 
+-      /* Have to have at least one bit in the mask, or else instance would always be culled. */
+-      if (0 == instance.visibilityMask) {
+-        instance.visibilityMask = 0xFF;
+-      }
++        if (ob->get_geometry()->is_hair()) {
++          const Hair *hair = static_cast<const Hair *>(ob->get_geometry());
++          if (hair->curve_shape == CURVE_RIBBON) {
++            instance.sbtOffset = PG_HITD_CURVE_RIBBON - PG_HITD;
+ 
+-      if (ob->get_geometry()->is_hair()) {
+-        const Hair *hair = static_cast<const Hair *>(ob->get_geometry());
+-        if (hair->curve_shape == CURVE_RIBBON) {
+-          instance.sbtOffset = PG_HITD_CURVE_RIBBON - PG_HITD;
++            /* Also skip curve ribbons in local trace calls. */
++            instance.visibilityMask |= 4;
++          }
++          else if (hair->curve_shape == CURVE_THICK_LINEAR) {
++            instance.sbtOffset = PG_HITD_CURVE_LINEAR - PG_HITD;
++            if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
++              instance.sbtOffset = PG_HITD_CURVE_LINEAR_MOTION - PG_HITD;
++            }
++          }
++          else {
++            if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
++              /* Select between motion blur and non-motion blur built-in intersection module. */
++              instance.sbtOffset = PG_HITD_MOTION - PG_HITD;
++            }
++          }
++        }
++        else if (ob->get_geometry()->is_pointcloud()) {
++          /* Use the hit group that has an intersection program for point clouds. */
++          instance.sbtOffset = PG_HITD_POINTCLOUD - PG_HITD;
+ 
+-          /* Also skip curve ribbons in local trace calls. */
++          /* Also skip point clouds in local trace calls. */
+           instance.visibilityMask |= 4;
+         }
+-        else if (hair->curve_shape == CURVE_THICK_LINEAR) {
+-          instance.sbtOffset = PG_HITD_CURVE_LINEAR - PG_HITD;
+-          if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
+-            instance.sbtOffset = PG_HITD_CURVE_LINEAR_MOTION - PG_HITD;
++        {
++          /* Can disable __anyhit__kernel_optix_visibility_test by default (except for thick
++           * curves, since it needs to filter out end-caps there).
++           *
++           * It is enabled where necessary (visibility mask exceeds 8 bits or the other any-hit
++           * programs like __anyhit__kernel_optix_shadow_all_hit) via
++           * OPTIX_RAY_FLAG_ENFORCE_ANYHIT.
++           */
++          instance.flags = OPTIX_INSTANCE_FLAG_DISABLE_ANYHIT;
++        }
++
++        /* Insert motion traversable if object has motion. */
++        if (slot.motion_transform_offset != SIZE_MAX) {
++          /* Fill host side memory for motion transform with transform data. */
++          OptixSRTMotionTransform *motion_transform = reinterpret_cast<OptixSRTMotionTransform *>(
++              motion_transform_host.data() + slot.motion_transform_offset);
++          motion_transform->child = handle;
++          motion_transform->motionOptions.numKeys = ob->get_motion().size();
++          motion_transform->motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
++          motion_transform->motionOptions.timeBegin = 0.0f;
++          motion_transform->motionOptions.timeEnd = 1.0f;
++
++          OptixSRTData *const srt_data = motion_transform->srtData;
++          array<DecomposedTransform> decomp(ob->get_motion().size());
++          transform_motion_decompose(
++              decomp.data(), ob->get_motion().data(), ob->get_motion().size());
++
++          for (size_t i = 0; i < ob->get_motion().size(); ++i) {
++            /* Scale. */
++            srt_data[i].sx = decomp[i].y.w; /* scale.x.x */
++            srt_data[i].sy = decomp[i].z.w; /* scale.y.y */
++            srt_data[i].sz = decomp[i].w.w; /* scale.z.z */
++
++            /* Shear. */
++            srt_data[i].a = decomp[i].z.x; /* scale.x.y */
++            srt_data[i].b = decomp[i].z.y; /* scale.x.z */
++            srt_data[i].c = decomp[i].w.x; /* scale.y.z */
++            assert(decomp[i].z.z == 0.0f); /* scale.y.x */
++            assert(decomp[i].w.y == 0.0f); /* scale.z.x */
++            assert(decomp[i].w.z == 0.0f); /* scale.z.y */
++
++            /* Pivot point. */
++            srt_data[i].pvx = 0.0f;
++            srt_data[i].pvy = 0.0f;
++            srt_data[i].pvz = 0.0f;
++
++            /* Rotation. */
++            srt_data[i].qx = decomp[i].x.x;
++            srt_data[i].qy = decomp[i].x.y;
++            srt_data[i].qz = decomp[i].x.z;
++            srt_data[i].qw = decomp[i].x.w;
++
++            /* Translation. */
++            srt_data[i].tx = decomp[i].y.x;
++            srt_data[i].ty = decomp[i].y.y;
++            srt_data[i].tz = decomp[i].y.z;
+           }
+         }
+         else {
+-          if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
+-            /* Select between motion blur and non-motion blur built-in intersection module. */
+-            instance.sbtOffset = PG_HITD_MOTION - PG_HITD;
++          instance.traversableHandle = handle;
++
++          if (ob->get_geometry()->is_instanced()) {
++            /* Set transform matrix. */
++            memcpy(instance.transform, &ob->get_tfm(), sizeof(instance.transform));
+           }
+         }
+       }
+-      else if (ob->get_geometry()->is_pointcloud()) {
+-        /* Use the hit group that has an intersection program for point clouds. */
+-        instance.sbtOffset = PG_HITD_POINTCLOUD - PG_HITD;
+-
+-        /* Also skip point clouds in local trace calls. */
+-        instance.visibilityMask |= 4;
+-      }
+-      {
+-        /* Can disable __anyhit__kernel_optix_visibility_test by default (except for thick curves,
+-         * since it needs to filter out end-caps there).
+-         *
+-         * It is enabled where necessary (visibility mask exceeds 8 bits or the other any-hit
+-         * programs like __anyhit__kernel_optix_shadow_all_hit) via OPTIX_RAY_FLAG_ENFORCE_ANYHIT.
+-         */
+-        instance.flags = OPTIX_INSTANCE_FLAG_DISABLE_ANYHIT;
+-      }
++    });
+ 
+-      /* Insert motion traversable if object has motion. */
+-      if (pipeline_options.usesMotionBlur && ob->use_motion()) {
+-        size_t motion_keys = max(ob->get_motion().size(), (size_t)2) - 2;
+-        size_t motion_transform_size = sizeof(OptixSRTMotionTransform) +
+-                                       motion_keys * sizeof(OptixSRTData);
+-
+-        motion_transform_offset = align_up(motion_transform_offset,
+-                                           OPTIX_TRANSFORM_BYTE_ALIGNMENT);
+-        assert(motion_transform_offset + motion_transform_size <= motion_transform_host.size());
+-        CUdeviceptr motion_transform_gpu = bvh_optix->motion_transform_data->device_pointer +
+-                                           motion_transform_offset;
+-
+-        /* Fill host side memory for motion transform with transform data. */
+-        OptixSRTMotionTransform *motion_transform = reinterpret_cast<OptixSRTMotionTransform *>(
+-            motion_transform_host.data() + motion_transform_offset);
+-        motion_transform_offset += motion_transform_size;
+-        motion_transform->child = handle;
+-        motion_transform->motionOptions.numKeys = ob->get_motion().size();
+-        motion_transform->motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
+-        motion_transform->motionOptions.timeBegin = 0.0f;
+-        motion_transform->motionOptions.timeEnd = 1.0f;
+-
+-        OptixSRTData *const srt_data = motion_transform->srtData;
+-        array<DecomposedTransform> decomp(ob->get_motion().size());
+-        transform_motion_decompose(
+-            decomp.data(), ob->get_motion().data(), ob->get_motion().size());
+-
+-        for (size_t i = 0; i < ob->get_motion().size(); ++i) {
+-          /* Scale. */
+-          srt_data[i].sx = decomp[i].y.w; /* scale.x.x */
+-          srt_data[i].sy = decomp[i].z.w; /* scale.y.y */
+-          srt_data[i].sz = decomp[i].w.w; /* scale.z.z */
+-
+-          /* Shear. */
+-          srt_data[i].a = decomp[i].z.x; /* scale.x.y */
+-          srt_data[i].b = decomp[i].z.y; /* scale.x.z */
+-          srt_data[i].c = decomp[i].w.x; /* scale.y.z */
+-          assert(decomp[i].z.z == 0.0f); /* scale.y.x */
+-          assert(decomp[i].w.y == 0.0f); /* scale.z.x */
+-          assert(decomp[i].w.z == 0.0f); /* scale.z.y */
+-
+-          /* Pivot point. */
+-          srt_data[i].pvx = 0.0f;
+-          srt_data[i].pvy = 0.0f;
+-          srt_data[i].pvz = 0.0f;
+-
+-          /* Rotation. */
+-          srt_data[i].qx = decomp[i].x.x;
+-          srt_data[i].qy = decomp[i].x.y;
+-          srt_data[i].qz = decomp[i].x.z;
+-          srt_data[i].qw = decomp[i].x.w;
+-
+-          /* Translation. */
+-          srt_data[i].tx = decomp[i].y.x;
+-          srt_data[i].ty = decomp[i].y.y;
+-          srt_data[i].tz = decomp[i].y.z;
+-        }
++    const CUDAContextScope scope(this);
+ 
+-        /* Get traversable handle to motion transform. The data is uploaded below, before the
+-         * acceleration structure build reads it. */
++    /* Get traversable handles to motion transforms. The data is uploaded below, before the
++     * acceleration structure build reads it. */
++    for (size_t slot_index = 0; slot_index < slots.size(); slot_index++) {
++      if (slots[slot_index].motion_transform_offset != SIZE_MAX) {
+         optixConvertPointerToTraversableHandle(context,
+-                                               motion_transform_gpu,
++                                               bvh_optix->motion_transform_data->device_pointer +
++                                                   slots[slot_index].motion_transform_offset,
+                                                OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM,
+-                                               &instance.traversableHandle);
+-      }
+-      else {
+-        instance.traversableHandle = handle;
+-
+-        if (ob->get_geometry()->is_instanced()) {
+-          /* Set transform matrix. */
+-          memcpy(instance.transform, &ob->get_tfm(), sizeof(instance.transform));
+-        }
++                                               &instances[slot_index].traversableHandle);
+       }
+     }
+ 

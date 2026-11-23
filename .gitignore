@@ -1,0 +1,17 @@
+/build/
+# What "START HERE - Build Cycles for Houdini.cmd" makes inside the project folder (scripts/easy-common.ps1).
+/_work/
+/Installers/
+/artifacts/
+/third_party/
+/dist/
+/tmp/
+.tmp/
+/cycles_background/
+/UI_mockup/
+__pycache__/
+*.pyc
+*.hip*
+*.exr
+*.png
+*.pdb

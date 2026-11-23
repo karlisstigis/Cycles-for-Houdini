@@ -1,0 +1,130 @@
+From 3aa4e8a412f69cb30c8135dc2f50b6853d5da70b Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Mon, 16 Nov 2026 01:35:28 +0000
+Subject: [PATCH 96/96] Emit object attribute maps and offsets in parallel
+
+After the attribute tables are filled, two loops still visit every object
+serially: writing its attribute map entries and terminator, and caching its
+attribute offsets in the kernel object. Both are linear in the object count.
+
+Map offsets are already assigned to all objects in object order before the
+entries are written, and each object writes only its own entries; the kernel
+object offsets of each object depend only on the finished attribute map. Run
+both loops with parallel_for. Attribute ids of object attribute names already
+exist, because each name is requested by its geometry whose entries are
+emitted first, so the id lookup from worker threads assigns no new ids; a
+per-range cache avoids repeating the locked lookup for the same name.
+
+Rationale: The object part of the attribute map and the kernel object attribute offsets were written serially for every object on every geometry update.
+Contract: Attribute map entries, object attribute map offsets and kernel object attribute offsets are identical to the serial loops; attribute ids are unchanged.
+Tests: tests/houdini_packed_instance_attribute_smoke.py, tests/houdini_sampled_instance_attribute_smoke.py, tests/houdini_packed_cd_smoke.py, tests/houdini_object_properties_smoke.py
+---
+ src/scene/geometry_attributes.cpp | 34 ++++++++++++++++++++++++++++---
+ src/scene/object.cpp              | 21 +++++++++++++++----
+ 2 files changed, 48 insertions(+), 7 deletions(-)
+
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index 7ac13683edaacc3f7f4b0af27138acdffc84e1a4..25a2dca4c31d8764c47917807409e2e241b58aa9 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -269,7 +269,13 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+     modified |= emit_attribute_map_terminator(attr_map, index, false, 0);
+   }
+ 
+-  for (size_t i = 0; i < scene->objects.size(); i++) {
++  /* Each object writes only its own map entries, at offsets assigned above. Object
++   * attribute names are requested by their geometry, so their ids already exist. */
++  const auto emit_object = [&](const size_t i,
++                               ustring &cached_name,
++                               uint64_t &cached_id,
++                               bool &cached) {
++    bool modified = false;
+     Object *object = scene->objects[i];
+     AttributeRequestSet &attributes = object_attributes[i];
+ 
+@@ -280,7 +286,12 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+       for (AttributeRequest &req : attributes.requests) {
+         uint64_t id;
+         if (req.std == ATTR_STD_NONE) {
+-          id = scene->shader_manager->get_attribute_id(req.name);
++          if (!cached || req.name != cached_name) {
++            cached_id = scene->shader_manager->get_attribute_id(req.name);
++            cached_name = req.name;
++            cached = true;
++          }
++          id = cached_id;
+         }
+         else {
+           id = scene->shader_manager->get_attribute_id(req.std);
+@@ -292,7 +303,24 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+ 
+       modified |= emit_attribute_map_terminator(attr_map, index, true, object->geometry->attr_map_offset);
+     }
+-  }
++    return modified;
++  };
++
++  std::atomic<bool> objects_modified = false;
++  parallel_for(blocked_range<size_t>(0, scene->objects.size(), 1024),
++               [&](const blocked_range<size_t> &r) {
++                 ustring cached_name;
++                 uint64_t cached_id = 0;
++                 bool cached = false;
++                 bool range_modified = false;
++                 for (size_t i = r.begin(); i != r.end(); i++) {
++                   range_modified |= emit_object(i, cached_name, cached_id, cached);
++                 }
++                 if (range_modified) {
++                   objects_modified = true;
++                 }
++               });
++  modified |= objects_modified;
+ 
+   /* copy to device */
+   if (modified) {
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index e2a8702e30d4411bfe858ca865a776e0f00448d1..2cec689bdfaa023e9a27b21dcad538e249af40ad 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -30,6 +30,7 @@
+ #include "util/vector.h"
+ 
+ #include "kernel/geom/attribute.h"
++#include <atomic>
+ #include <stdexcept>
+ 
+ CCL_NAMESPACE_BEGIN
+@@ -1293,9 +1294,10 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+ 
+   KernelObject *kobjects = dscene->objects.data();
+ 
+-  bool update = false;
+-
+-  for (Object *object : scene->objects) {
++  /* Each object only writes its own kernel object and reads the attribute map,
++   * so objects are updated in parallel. */
++  const auto update_object = [&](Object *object) {
++    bool update = false;
+     Geometry *geom = object->geometry;
+ 
+     KernelObject &kobject = kobjects[object->index];
+@@ -1411,7 +1413,18 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+       kobject.mesh_volume.num_prims = numprims;
+       update = true;
+     }
+-  }
++    return update;
++  };
++
++  std::atomic<bool> update = false;
++  parallel_for(blocked_range<size_t>(0, scene->objects.size(), 1024),
++               [&](const blocked_range<size_t> &r) {
++                 for (size_t i = r.begin(); i != r.end(); i++) {
++                   if (update_object(scene->objects[i])) {
++                     update = true;
++                   }
++                 }
++               });
+ 
+   if (update) {
+     dscene->objects.copy_to_device();

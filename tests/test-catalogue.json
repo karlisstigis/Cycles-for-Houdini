@@ -1,0 +1,6378 @@
+{
+  "schema_version": 1,
+  "policy": "tests/TESTING.md",
+  "nightly_exclusions": {
+    "houdini_memory_smoke.py": "Calibrated telemetry requires an NVIDIA GeForce RTX 4090 and matching Windows DXGI counters. Run with -Tests on that workstation.",
+    "houdini_device_selection_smoke.py": "Workstation certification requires two physical GPUs with both CUDA and OptiX; run explicitly with -Tests on that hardware.",
+    "houdini_viewer_memory_smoke.py": "Workstation telemetry certification requires two physical OptiX GPUs and working Windows DXGI per-GPU counters; run explicitly with -Tests."
+  },
+  "headless": [
+    {
+      "test": "runtime_assets_test.py",
+      "report": "artifacts/stage0/runtime-assets/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "native_test_runtime_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "blend_cache_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk",
+        "blender"
+      ]
+    },
+    {
+      "test": "core_subdivision_count_overflow_smoke.py",
+      "report": "artifacts/stage2/subdivision/count-overflow/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_object_volume_bounds_smoke.py",
+      "report": "artifacts/stage2/objects/volume-bounds/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_point_lifetime_smoke.py",
+      "report": "artifacts/stage2/particles/lifetime/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "verification_outcome_test.py",
+      "report": "artifacts/stage0/verification-outcome/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "native_verification_archive_test.py",
+      "report": "artifacts/stage0/native-verification-archive/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "release_package_test.py",
+      "report": "artifacts/release-package-unit.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "sdk_dependency_policy_test.py",
+      "report": "artifacts/sdk-dependency-policy-unit.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "startup_dependency_guard_test.py",
+      "report": "artifacts/startup-dependency-guard-unit.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "material_override_evaluation_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "material_override_expression_test.py",
+      "report": "artifacts/material-override-expressions-unit.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "camera_dof_motion_source_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "camera_intrinsic_reference_test.py",
+      "report": "artifacts/stage2/cameras/intrinsic-motion/reference-unit.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "tapered_volume_reference_test.py",
+      "report": "artifacts/stage3/volumes/tapered/reference-unit.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_startup_dependency_recovery_smoke.py",
+      "report": "artifacts/stage0/startup-dependency/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "control_bridge_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_native_smoke.py",
+      "report": "artifacts/stage0/houdini-native-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_rop_layout_smoke.py",
+      "report": "artifacts/rop-layout/houdini-rop-layout-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_showcase_refresh_smoke.py",
+      "report": "artifacts/current-schema-cleanup/showcase/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_display_smoke.py",
+      "report": "artifacts/stage1/houdini-display-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "display_queue_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "queued_feedback_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_cop_image_ownership_smoke.py",
+      "report": "artifacts/stage3/textures/cop-ownership/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_cop_texture_smoke.py",
+      "report": "artifacts/stage3/textures/cop-render/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_cop_world_smoke.py",
+      "report": "artifacts/stage3/world/cop/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_environment_recovery_smoke.py",
+      "report": "artifacts/stage3/world/recovery/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_cop_shutter_smoke.py",
+      "report": "artifacts/stage3/textures/cop-shutter/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_cop_batch_smoke.py",
+      "report": "artifacts/stage3/textures/cop-batch/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_owned_image_smoke.py",
+      "report": "artifacts/stage3/textures/owned-engine/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_bypass_preview_smoke.py",
+      "report": "artifacts/stage3/materials/bypass-preview/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_input_states_smoke.py",
+      "report": "artifacts/stage3/materials/input-states/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_hash_displacement_smoke.py",
+      "report": "artifacts/stage3/materials/hash-displacement/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_hash_displacement_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/hash-displacement/recovery-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_coordinate_displacement_smoke.py",
+      "report": "artifacts/stage3/displacement-camera-coordinates/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_scene_query_displacement_smoke.py",
+      "report": "artifacts/stage3/displacement-scene-query/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "soho_update_guard_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_scene_observer_smoke.py",
+      "report": "artifacts/stage3/world/recovery/observer-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_motion_smoke.py",
+      "report": "artifacts/stage2/motion/houdini-motion-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_panel_motion_timing_smoke.py",
+      "report": "artifacts/stage1/panel-motion-timing/houdini-panel-motion-timing-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [
+        "houdini_motion_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_display_queue_smoke.py",
+      "report": "artifacts/stage1/display-queue/houdini-display-queue-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_gpu_input_ownership_smoke.py",
+      "report": "artifacts/stage1/display-input/ownership-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_display_storage_smoke.py",
+      "report": "artifacts/stage1/display-input/storage-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_display_profile_smoke.py",
+      "report": "artifacts/stage1/display-profile/houdini-display-profile-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_display_data_reference_smoke.py",
+      "report": "artifacts/stage1/display-profile/data-reference-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_display_alpha_smoke.py",
+      "report": "artifacts/stage3/color/display-alpha/houdini-display-alpha-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_transparency_smoke.py",
+      "report": "artifacts/stage3/color/transparency/houdini-transparency-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_texture_alpha_smoke.py",
+      "report": "artifacts/stage3/color/transparency/texture-alpha/houdini-texture-alpha-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_transparency_batch_smoke.py",
+      "report": "artifacts/stage3/color/transparency/batch/houdini-transparency-batch-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [
+        "houdini_transparency_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_noise_smoke.py",
+      "report": "artifacts/stage3/materials/noise/houdini-noise-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_courtyard_smoke.py",
+      "report": "artifacts/examples/sop-fx-courtyard/houdini-courtyard-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_batch_smoke.py",
+      "report": "artifacts/stage2/packed/batches/houdini-packed-batch-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_scale_smoke.py",
+      "report": "artifacts/packed-scale/houdini-packed-scale-worker-cpu.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--execution"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ],
+      "reports_by_backend": {
+        "CPU": "artifacts/packed-scale/houdini-packed-scale-worker-cpu.json",
+        "OPTIX": "artifacts/packed-scale/houdini-packed-scale-worker-gpu.json"
+      }
+    },
+    {
+      "test": "core_snapshot_retention_smoke.py",
+      "report": "artifacts/stage1/snapshots/core-snapshot-retention-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_session_lifecycle_smoke.py",
+      "report": "artifacts/stage3/session-lifecycle/core-session-lifecycle-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_object_binding_smoke.py",
+      "report": "artifacts/stage1/object-bindings/core-object-binding-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_object_pose_smoke.py",
+      "report": "artifacts/stage1/object-poses/core-object-pose-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_displacement_hash_smoke.py",
+      "report": "artifacts/stage3/displacement-hash/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_instance_motion_smoke.py",
+      "report": "artifacts/stage3/materials/instance-motion/core-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sampled_instance_attribute_smoke.py",
+      "report": "artifacts/stage3/materials/sampled-instance-fields/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sampled_instance_reuse_smoke.py",
+      "report": "artifacts/stage3/materials/sampled-instance-reuse.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_pointiness_smoke.py",
+      "report": "artifacts/stage3/materials/pointiness/core-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_displacement_invalidation_smoke.py",
+      "report": "artifacts/stage3/displacement-invalidation/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_object_pose_acquisition_smoke.py",
+      "report": "artifacts/stage1/early-poses/houdini-object-pose-acquisition-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_pose_variants_smoke.py",
+      "report": "artifacts/stage1/object-poses/houdini-pose-variants-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_compact_image_smoke.py",
+      "report": "artifacts/stage1/compact-images/core-compact-image-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_mesh_payload_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/core-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_mesh_sharing_smoke.py",
+      "report": "artifacts/stage3/mesh-sharing/core-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_mesh_family_scale_smoke.py",
+      "report": "artifacts/stage3/mesh-family-scaling/core-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_sharing_lighting_smoke.py",
+      "report": "artifacts/stage3/mesh-sharing/lighting-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_emission_face_energy_smoke.py",
+      "report": "artifacts/stage3/light-tree-energy/face-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_sharing_storage_smoke.py",
+      "report": "artifacts/stage3/mesh-sharing/storage-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_sharing_uv_pass_smoke.py",
+      "report": "artifacts/stage3/mesh-sharing/uv-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_update_profile_smoke.py",
+      "report": "artifacts/stage3/lighting-transfer/profile-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_retained_cancel_smoke.py",
+      "report": "artifacts/stage3/lighting-transfer/cancel-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_device_range_smoke.py",
+      "report": "artifacts/stage3/performance/device-ranges/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_binding_preparation_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/preparation-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_payload_transport_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/transport-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_field_transport_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/field-transport-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_named_capture_reuse_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/named-capture-reuse-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--heavy"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_capture_guard_smoke.py",
+      "report": "artifacts/stage1/camera-capture/houdini-camera-capture-guard-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_navigation_snapshot_smoke.py",
+      "report": "artifacts/stage1/navigation/houdini-navigation-snapshot-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_navigation_time_revisit_smoke.py",
+      "report": "artifacts/stage1/navigation-time/houdini-navigation-time-revisit-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_navigation_output_dependency_smoke.py",
+      "report": "artifacts/stage1/navigation/houdini-navigation-output-dependency-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_queued_worker_smoke.py",
+      "report": "artifacts/stage1/queued-workers/houdini-queued-worker-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [
+        "houdini_showcase_refresh_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_scene_interruption_smoke.py",
+      "report": "artifacts/stage1/sampling-interruption/houdini-scene-interruption-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_lightgroups_smoke.py",
+      "report": "artifacts/stage3/passes/lightgroups/houdini-lightgroups-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_cryptomatte_smoke.py",
+      "report": "artifacts/stage3/passes/cryptomatte/houdini-cryptomatte-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_index_passes_smoke.py",
+      "report": "artifacts/stage3/passes/indexes/houdini-index-passes-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shadow_catcher_smoke.py",
+      "report": "artifacts/stage3/passes/shadow-catcher/houdini-shadow-catcher-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mixed_geometry_smoke.py",
+      "report": "artifacts/stage3/mixed-geometry/houdini-mixed-geometry-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_capture_cache_smoke.py",
+      "report": "artifacts/stage1/mesh-capture/houdini-mesh-capture-cache-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mixed_geometry_fx_smoke.py",
+      "report": "artifacts/stage3/mixed-geometry/houdini-mixed-geometry-fx-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mixed_geometry_motion_smoke.py",
+      "report": "artifacts/stage3/mixed-geometry/houdini-mixed-geometry-motion-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_object_scene_smoke.py",
+      "report": "artifacts/stage3/native-scene/houdini-object-scene-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_object_properties_smoke.py",
+      "report": "artifacts/stage3/object-properties/houdini-object-properties-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_properties_smoke.py",
+      "report": "artifacts/stage3/light-properties/houdini-light-properties-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_parenting_smoke.py",
+      "report": "artifacts/stage3/light-properties/parenting/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_handle_coordinates_smoke.py",
+      "report": "artifacts/stage3/light-properties/handle-coordinates/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_refinement_smoke.py",
+      "report": "artifacts/stage2/subdivision/houdini-camera-refinement-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_render_settings_smoke.py",
+      "report": "artifacts/stage3/render-settings/houdini-render-settings-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_explicit_device_selection_smoke.py",
+      "report": "artifacts/stage3/devices/explicit/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_aov_smoke.py",
+      "report": "artifacts/stage3/passes/aovs/houdini-aov-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_object_lights_smoke.py",
+      "report": "artifacts/stage3/native-scene/houdini-object-lights-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_object_scene_batch_smoke.py",
+      "report": "artifacts/stage3/native-scene/batch/houdini-object-scene-batch-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_resource_smoke.py",
+      "report": "artifacts/stage1/houdini-resource-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_diagnostics_smoke.py",
+      "report": "artifacts/stage1/houdini-diagnostics-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_diagnostic_sampling_smoke.py",
+      "report": "artifacts/stage3/materials/diagnostic-sampling/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_cache_smoke.py",
+      "report": "artifacts/stage1/light-tree-cache/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_light_tree_cache_smoke.py",
+      "report": "artifacts/stage3/performance/light-tree-compaction/core-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_compact_smoke.py",
+      "report": "artifacts/stage1/light-tree-cache/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_storage_baseline.py",
+      "report": "artifacts/stage3/stylesheet-storage/baseline.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_parallel_smoke.py",
+      "report": "artifacts/stage1/light-tree-cache/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_split_snapshot_smoke.py",
+      "report": "artifacts/stage3/light-tree-split/paired-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_cache_budget_smoke.py",
+      "report": "artifacts/stage1/light-tree-cache/budget-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_catalogue_smoke.py",
+      "report": "artifacts/stage3/materials/houdini-shader-catalogue-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_layout_smoke.py",
+      "report": "artifacts/stage3/materials/layout/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_subdivision_shading_smoke.py",
+      "report": "artifacts/stage3/performance/subdivision-shading/core-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shading_payload_smoke.py",
+      "report": "artifacts/stage3/materials/shading-payload/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_attribute_layout_smoke.py",
+      "report": "artifacts/stage3/materials/attribute-layout/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shading_delivery_benchmark.py",
+      "report": "artifacts/stage3/performance/shading-delivery/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--expect-rebuild"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_upload_smoke.py",
+      "report": "artifacts/stage3/performance/light-tree-uploads/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_tree_compact_upload_smoke.py",
+      "report": "artifacts/stage3/performance/light-tree-uploads/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mix_nodes_smoke.py",
+      "report": "artifacts/stage3/materials/mix-nodes/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_instance_attribute_smoke.py",
+      "report": "artifacts/stage3/materials/packed-instance-attributes/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_cd_smoke.py",
+      "report": "artifacts/stage3/materials/packed-cd/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_constant_attribute_smoke.py",
+      "report": "artifacts/stage3/materials/constant-attributes/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_pointiness_smoke.py",
+      "report": "artifacts/stage3/materials/pointiness/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mesh_island_smoke.py",
+      "report": "artifacts/examples/mesh-islands/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_retained_emitter_update_smoke.py",
+      "report": "artifacts/stage3/performance/retained-emitters/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_graph_smoke.py",
+      "report": "artifacts/stage3/materials/graphs/houdini-shader-graph-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_texture_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-texture-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_binding_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-binding-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_mixed_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-mixed-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-material-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_source_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-source-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_volume_shader_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-volume-shader-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_volume_field_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-volume-field-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_dense_volume_smoke.py",
+      "report": "artifacts/stage2/volumes/dense/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_dense_volume_recovery_smoke.py",
+      "report": "artifacts/stage2/volumes/dense-recovery/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_dense_volume_cache_smoke.py",
+      "report": "artifacts/stage2/volumes/dense-recovery/cache-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_dense_volume_voxel_smoke.py",
+      "report": "artifacts/stage2/volumes/dense-recovery/voxel-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_volume_vector_smoke.py",
+      "report": "artifacts/stage2/volumes/vector-components/contracts.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_volume_vector_smoke.py",
+      "report": "artifacts/stage2/volumes/vector-components/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_parametric_curve_contracts.py",
+      "report": "artifacts/stage2/hair/parametric/contracts.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_parametric_curve_smoke.py",
+      "report": "artifacts/stage2/hair/parametric/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_parametric_curve_recovery_smoke.py",
+      "report": "artifacts/stage2/hair/parametric/recovery-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_parametric_curve_packed_smoke.py",
+      "report": "artifacts/stage2/hair/parametric/packed-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_strand_binding_refresh_smoke.py",
+      "report": "artifacts/stage2/hair/parametric/binding-refresh-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_reactivation_smoke.py",
+      "report": "artifacts/stage3/materials/reactivation/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_source_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-packed-source-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_identity_subdivision_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-identity-subdivision-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_particle_attribute_smoke.py",
+      "report": "artifacts/stage3/particle-attributes/houdini-particle-attribute-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_size_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-size-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_crease_packed_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-crease-packed-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_motion_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-motion-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_normal_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-normal-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_displacement_motion_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-displacement-motion-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sampled_displacement_smoke.py",
+      "report": "artifacts/stage2/displacement/houdini-sampled-displacement-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report",
+        "--subdivision-normals-only"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_temporal_displacement_smoke.py",
+      "report": "artifacts/stage2/displacement/houdini-temporal-displacement-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sampled_override_smoke.py",
+      "report": "artifacts/examples/sampled-overrides/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_temporal_binding_reuse_smoke.py",
+      "report": "artifacts/stage2/displacement/temporal-binding-reuse/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_velocity_normal_smoke.py",
+      "report": "artifacts/stage2/motion/velocity-normals/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_independent_binding_motion_smoke.py",
+      "report": "artifacts/stage2/displacement/independent-bindings/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shutter_coordinate_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/shutter-coordinates/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_spatial_displacement_smoke.py",
+      "report": "artifacts/stage2/displacement/spatial/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_lens_motion_smoke.py",
+      "report": "artifacts/stage2/cameras/lens-motion/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_camera_dof_motion_smoke.py",
+      "report": "artifacts/stage2/cameras/dof-motion/core-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_dof_motion_smoke.py",
+      "report": "artifacts/stage2/cameras/dof-motion/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_camera_intrinsic_motion_smoke.py",
+      "report": "artifacts/stage2/cameras/intrinsic-motion/core-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_intrinsic_motion_smoke.py",
+      "report": "artifacts/stage2/cameras/intrinsic-motion/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_local_volume_origin_smoke.py",
+      "report": "artifacts/stage2/cameras/local-volume-origin/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_camera_sampling_smoke.py",
+      "report": "artifacts/stage2/cameras/sampling/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_panorama_coverage_smoke.py",
+      "report": "artifacts/stage2/cameras/panorama/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sampled_attribute_displacement_smoke.py",
+      "report": "artifacts/stage2/displacement/houdini-sampled-attribute-displacement-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_nominal_binding_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-nominal-binding-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_geometry_binding_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-geometry-binding-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_domain_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-domain-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_named_field_displacement_smoke.py",
+      "report": "artifacts/stage2/displacement/houdini-named-field-displacement-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_tangent_basis_smoke.py",
+      "report": "artifacts/stage3/materials/tangent-bases/houdini-tangent-basis-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_field_motion_smoke.py",
+      "report": "artifacts/stage3/materials/field-motion/houdini-field-motion-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_named_attribute_smoke.py",
+      "report": "artifacts/stage3/materials/named-attributes/houdini-named-attribute-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_source_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-shader-source-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shading_attribute_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/recovery/houdini-shading-attribute-recovery-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_update_smoke.py",
+      "report": "artifacts/stage3/native-scene/light-update.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_combined_material_smoke.py",
+      "report": "artifacts/stage3/materials/combined/houdini-combined-material-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_vop_smoke.py",
+      "report": "artifacts/stage3/materials/vops/houdini-material-vop-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_extensions_smoke.py",
+      "report": "artifacts/stage3/materials/extensions/houdini-material-extensions-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_texture_smoke.py",
+      "report": "artifacts/stage3/textures/houdini-texture-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_texture_cache_smoke.py",
+      "report": "artifacts/stage3/textures/cache/houdini-texture-cache-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [
+        "houdini_texture_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_texture_normal_smoke.py",
+      "report": "artifacts/stage3/textures/normals/houdini-texture-normal-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [
+        "houdini_texture_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_color_epoch_smoke.py",
+      "report": "artifacts/stage3/color/epochs/houdini-color-epoch-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_color_config_smoke.py",
+      "report": "artifacts/stage3/color/houdini-config/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_color_interop_smoke.py",
+      "report": "artifacts/stage3/color/portable/houdini-color-interop-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_texture_auto_smoke.py",
+      "report": "artifacts/stage3/color/auto/houdini-texture-auto-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_texture_auto_batch_smoke.py",
+      "report": "artifacts/stage3/color/auto/batch/houdini-texture-auto-batch-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [
+        "houdini_texture_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_subnet_smoke.py",
+      "report": "artifacts/stage3/materials/subnets/houdini-material-subnet-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_ramp_smoke.py",
+      "report": "artifacts/stage3/materials/ramps/houdini-material-ramp-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_ramp_interpolation_smoke.py",
+      "report": "artifacts/stage3/materials/ramp-interpolation/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_curves_smoke.py",
+      "report": "artifacts/stage3/materials/shader-curves/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_hue_ramp_smoke.py",
+      "report": "artifacts/stage3/materials/hue-ramps/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_hue_ramp_smoke.py",
+      "report": "artifacts/stage3/materials/hue-ramp-contracts/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_curve_mapping_table_smoke.py",
+      "report": "artifacts/stage3/materials/curve-mapping/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_color_ramp_rgba_smoke.py",
+      "report": "artifacts/stage3/materials/color-ramp-rgba/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_rgb_ramp_smoke.py",
+      "report": "artifacts/stage3/materials/rgb-ramp/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_rgba_promotion_storage_smoke.py",
+      "report": "artifacts/stage3/materials/rgba-promotion/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_color_ramp_storage_smoke.py",
+      "report": "artifacts/stage3/materials/color-ramp-storage/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_color_ramp_migration_smoke.py",
+      "report": "artifacts/stage3/materials/color-ramp-migration/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_ramp_control_recovery_smoke.py",
+      "report": "artifacts/stage3/materials/ramp-control-recovery/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_ramp_contracts_smoke.py",
+      "report": "artifacts/stage3/materials/ramp-contracts/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_assignment_smoke.py",
+      "report": "artifacts/stage3/materials/assignments/houdini-material-assignment-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_override_smoke.py",
+      "report": "artifacts/stage3/material-overrides/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_ramp_override_smoke.py",
+      "report": "artifacts/stage3/materials/material-ramp-overrides/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_geometry_key_bindings_smoke.py",
+      "report": "artifacts/stage3/materials/geometry-key-bindings/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_point_subject_stylesheets_smoke.py",
+      "report": "artifacts/stage3/materials/point-subject-stylesheets/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_tapered_volume_smoke.py",
+      "report": "artifacts/stage3/volumes/tapered/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_expression_smoke.py",
+      "report": "artifacts/stage3/materials/material-expressions/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_stylesheet_smoke.py",
+      "report": "artifacts/stage3/material-stylesheets/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_acquisition_profile.py",
+      "report": "artifacts/stage3/stylesheet-storage/acquisition/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_attribute_acquisition_profile.py",
+      "report": "artifacts/stage3/stylesheet-storage/attribute-acquisition/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_motion_acquisition_profile.py",
+      "report": "artifacts/stage3/stylesheet-storage/material-motion-acquisition/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_motion_general_acquisition_profile.py",
+      "report": "artifacts/stage3/stylesheet-storage/material-motion-general-acquisition/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_material_motion_acquisition_profile.py",
+      "report": "artifacts/stage3/stylesheet-storage/packed-material-motion-acquisition/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--counts",
+        "--device",
+        "--prototype-rows"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_scene_publication_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/scene-publication-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_capture_retirement_profile.py",
+      "report": "artifacts/stage3/stylesheet-storage/capture-retirement-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--counts",
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_capture_retirement_shutdown_smoke.py",
+      "report": "artifacts/stage1/capture-retirement-shutdown/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_transaction_contract_smoke.py",
+      "report": "artifacts/stage3/transactions/contract-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sky_smoke.py",
+      "report": "artifacts/stage3/world/sky/houdini-sky-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sky_source_recovery_smoke.py",
+      "report": "artifacts/examples/sky-source-recovery/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_sky_light_recovery_smoke.py",
+      "report": "artifacts/stage3/sky-light-recovery/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_batch_boundaries_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/boundaries/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_sources_smoke.py",
+      "report": "artifacts/stage3/stylesheet-sources/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_cvex_smoke.py",
+      "report": "artifacts/stage3/stylesheet-cvex/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_cvex_time_smoke.py",
+      "report": "artifacts/stage3/stylesheet-cvex-time/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_cvex_shutter_smoke.py",
+      "report": "artifacts/examples/stylesheet-cvex-shutter/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_motion_mesh_gate_smoke.py",
+      "report": "artifacts/stage3/stylesheet-storage/material-motion-mesh-gate/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_static_style_motion_gate_smoke.py",
+      "report": "artifacts/stage3/static-style-motion-gate/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_domains_smoke.py",
+      "report": "artifacts/stage3/stylesheet-domains/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_domains_volume_smoke.py",
+      "report": "artifacts/examples/stylesheet-domains-volumes/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_stylesheet_domains_motion_smoke.py",
+      "report": "artifacts/examples/stylesheet-domains-motion/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_object_binding_shutter_smoke.py",
+      "report": "artifacts/examples/object-binding-shutter/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_override_bindings_smoke.py",
+      "report": "artifacts/stage3/material-override-bindings/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_override_graph_smoke.py",
+      "report": "artifacts/stage3/material-override-graphs/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_override_volume_smoke.py",
+      "report": "artifacts/examples/material-override-volumes/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_capacity_smoke.py",
+      "report": "artifacts/stage3/material-capacity/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_strand_material_smoke.py",
+      "report": "artifacts/stage3/materials/strands/houdini-strand-material-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_strand_material_smoke.py",
+      "report": "artifacts/stage3/materials/strands/core-strand-material-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [
+        "houdini_strand_material_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_volume_material_smoke.py",
+      "report": "artifacts/stage3/materials/volumes/houdini-volume-material-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_volume_material_smoke.py",
+      "report": "artifacts/stage3/materials/volumes/core-volume-material-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [
+        "houdini_volume_material_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_displacement_smoke.py",
+      "report": "artifacts/stage2/displacement/houdini-displacement-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_displacement_smoke.py",
+      "report": "artifacts/stage2/displacement/core-displacement-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [
+        "houdini_displacement_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_subdivision_smoke.py",
+      "report": "artifacts/stage2/subdivision/houdini-subdivision-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_tessellation_update_smoke.py",
+      "report": "artifacts/tessellation-update/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_subdivision_smoke.py",
+      "report": "artifacts/stage2/subdivision/core-subdivision-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [
+        "houdini_subdivision_smoke.py"
+      ],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_named_volume_regression.py",
+      "report": "artifacts/stage3/materials/volumes/houdini-named-volume-regression.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_shader_retirement_smoke.py",
+      "report": "artifacts/stage3/materials/retirement/houdini-shader-retirement-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_progressive_smoke.py",
+      "report": "artifacts/stage1/houdini-progressive-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_progressive_layout_smoke.py",
+      "report": "artifacts/stage1/progressive-layout/houdini-progressive-layout-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_output_smoke.py",
+      "report": "artifacts/stage1/output/houdini-output-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "farm_output_policy_test.py",
+      "report": "",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_farm_output_policy_smoke.py",
+      "report": "artifacts/stage3/farm-output-policy/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_exr_policy_smoke.py",
+      "report": "artifacts/stage3/exr-policy/houdini-exr-policy-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_pass_outputs_smoke.py",
+      "report": "artifacts/stage3/pass-outputs/houdini-pass-outputs-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_single_pass_exr_smoke.py",
+      "report": "artifacts/stage3/single-pass-exr/houdini-single-pass-exr-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_viewer_resolution_smoke.py",
+      "report": "artifacts/stage3/viewer-resolution/houdini-viewer-resolution-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_viewer_timing_smoke.py",
+      "report": "artifacts/stage3/viewer-timing/houdini-viewer-timing-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_multipart_smoke.py",
+      "report": "artifacts/stage3/multipart/houdini-multipart-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_passes_smoke.py",
+      "report": "artifacts/stage3/passes/houdini-passes-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_progressive_passes_smoke.py",
+      "report": "artifacts/stage3/passes/houdini-progressive-passes-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_batch_smoke.py",
+      "report": "artifacts/stage1/batch/houdini-batch-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_final_sequence_smoke.py",
+      "report": "artifacts/stage3/final-sequence/houdini-final-sequence-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_fatal_gpu_render_smoke.py",
+      "report": "artifacts/stage3/fatal-gpu-render/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_saved_hip_farm_smoke.py",
+      "report": "artifacts/stage3/saved-hip-farm/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_smoke.py",
+      "report": "artifacts/stage2/packed/houdini-packed-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_implicit_packed_smoke.py",
+      "report": "artifacts/stage2/packed/houdini-implicit-packed-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "attribute_conventions_probe.py",
+      "report": "artifacts/stage2/attribute-conventions.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "camera_conventions_probe.py",
+      "report": "artifacts/stage2/camera/camera-conventions.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_points_smoke.py",
+      "report": "artifacts/stage2/particles/houdini-points-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_lighting_smoke.py",
+      "report": "artifacts/stage2/lighting/houdini-lighting-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_hair_smoke.py",
+      "report": "artifacts/stage2/hair/houdini-hair-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_motion_smoke.py",
+      "report": "artifacts/stage2/motion/core-motion-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_changing_topology_velocity_smoke.py",
+      "report": "artifacts/stage2/motion/houdini-changing-topology-velocity-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_deformation_smoke.py",
+      "report": "artifacts/stage2/motion/deformation/houdini-deformation-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_deformation_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_alias_conversion_smoke.py",
+      "report": "artifacts/stage3/packed-alias-conversion/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--leaves",
+        "--render",
+        "--repeats",
+        "--section",
+        "--skip-render"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_volume_deformation_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/mixed-volume/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_background_final_smoke.py",
+      "report": "artifacts/stage3/background-final/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_background_jobs_smoke.py",
+      "report": "artifacts/stage3/background-jobs/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_thumbnail_smoke.py",
+      "report": "artifacts/stage3/material-thumbnails/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_thumbnail_resources_smoke.py",
+      "report": "artifacts/stage3/material-thumbnail-resources/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_thumbnail_domains_smoke.py",
+      "report": "artifacts/stage3/material-thumbnail-domains/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_world_volume_smoke.py",
+      "report": "artifacts/stage3/world-volume/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_world_volume_thumbnail_smoke.py",
+      "report": "artifacts/stage3/world-volume-thumbnails/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_shader_smoke.py",
+      "report": "artifacts/stage3/light-shaders/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_light_texture_smoke.py",
+      "report": "artifacts/stage3/light-shaders/texture-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_linking_smoke.py",
+      "report": "artifacts/stage3/linking/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_linking_emitters_smoke.py",
+      "report": "artifacts/stage3/linking-emitters/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_linking_limits_smoke.py",
+      "report": "artifacts/stage3/linking-limits/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "core_ies_ownership_smoke.py",
+      "report": "artifacts/stage3/light-shaders/ownership-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_background_controls_smoke.py",
+      "report": "artifacts/stage3/background-controls/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_background_stop_smoke.py",
+      "report": "artifacts/stage3/background-stop-profile/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_cancel_restart_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/cancel-restart-report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_deformation_retention_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/retention-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_deformation_variants_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/variants-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_resource_identity_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/resource-identity-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_deformation_frames_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/frames-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_deformation_material_smoke.py",
+      "report": "artifacts/stage2/motion/packed-deformation/material-report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_packed_velocity_smoke.py",
+      "report": "artifacts/stage2/motion/packed-velocity/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_frozen_material_candidates_smoke.py",
+      "report": "artifacts/stage1/geometry-ownership/frozen-material-candidates.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_material_acquisition_smoke.py",
+      "report": "artifacts/stage1/geometry-ownership/material-acquisition.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_volume_motion_smoke.py",
+      "report": "artifacts/stage2/motion/volume/houdini-volume-motion-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_volume_smoke.py",
+      "report": "artifacts/stage2/volume/houdini-volume-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_pyro_smoke.py",
+      "report": "artifacts/stage2/pyro/houdini-pyro-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_panel_smoke.py",
+      "report": "artifacts/stage1/houdini-panel-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_viewer_redesign_smoke.py",
+      "report": "artifacts/viewer-redesign/report.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_native_normals_smoke.py",
+      "report": "artifacts/stage1/houdini-native-normals-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_display_parallel_smoke.py",
+      "report": "artifacts/stage1/output/houdini-display-parallel-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_denoising_smoke.py",
+      "report": "artifacts/stage3/denoising/houdini-denoising-smoke.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_oidn_provider_smoke.py",
+      "report": "artifacts/stage3/denoising/sdk-provider/report.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--expected-data-root",
+        "--expected-host",
+        "--output",
+        "--report"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
+      "test": "houdini_unchanged_update_smoke.py",
+      "report": "artifacts/stage1/unchanged-update/houdini-unchanged-update-smoke.json",
+      "backends": [
+        "script-declared"
+      ],
+      "backend_policy": "script-declared",
+      "options": [],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    }
+  ],
+  "pytest": [
+    "pytest_cases/test_assets_cache.py",
+    "pytest_cases/test_assets_catalogs.py",
+    "pytest_cases/test_assets_collect.py",
+    "pytest_cases/test_assets_import_switch.py",
+    "pytest_cases/test_assets_libraries.py",
+    "pytest_cases/test_assets_move_project.py",
+    "pytest_cases/test_assets_panel.py",
+    "pytest_cases/test_assets_panel_core.py",
+    "pytest_cases/test_assets_panel_importers.py",
+    "pytest_cases/test_assets_panel_links.py",
+    "pytest_cases/test_assets_providers.py",
+    "pytest_cases/test_assets_relink.py",
+    "pytest_cases/test_assets_reload_collected.py",
+    "pytest_cases/test_assets_selection_theme.py",
+    "pytest_cases/test_assets_texture_names.py",
+    "pytest_cases/test_assets_worker_host.py",
+    "pytest_cases/test_assets_worker_scan.py",
+    "pytest_cases/test_assets_worlds.py",
+    "pytest_cases/test_blend_all_attributes.py",
+    "pytest_cases/test_blend_assets_layout.py",
+    "pytest_cases/test_blend_bounds.py",
+    "pytest_cases/test_blend_catalogue.py",
+    "pytest_cases/test_blend_collection_exclusion.py",
+    "pytest_cases/test_blend_convert.py",
+    "pytest_cases/test_blend_convert_export.py",
+    "pytest_cases/test_blend_convert_layout.py",
+    "pytest_cases/test_blend_file_node.py",
+    "pytest_cases/test_blend_hair.py",
+    "pytest_cases/test_blend_image_colorspace.py",
+    "pytest_cases/test_blend_import_dialog.py",
+    "pytest_cases/test_blend_import_listing.py",
+    "pytest_cases/test_blend_include_disabled_collections.py",
+    "pytest_cases/test_blend_instance_layers.py",
+    "pytest_cases/test_blend_library_textures.py",
+    "pytest_cases/test_blend_material_axes.py",
+    "pytest_cases/test_blend_material_fallback.py",
+    "pytest_cases/test_blend_material_layout.py",
+    "pytest_cases/test_blend_mesh_intrinsics.py",
+    "pytest_cases/test_blend_object_values.py",
+    "pytest_cases/test_blend_pointcloud.py",
+    "pytest_cases/test_blend_preview.py",
+    "pytest_cases/test_blend_radius_lookup.py",
+    "pytest_cases/test_blend_refresh_handoff.py",
+    "pytest_cases/test_blend_sync_parity.py",
+    "pytest_cases/test_blend_targets.py",
+    "pytest_cases/test_blend_textures_in_place.py",
+    "pytest_cases/test_blend_update.py",
+    "pytest_cases/test_blend_uv_sets.py",
+    "pytest_cases/test_blend_viewport.py",
+    "pytest_cases/test_blend_world_export.py",
+    "pytest_cases/test_blend_worlds.py",
+    "pytest_cases/test_blender_bridge.py",
+    "pytest_cases/test_blender_component_boundary.py",
+    "pytest_cases/test_blender_environment.py",
+    "pytest_cases/test_canonical_blender_aliases.py",
+    "pytest_cases/test_catalogue.py",
+    "pytest_cases/test_catalogue_native.py",
+    "pytest_cases/test_catalogue_selection.py",
+    "pytest_cases/test_dependent_recipes.py",
+    "pytest_cases/test_devices.py",
+    "pytest_cases/test_displayed_frame_metrics.py",
+    "pytest_cases/test_doc_paths.py",
+    "pytest_cases/test_engine_commit_metadata.py",
+    "pytest_cases/test_external_shutter_plan.py",
+    "pytest_cases/test_final_gpu_warning.py",
+    "pytest_cases/test_headless_native.py",
+    "pytest_cases/test_heavy_bias_inputs.py",
+    "pytest_cases/test_heavy_bias_statistics.py",
+    "pytest_cases/test_images.py",
+    "pytest_cases/test_ipr_display_reconnect.py",
+    "pytest_cases/test_legacy_contracts.py",
+    "pytest_cases/test_material_convert.py",
+    "pytest_cases/test_multi_device_range_fault.py",
+    "pytest_cases/test_native_lifetime.py",
+    "pytest_cases/test_native_test_plan.py",
+    "pytest_cases/test_nightly_qualification.py",
+    "pytest_cases/test_node_bounds.py",
+    "pytest_cases/test_patch_inventory.py",
+    "pytest_cases/test_powershell_contracts.py",
+    "pytest_cases/test_prototype_leases.py",
+    "pytest_cases/test_python_package.py",
+    "pytest_cases/test_queued_forced_stop.py",
+    "pytest_cases/test_recipe_contracts.py",
+    "pytest_cases/test_release_focused.py",
+    "pytest_cases/test_report_publication.py",
+    "pytest_cases/test_review_dispositions.py",
+    "pytest_cases/test_reviewed_native.py",
+    "pytest_cases/test_rop_layout.py",
+    "pytest_cases/test_runner_arguments.py",
+    "pytest_cases/test_session_log.py",
+    "pytest_cases/test_session_soak_fixture.py",
+    "pytest_cases/test_shader_help_metadata.py",
+    "pytest_cases/test_shader_values.py",
+    "pytest_cases/test_staging_python_sources.py",
+    "pytest_cases/test_support.py",
+    "pytest_cases/test_support_diagnostics.py",
+    "pytest_cases/test_text_encoding.py",
+    "pytest_cases/test_texture_cache_actions.py",
+    "pytest_cases/test_viewer_chrome_scale.py",
+    "pytest_cases/test_viewer_copy_diagnostics.py",
+    "pytest_cases/test_viewer_display_mode.py",
+    "pytest_cases/test_viewer_display_raster.py",
+    "pytest_cases/test_viewer_lifetime.py",
+    "pytest_cases/test_viewer_loading_status.py",
+    "pytest_cases/test_viewer_pick_tools.py",
+    "pytest_cases/test_viewer_timeline_updates.py",
+    "pytest_cases/test_viewer_toolbar_segments.py",
+    "pytest_cases/test_viewer_update_clock.py",
+    "pytest_cases/test_worker_release_observations.py"
+  ],
+  "scheduled": [
+    "archive_test_manifest_test.ps1",
+    "attribute_conventions_probe.py",
+    "blend_cache_test.py",
+    "build_layout_test.py",
+    "camera_conventions_probe.py",
+    "camera_dof_motion_source_test.py",
+    "camera_intrinsic_reference_test.py",
+    "community_build_test.py",
+    "control_bridge_test.py",
+    "core_attribute_eligibility_smoke.py",
+    "core_camera_dof_motion_smoke.py",
+    "core_camera_intrinsic_motion_smoke.py",
+    "core_compact_image_smoke.py",
+    "core_device_range_smoke.py",
+    "core_displacement_hash_smoke.py",
+    "core_displacement_smoke.py",
+    "core_gpu_concurrency_smoke.py",
+    "core_hue_ramp_smoke.py",
+    "core_ies_ownership_smoke.py",
+    "core_image_iris_color_smoke.py",
+    "core_image_iris_smoke.py",
+    "core_instance_motion_smoke.py",
+    "core_light_tree_cache_smoke.py",
+    "core_mesh_family_scale_smoke.py",
+    "core_mesh_payload_smoke.py",
+    "core_mesh_sharing_smoke.py",
+    "core_motion_smoke.py",
+    "core_object_binding_smoke.py",
+    "core_object_pose_smoke.py",
+    "core_object_volume_bounds_smoke.py",
+    "core_owned_image_smoke.py",
+    "core_point_lifetime_smoke.py",
+    "core_pointiness_smoke.py",
+    "core_session_lifecycle_smoke.py",
+    "core_snapshot_retention_smoke.py",
+    "core_strand_material_smoke.py",
+    "core_subdivision_count_overflow_smoke.py",
+    "core_subdivision_shading_smoke.py",
+    "core_subdivision_smoke.py",
+    "core_volume_material_smoke.py",
+    "core_volume_vector_smoke.py",
+    "display_queue_test.py",
+    "dlss_host_policy_test.py",
+    "dlss_menu_test.py",
+    "engine_fork_test.py",
+    "exchange_watchdog_test.py",
+    "farm_output_policy_test.py",
+    "houdini_active_shutdown_smoke.py",
+    "houdini_adaptive_target_smoke.py",
+    "houdini_aov_ipr_smoke.py",
+    "houdini_aov_smoke.py",
+    "houdini_argument_buffer_contract.py",
+    "houdini_artist_scene_ipr_smoke.py",
+    "houdini_artist_workflow_smoke.py",
+    "houdini_async_capture_ipr_smoke.py",
+    "houdini_attribute_layout_smoke.py",
+    "houdini_background_controls_smoke.py",
+    "houdini_background_final_gui_cleanup_smoke.py",
+    "houdini_background_final_gui_smoke.py",
+    "houdini_background_final_smoke.py",
+    "houdini_background_jobs_gui_smoke.py",
+    "houdini_background_jobs_smoke.py",
+    "houdini_background_stop_smoke.py",
+    "houdini_batch_smoke.py",
+    "houdini_binding_recovery_smoke.py",
+    "houdini_blend_direct_styles_smoke.py",
+    "houdini_blend_instance_reseed_smoke.py",
+    "houdini_blend_instance_resolution_smoke.py",
+    "houdini_blend_instances_smoke.py",
+    "houdini_blend_resident_reuse_smoke.py",
+    "houdini_blender53_gsplats_smoke.py",
+    "houdini_blender53_utilities_smoke.py",
+    "houdini_blender_preview_isolation_smoke.py",
+    "houdini_blender_reference_pieces.py",
+    "houdini_blender_reference_ui.py",
+    "houdini_build_compatibility_smoke.py",
+    "houdini_camera_capture_guard_smoke.py",
+    "houdini_camera_coordinate_displacement_gui_smoke.py",
+    "houdini_camera_coordinate_displacement_native_gui_smoke.py",
+    "houdini_camera_coordinate_displacement_smoke.py",
+    "houdini_camera_delivery_benchmark.py",
+    "houdini_camera_denoising_ipr_smoke.py",
+    "houdini_camera_dependencies_ipr_smoke.py",
+    "houdini_camera_dof_motion_gui_smoke.py",
+    "houdini_camera_dof_motion_native_gui_smoke.py",
+    "houdini_camera_dof_motion_smoke.py",
+    "houdini_camera_focus_capture_guard_smoke.py",
+    "houdini_camera_intrinsic_motion_gui_smoke.py",
+    "houdini_camera_intrinsic_motion_native_gui_smoke.py",
+    "houdini_camera_intrinsic_motion_smoke.py",
+    "houdini_camera_lens_motion_gui_smoke.py",
+    "houdini_camera_lens_motion_native_gui_smoke.py",
+    "houdini_camera_lens_motion_smoke.py",
+    "houdini_camera_local_volume_origin_smoke.py",
+    "houdini_camera_refinement_smoke.py",
+    "houdini_camera_sampling_gui_smoke.py",
+    "houdini_camera_sampling_native_gui_smoke.py",
+    "houdini_camera_sampling_smoke.py",
+    "houdini_camera_subdivision_ipr_smoke.py",
+    "houdini_cancel_restart_smoke.py",
+    "houdini_capture_retirement_gui_smoke.py",
+    "houdini_capture_retirement_profile.py",
+    "houdini_capture_retirement_shutdown_smoke.py",
+    "houdini_changing_topology_velocity_smoke.py",
+    "houdini_color_config_smoke.py",
+    "houdini_color_epoch_smoke.py",
+    "houdini_color_interop_ipr_smoke.py",
+    "houdini_color_interop_smoke.py",
+    "houdini_color_ipr_smoke.py",
+    "houdini_color_ramp_migration_smoke.py",
+    "houdini_color_ramp_rgba_smoke.py",
+    "houdini_color_ramp_storage_smoke.py",
+    "houdini_combined_material_gui_smoke.py",
+    "houdini_combined_material_smoke.py",
+    "houdini_compact_display_gui_smoke.py",
+    "houdini_constant_attribute_gui_smoke.py",
+    "houdini_constant_attribute_native_gui_smoke.py",
+    "houdini_constant_attribute_smoke.py",
+    "houdini_continuous_packed_ipr_smoke.py",
+    "houdini_cop_batch_smoke.py",
+    "houdini_cop_image_ownership_smoke.py",
+    "houdini_cop_refresh_scope_smoke.py",
+    "houdini_cop_shutter_smoke.py",
+    "houdini_cop_texture_gui_smoke.py",
+    "houdini_cop_texture_smoke.py",
+    "houdini_cop_world_shutter_gui_smoke.py",
+    "houdini_cop_world_smoke.py",
+    "houdini_courtyard_ipr_smoke.py",
+    "houdini_courtyard_smoke.py",
+    "houdini_crease_packed_recovery_gui_smoke.py",
+    "houdini_crease_packed_recovery_smoke.py",
+    "houdini_cryptomatte_smoke.py",
+    "houdini_curve_inline_gui_smoke.py",
+    "houdini_curve_mapping_table_smoke.py",
+    "houdini_deformation_ownership_probe.py",
+    "houdini_deformation_smoke.py",
+    "houdini_denoising_ipr_smoke.py",
+    "houdini_denoising_smoke.py",
+    "houdini_dense_packed_preview_smoke.py",
+    "houdini_dense_volume_cache_smoke.py",
+    "houdini_dense_volume_gui_smoke.py",
+    "houdini_dense_volume_native_gui_smoke.py",
+    "houdini_dense_volume_recovery_smoke.py",
+    "houdini_dense_volume_smoke.py",
+    "houdini_dense_volume_voxel_smoke.py",
+    "houdini_device_layout_cache_smoke.py",
+    "houdini_device_selection_smoke.py",
+    "houdini_diagnostic_emission_smoke.py",
+    "houdini_diagnostic_sampling_smoke.py",
+    "houdini_diagnostics_smoke.py",
+    "houdini_dicing_disk_smoke.py",
+    "houdini_dicing_policy_smoke.py",
+    "houdini_direct_instance_preparation_smoke.py",
+    "houdini_direct_instance_render_reuse_smoke.py",
+    "houdini_displacement_invalidation_smoke.py",
+    "houdini_displacement_ipr_smoke.py",
+    "houdini_displacement_motion_recovery_gui_smoke.py",
+    "houdini_displacement_motion_recovery_smoke.py",
+    "houdini_displacement_smoke.py",
+    "houdini_displacement_surface_fields_smoke.py",
+    "houdini_display_alpha_smoke.py",
+    "houdini_display_data_reference_smoke.py",
+    "houdini_display_parallel_smoke.py",
+    "houdini_display_profile_smoke.py",
+    "houdini_display_queue_smoke.py",
+    "houdini_display_smoke.py",
+    "houdini_display_storage_smoke.py",
+    "houdini_dlss_sample_count_smoke.py",
+    "houdini_dlss_worker_smoke.py",
+    "houdini_domain_recovery_gui_smoke.py",
+    "houdini_domain_recovery_smoke.py",
+    "houdini_early_pose_ipr_smoke.py",
+    "houdini_emission_face_energy_smoke.py",
+    "houdini_environment_orientation_smoke.py",
+    "houdini_environment_recovery_gui_smoke.py",
+    "houdini_environment_recovery_smoke.py",
+    "houdini_explicit_device_selection_smoke.py",
+    "houdini_exr_policy_smoke.py",
+    "houdini_farm_output_policy_smoke.py",
+    "houdini_fatal_gpu_render_smoke.py",
+    "houdini_field_motion_gui_smoke.py",
+    "houdini_field_motion_smoke.py",
+    "houdini_final_cancel_gui_smoke.py",
+    "houdini_final_sequence_smoke.py",
+    "houdini_final_tiling_smoke.py",
+    "houdini_frozen_material_candidates_smoke.py",
+    "houdini_gaussian_splats_smoke.py",
+    "houdini_geometry_binding_recovery_gui_smoke.py",
+    "houdini_geometry_binding_recovery_smoke.py",
+    "houdini_geometry_key_bindings_gui_smoke.py",
+    "houdini_geometry_key_bindings_native_gui_smoke.py",
+    "houdini_geometry_key_bindings_smoke.py",
+    "houdini_geometry_lease_probe.py",
+    "houdini_gpu_display_ipr_smoke.py",
+    "houdini_gpu_display_lifecycle_smoke.py",
+    "houdini_gpu_display_probe.py",
+    "houdini_gpu_input_ownership_smoke.py",
+    "houdini_gsplats_dlss_worker_smoke.py",
+    "houdini_hair_smoke.py",
+    "houdini_hash_displacement_gui_smoke.py",
+    "houdini_hash_displacement_native_gui_smoke.py",
+    "houdini_hash_displacement_recovery_smoke.py",
+    "houdini_hash_displacement_smoke.py",
+    "houdini_heavy_packed_animation_benchmark.py",
+    "houdini_heavy_packed_async_ipr_smoke.py",
+    "houdini_heavy_packed_cooking_response_benchmark.py",
+    "houdini_heavy_packed_response_benchmark.py",
+    "houdini_hue_ramp_gui_smoke.py",
+    "houdini_hue_ramp_native_gui_smoke.py",
+    "houdini_hue_ramp_smoke.py",
+    "houdini_identity_subdivision_recovery_gui_smoke.py",
+    "houdini_identity_subdivision_recovery_smoke.py",
+    "houdini_implicit_packed_smoke.py",
+    "houdini_independent_binding_gui_smoke.py",
+    "houdini_independent_binding_motion_smoke.py",
+    "houdini_independent_binding_native_gui_smoke.py",
+    "houdini_index_passes_smoke.py",
+    "houdini_ipr_settings_layout_smoke.py",
+    "houdini_ipr_smoke.py",
+    "houdini_light_controls_smoke.py",
+    "houdini_light_handle_coordinates_smoke.py",
+    "houdini_light_handles_smoke.py",
+    "houdini_light_material_smoke.py",
+    "houdini_light_parenting_smoke.py",
+    "houdini_light_pose_navigation_smoke.py",
+    "houdini_light_pose_sources_benchmark.py",
+    "houdini_light_properties_smoke.py",
+    "houdini_light_shader_gui_smoke.py",
+    "houdini_light_shader_smoke.py",
+    "houdini_light_texture_smoke.py",
+    "houdini_light_tree_cache_budget_smoke.py",
+    "houdini_light_tree_cache_smoke.py",
+    "houdini_light_tree_compact_smoke.py",
+    "houdini_light_tree_compact_upload_smoke.py",
+    "houdini_light_tree_parallel_smoke.py",
+    "houdini_light_tree_retained_cancel_smoke.py",
+    "houdini_light_tree_split_snapshot_smoke.py",
+    "houdini_light_tree_upload_smoke.py",
+    "houdini_light_update_gui_smoke.py",
+    "houdini_light_update_profile_smoke.py",
+    "houdini_light_update_smoke.py",
+    "houdini_lightgroups_smoke.py",
+    "houdini_lighting_smoke.py",
+    "houdini_linking_emitters_smoke.py",
+    "houdini_linking_gui_smoke.py",
+    "houdini_linking_limits_smoke.py",
+    "houdini_linking_smoke.py",
+    "houdini_material_acquisition_smoke.py",
+    "houdini_material_assignment_ipr_smoke.py",
+    "houdini_material_assignment_smoke.py",
+    "houdini_material_capacity_gui_smoke.py",
+    "houdini_material_capacity_native_gui_smoke.py",
+    "houdini_material_capacity_smoke.py",
+    "houdini_material_expression_gui_smoke.py",
+    "houdini_material_expression_native_gui_smoke.py",
+    "houdini_material_expression_smoke.py",
+    "houdini_material_extensions_smoke.py",
+    "houdini_material_graph_ownership_probe.py",
+    "houdini_material_ipr_smoke.py",
+    "houdini_material_motion_acquisition_profile.py",
+    "houdini_material_motion_cooperative_gui_smoke.py",
+    "houdini_material_motion_cooperative_native_gui_smoke.py",
+    "houdini_material_motion_general_acquisition_profile.py",
+    "houdini_material_motion_mesh_gate_smoke.py",
+    "houdini_material_override_bindings_smoke.py",
+    "houdini_material_override_graph_smoke.py",
+    "houdini_material_override_gui_smoke.py",
+    "houdini_material_override_native_gui_smoke.py",
+    "houdini_material_override_smoke.py",
+    "houdini_material_override_volume_smoke.py",
+    "houdini_material_ramp_ipr_smoke.py",
+    "houdini_material_ramp_override_gui_smoke.py",
+    "houdini_material_ramp_override_native_gui_smoke.py",
+    "houdini_material_ramp_override_smoke.py",
+    "houdini_material_ramp_smoke.py",
+    "houdini_material_recovery_gui_smoke.py",
+    "houdini_material_recovery_ipr_smoke.py",
+    "houdini_material_recovery_smoke.py",
+    "houdini_material_stylesheet_gui_smoke.py",
+    "houdini_material_stylesheet_native_gui_smoke.py",
+    "houdini_material_stylesheet_smoke.py",
+    "houdini_material_subnet_ipr_smoke.py",
+    "houdini_material_subnet_smoke.py",
+    "houdini_material_thumbnail_domains_gui_smoke.py",
+    "houdini_material_thumbnail_domains_smoke.py",
+    "houdini_material_thumbnail_gui_smoke.py",
+    "houdini_material_thumbnail_resources_smoke.py",
+    "houdini_material_thumbnail_smoke.py",
+    "houdini_material_vop_smoke.py",
+    "houdini_memory_smoke.py",
+    "houdini_mesh_binding_preparation_smoke.py",
+    "houdini_mesh_capture_cache_smoke.py",
+    "houdini_mesh_field_gui_smoke.py",
+    "houdini_mesh_field_native_gui_smoke.py",
+    "houdini_mesh_field_transport_smoke.py",
+    "houdini_mesh_island_gui_smoke.py",
+    "houdini_mesh_island_native_gui_smoke.py",
+    "houdini_mesh_island_smoke.py",
+    "houdini_mesh_payload_gui_smoke.py",
+    "houdini_mesh_payload_native_gui_smoke.py",
+    "houdini_mesh_payload_transport_smoke.py",
+    "houdini_mesh_sharing_lighting_smoke.py",
+    "houdini_mesh_sharing_storage_smoke.py",
+    "houdini_mesh_sharing_uv_pass_smoke.py",
+    "houdini_mix_nodes_gui_smoke.py",
+    "houdini_mix_nodes_smoke.py",
+    "houdini_mixed_geometry_fx_smoke.py",
+    "houdini_mixed_geometry_motion_smoke.py",
+    "houdini_mixed_geometry_smoke.py",
+    "houdini_mixed_recovery_smoke.py",
+    "houdini_motion_ipr_smoke.py",
+    "houdini_motion_recovery_smoke.py",
+    "houdini_motion_smoke.py",
+    "houdini_multipart_gui_smoke.py",
+    "houdini_multipart_smoke.py",
+    "houdini_named_attribute_gui_smoke.py",
+    "houdini_named_attribute_smoke.py",
+    "houdini_named_capture_reuse_smoke.py",
+    "houdini_named_field_displacement_gui_smoke.py",
+    "houdini_named_field_displacement_smoke.py",
+    "houdini_named_volume_regression.py",
+    "houdini_native_lifetime_contract.py",
+    "houdini_native_normals_smoke.py",
+    "houdini_native_smoke.py",
+    "houdini_navigation_output_dependency_smoke.py",
+    "houdini_navigation_priority_ipr_smoke.py",
+    "houdini_navigation_snapshot_smoke.py",
+    "houdini_navigation_time_revisit_smoke.py",
+    "houdini_nested_dielectrics_ipr_edits_smoke.py",
+    "houdini_nested_dielectrics_plumbing_smoke.py",
+    "houdini_no_blender_smoke.py",
+    "houdini_noise_smoke.py",
+    "houdini_nominal_binding_recovery_smoke.py",
+    "houdini_normal_recovery_smoke.py",
+    "houdini_object_binding_shutter_gui_smoke.py",
+    "houdini_object_binding_shutter_native_gui_smoke.py",
+    "houdini_object_binding_shutter_smoke.py",
+    "houdini_object_lights_smoke.py",
+    "houdini_object_pose_acquisition_smoke.py",
+    "houdini_object_properties_ipr_smoke.py",
+    "houdini_object_properties_smoke.py",
+    "houdini_object_scene_batch_smoke.py",
+    "houdini_object_scene_ipr_smoke.py",
+    "houdini_object_scene_smoke.py",
+    "houdini_offline_save_benchmark.py",
+    "houdini_offline_structure_smoke.py",
+    "houdini_oidn_provider_smoke.py",
+    "houdini_output_color_smoke.py",
+    "houdini_output_smoke.py",
+    "houdini_packed_alias_conversion_smoke.py",
+    "houdini_packed_batch_smoke.py",
+    "houdini_packed_blender_population_reuse_smoke.py",
+    "houdini_packed_cd_gui_smoke.py",
+    "houdini_packed_cd_native_gui_smoke.py",
+    "houdini_packed_cd_smoke.py",
+    "houdini_packed_deformation_frames_smoke.py",
+    "houdini_packed_deformation_gui_smoke.py",
+    "houdini_packed_deformation_material_smoke.py",
+    "houdini_packed_deformation_retention_smoke.py",
+    "houdini_packed_deformation_smoke.py",
+    "houdini_packed_deformation_variants_smoke.py",
+    "houdini_packed_instance_attribute_gui_smoke.py",
+    "houdini_packed_instance_attribute_native_gui_smoke.py",
+    "houdini_packed_instance_attribute_smoke.py",
+    "houdini_packed_material_motion_acquisition_profile.py",
+    "houdini_packed_named_index_smoke.py",
+    "houdini_packed_named_shutter_smoke.py",
+    "houdini_packed_ownership_probe.py",
+    "houdini_packed_pose_ipr_smoke.py",
+    "houdini_packed_resource_identity_smoke.py",
+    "houdini_packed_scale_smoke.py",
+    "houdini_packed_smoke.py",
+    "houdini_packed_source_recovery_gui_smoke.py",
+    "houdini_packed_source_recovery_smoke.py",
+    "houdini_packed_velocity_gui_smoke.py",
+    "houdini_packed_velocity_smoke.py",
+    "houdini_packed_volume_deformation_smoke.py",
+    "houdini_panel_history_fullscreen_smoke.py",
+    "houdini_panel_motion_timing_smoke.py",
+    "houdini_panel_navigation_ipr_smoke.py",
+    "houdini_panel_smoke.py",
+    "houdini_panel_update_reuse_smoke.py",
+    "houdini_panorama_coverage_smoke.py",
+    "houdini_panorama_gui_smoke.py",
+    "houdini_panorama_native_gui_smoke.py",
+    "houdini_panorama_smoke.py",
+    "houdini_parametric_curve_contracts.py",
+    "houdini_parametric_curve_gui_smoke.py",
+    "houdini_parametric_curve_native_gui_smoke.py",
+    "houdini_parametric_curve_packed_smoke.py",
+    "houdini_parametric_curve_recovery_smoke.py",
+    "houdini_parametric_curve_smoke.py",
+    "houdini_parented_light_ipr_smoke.py",
+    "houdini_particle_attribute_gui_smoke.py",
+    "houdini_particle_attribute_ipr_smoke.py",
+    "houdini_particle_attribute_smoke.py",
+    "houdini_particle_binding_recovery_gui_smoke.py",
+    "houdini_particle_binding_recovery_native_gui_smoke.py",
+    "houdini_pass_outputs_gui_smoke.py",
+    "houdini_pass_outputs_smoke.py",
+    "houdini_passes_ipr_smoke.py",
+    "houdini_passes_smoke.py",
+    "houdini_point_instancing_binding_motion_review4_smoke.py",
+    "houdini_point_instancing_farm_smoke.py",
+    "houdini_point_instancing_ipr_smoke.py",
+    "houdini_point_instancing_motion_smoke.py",
+    "houdini_point_instancing_passes_edgecases_smoke.py",
+    "houdini_point_instancing_passes_smoke.py",
+    "houdini_point_instancing_render_smoke.py",
+    "houdini_point_instancing_review4_smoke.py",
+    "houdini_point_instancing_transforms_smoke.py",
+    "houdini_point_subject_stylesheets_gui_smoke.py",
+    "houdini_point_subject_stylesheets_native_gui_smoke.py",
+    "houdini_point_subject_stylesheets_smoke.py",
+    "houdini_pointiness_gui_smoke.py",
+    "houdini_pointiness_native_gui_smoke.py",
+    "houdini_pointiness_smoke.py",
+    "houdini_points_smoke.py",
+    "houdini_pose_variants_smoke.py",
+    "houdini_progressive_focus_smoke.py",
+    "houdini_progressive_layout_smoke.py",
+    "houdini_progressive_passes_smoke.py",
+    "houdini_progressive_smoke.py",
+    "houdini_pybind_front_contract.py",
+    "houdini_pyro_smoke.py",
+    "houdini_queued_worker_smoke.py",
+    "houdini_ramp_contracts_smoke.py",
+    "houdini_ramp_control_recovery_smoke.py",
+    "houdini_ramp_curve_blender_smoke.py",
+    "houdini_ramp_interpolation_gui_smoke.py",
+    "houdini_ramp_interpolation_native_gui_smoke.py",
+    "houdini_ramp_interpolation_smoke.py",
+    "houdini_ramp_shutter_parity.py",
+    "houdini_reference_bounds_persistence_smoke.py",
+    "houdini_reference_edit_transform_smoke.py",
+    "houdini_release_existing_hip_smoke.py",
+    "houdini_release_response_gui_smoke.py",
+    "houdini_release_runtime_smoke.py",
+    "houdini_relocated_release_smoke.py",
+    "houdini_render_ownership_smoke.py",
+    "houdini_render_settings_smoke.py",
+    "houdini_resource_smoke.py",
+    "houdini_retained_emitter_update_smoke.py",
+    "houdini_rgb_ramp_gui_smoke.py",
+    "houdini_rgb_ramp_native_gui_smoke.py",
+    "houdini_rgb_ramp_smoke.py",
+    "houdini_rgba_promotion_storage_smoke.py",
+    "houdini_rop_actions_gui_smoke.py",
+    "houdini_rop_help_smoke.py",
+    "houdini_rop_layout_smoke.py",
+    "houdini_sampled_attribute_displacement_gui_smoke.py",
+    "houdini_sampled_attribute_displacement_smoke.py",
+    "houdini_sampled_displacement_gui_smoke.py",
+    "houdini_sampled_displacement_smoke.py",
+    "houdini_sampled_instance_attribute_gui_smoke.py",
+    "houdini_sampled_instance_attribute_native_gui_smoke.py",
+    "houdini_sampled_instance_attribute_smoke.py",
+    "houdini_sampled_instance_reuse_smoke.py",
+    "houdini_sampled_override_gui_smoke.py",
+    "houdini_sampled_override_native_gui_smoke.py",
+    "houdini_sampled_override_smoke.py",
+    "houdini_saved_hip_farm_smoke.py",
+    "houdini_scene_interruption_smoke.py",
+    "houdini_scene_load_gui_smoke.py",
+    "houdini_scene_observer_smoke.py",
+    "houdini_scene_ownership_probe.py",
+    "houdini_scene_publication_smoke.py",
+    "houdini_scene_query_displacement_gui_smoke.py",
+    "houdini_scene_query_displacement_native_gui_smoke.py",
+    "houdini_scene_query_displacement_smoke.py",
+    "houdini_selective_rls_smoke.py",
+    "houdini_shader_bypass_preview_gui_smoke.py",
+    "houdini_shader_bypass_preview_smoke.py",
+    "houdini_shader_catalogue_smoke.py",
+    "houdini_shader_curves_smoke.py",
+    "houdini_shader_graph_smoke.py",
+    "houdini_shader_input_states_gui_smoke.py",
+    "houdini_shader_input_states_smoke.py",
+    "houdini_shader_layout_gui_smoke.py",
+    "houdini_shader_layout_smoke.py",
+    "houdini_shader_preview_shortcut_gui_smoke.py",
+    "houdini_shader_reactivation_smoke.py",
+    "houdini_shader_retirement_smoke.py",
+    "houdini_shader_source_recovery_gui_smoke.py",
+    "houdini_shader_source_recovery_smoke.py",
+    "houdini_shading_attribute_recovery_gui_smoke.py",
+    "houdini_shading_attribute_recovery_smoke.py",
+    "houdini_shading_delivery_benchmark.py",
+    "houdini_shading_payload_gui_smoke.py",
+    "houdini_shading_payload_native_gui_smoke.py",
+    "houdini_shading_payload_smoke.py",
+    "houdini_shadow_catcher_smoke.py",
+    "houdini_showcase_refresh_smoke.py",
+    "houdini_shutter_coordinate_gui_smoke.py",
+    "houdini_shutter_coordinate_native_gui_smoke.py",
+    "houdini_shutter_coordinate_recovery_smoke.py",
+    "houdini_single_pass_exr_smoke.py",
+    "houdini_size_recovery_gui_smoke.py",
+    "houdini_size_recovery_smoke.py",
+    "houdini_sky_light_recovery_smoke.py",
+    "houdini_sky_smoke.py",
+    "houdini_sky_source_recovery_gui_smoke.py",
+    "houdini_sky_source_recovery_native_gui_smoke.py",
+    "houdini_sky_source_recovery_smoke.py",
+    "houdini_source_recovery_smoke.py",
+    "houdini_spatial_displacement_gui_smoke.py",
+    "houdini_spatial_displacement_native_gui_smoke.py",
+    "houdini_spatial_displacement_smoke.py",
+    "houdini_spectral_nested_smoke.py",
+    "houdini_startup_dependency_recovery_smoke.py",
+    "houdini_static_style_motion_gate_smoke.py",
+    "houdini_status_conversion_contract.py",
+    "houdini_strand_binding_refresh_smoke.py",
+    "houdini_strand_material_ipr_smoke.py",
+    "houdini_strand_material_smoke.py",
+    "houdini_strands_ipr_smoke.py",
+    "houdini_stylesheet_acquisition_profile.py",
+    "houdini_stylesheet_attribute_acquisition_profile.py",
+    "houdini_stylesheet_batch_boundaries_smoke.py",
+    "houdini_stylesheet_cooperative_gui_smoke.py",
+    "houdini_stylesheet_cooperative_native_gui_smoke.py",
+    "houdini_stylesheet_cvex_gui_smoke.py",
+    "houdini_stylesheet_cvex_native_gui_smoke.py",
+    "houdini_stylesheet_cvex_shutter_smoke.py",
+    "houdini_stylesheet_cvex_smoke.py",
+    "houdini_stylesheet_cvex_time_gui_smoke.py",
+    "houdini_stylesheet_cvex_time_native_gui_smoke.py",
+    "houdini_stylesheet_cvex_time_smoke.py",
+    "houdini_stylesheet_domains_gui_smoke.py",
+    "houdini_stylesheet_domains_motion_smoke.py",
+    "houdini_stylesheet_domains_native_gui_smoke.py",
+    "houdini_stylesheet_domains_smoke.py",
+    "houdini_stylesheet_domains_volume_smoke.py",
+    "houdini_stylesheet_sources_gui_smoke.py",
+    "houdini_stylesheet_sources_native_gui_smoke.py",
+    "houdini_stylesheet_sources_smoke.py",
+    "houdini_stylesheet_storage_baseline.py",
+    "houdini_subdivision_ipr_smoke.py",
+    "houdini_subdivision_ipr_toggle_gui_smoke.py",
+    "houdini_subdivision_ipr_toggle_native_gui_smoke.py",
+    "houdini_subdivision_smoke.py",
+    "houdini_subnet_dielectric_priority_smoke.py",
+    "houdini_tabs_menu_smoke.py",
+    "houdini_tangent_basis_gui_smoke.py",
+    "houdini_tangent_basis_smoke.py",
+    "houdini_tapered_volume_gui_smoke.py",
+    "houdini_tapered_volume_native_gui_smoke.py",
+    "houdini_tapered_volume_smoke.py",
+    "houdini_temporal_binding_reuse_smoke.py",
+    "houdini_temporal_displacement_gui_smoke.py",
+    "houdini_temporal_displacement_smoke.py",
+    "houdini_temporal_sample_count_smoke.py",
+    "houdini_tessellation_update_ipr_gui_smoke.py",
+    "houdini_tessellation_update_smoke.py",
+    "houdini_texture_alpha_smoke.py",
+    "houdini_texture_auto_batch_smoke.py",
+    "houdini_texture_auto_ipr_smoke.py",
+    "houdini_texture_auto_smoke.py",
+    "houdini_texture_cache_actions_smoke.py",
+    "houdini_texture_cache_smoke.py",
+    "houdini_texture_ipr_smoke.py",
+    "houdini_texture_normal_smoke.py",
+    "houdini_texture_recovery_smoke.py",
+    "houdini_texture_smoke.py",
+    "houdini_transaction_contract_smoke.py",
+    "houdini_transaction_recovery_gui_smoke.py",
+    "houdini_transaction_recovery_native_gui_smoke.py",
+    "houdini_transparency_batch_smoke.py",
+    "houdini_transparency_ipr_smoke.py",
+    "houdini_transparency_smoke.py",
+    "houdini_transport_images_smoke.py",
+    "houdini_unchanged_update_smoke.py",
+    "houdini_velocity_normal_gui_smoke.py",
+    "houdini_velocity_normal_native_gui_smoke.py",
+    "houdini_velocity_normal_smoke.py",
+    "houdini_viewer_final_gui_smoke.py",
+    "houdini_viewer_memory_smoke.py",
+    "houdini_viewer_redesign_smoke.py",
+    "houdini_viewer_resolution_smoke.py",
+    "houdini_viewer_sequence_gui_smoke.py",
+    "houdini_viewer_session_recreation_smoke.py",
+    "houdini_viewer_timing_smoke.py",
+    "houdini_viewer_wakeup_smoke.py",
+    "houdini_viewport_drag_benchmark.py",
+    "houdini_volume_field_recovery_gui_smoke.py",
+    "houdini_volume_field_recovery_smoke.py",
+    "houdini_volume_ipr_smoke.py",
+    "houdini_volume_material_ipr_smoke.py",
+    "houdini_volume_material_smoke.py",
+    "houdini_volume_motion_ipr_smoke.py",
+    "houdini_volume_motion_smoke.py",
+    "houdini_volume_ownership_probe.py",
+    "houdini_volume_shader_recovery_gui_smoke.py",
+    "houdini_volume_shader_recovery_smoke.py",
+    "houdini_volume_smoke.py",
+    "houdini_volume_vector_gui_smoke.py",
+    "houdini_volume_vector_native_gui_smoke.py",
+    "houdini_volume_vector_smoke.py",
+    "houdini_worker_active_failure_smoke.py",
+    "houdini_world_batch_smoke.py",
+    "houdini_world_native_ipr_smoke.py",
+    "houdini_world_sampling_smoke.py",
+    "houdini_world_smoke.py",
+    "houdini_world_volume_gui_smoke.py",
+    "houdini_world_volume_smoke.py",
+    "houdini_world_volume_thumbnail_smoke.py",
+    "hydra_smoke.py",
+    "hython_scene_contract.py",
+    "image_iris_controls_source_test.py",
+    "installer_refresh_members_test.ps1",
+    "local_final_async_rollback_test.py",
+    "local_final_lifecycle_test.py",
+    "local_final_ownership_edges_test.py",
+    "local_final_suspension_test.py",
+    "material_authoring_test.py",
+    "material_override_evaluation_test.py",
+    "material_override_expression_test.py",
+    "multi_device_range_fault_test.py",
+    "native_review_contracts.py",
+    "native_scene_definition_test.py",
+    "native_test_context_test.ps1",
+    "native_test_runtime_test.py",
+    "native_verification_archive_test.py",
+    "offline_archive_test.py",
+    "offline_scripts_test.py",
+    "output_sequence_paths_test.py",
+    "patch_maintenance_test.py",
+    "patch_replay_parent_git_test.py",
+    "patch_test_matrix_test.py",
+    "pytest_contracts.py",
+    "python_status_conversion_contract.py",
+    "queued_feedback_test.py",
+    "queued_rejected_navigation_test.py",
+    "release_package_test.py",
+    "release_workflow_test.py",
+    "run_harness_context_test.ps1",
+    "run_hython_log_routing_test.ps1",
+    "run_tests_selection_test.ps1",
+    "runtime_assets_test.py",
+    "sdk_dependency_policy_test.py",
+    "soho_update_guard_test.py",
+    "source_history_test.py",
+    "staging_runtime_inventory_test.py",
+    "startup_dependency_guard_test.py",
+    "subdivision_count_wrapper_test.py",
+    "system_input_evidence_test.py",
+    "tapered_volume_reference_test.py",
+    "test_rop_help_source.py",
+    "test_runner_routing_test.ps1",
+    "verification_outcome_test.py",
+    "viewer_memory_idle_test.py",
+    "viewer_priority_delivery_test.py",
+    "worker_release_observations_test.py",
+    "worker_scheduling_test.py",
+    "worker_stdout_transport_test.py",
+    "workstation_ci_test.py"
+  ],
+  "support": [
+    "background_stop_profile_hooks.py",
+    "benchmark_memory.py",
+    "blend_all_attributes_fixture.py",
+    "blend_direct_fixture.py",
+    "blend_instances_reference.py",
+    "blend_mesh_fixture.py",
+    "blend_reference_hulls_fixture.py",
+    "blend_reference_pieces_fixture.py",
+    "blend_reference_timeline_fixture.py",
+    "blender_mesh_shading_reference.py",
+    "camera_coordinate_displacement_fixture.py",
+    "camera_dof_motion_fixture.py",
+    "camera_intrinsic_motion_fixture.py",
+    "camera_intrinsic_reference.py",
+    "camera_lens_motion_fixture.py",
+    "camera_sampling_fixture.py",
+    "compare_exr_bands_reports.py",
+    "conftest.py",
+    "constant_attribute_fixture.py",
+    "cop_shutter_fixture.py",
+    "curve_capacity_fixture.py",
+    "dense_volume_fixture.py",
+    "displacement_motion_recovery_fixture.py",
+    "domain_recovery_fixture.py",
+    "environment_recovery_fixture.py",
+    "field_motion_fixture.py",
+    "fixtures/asset_browser/make_listing_fixture.py",
+    "fixtures/blend_worlds/orientation_reference.py",
+    "geometry_binding_recovery_fixture.py",
+    "geometry_key_binding_fixture.py",
+    "gpu_color_reference.py",
+    "gui_shutdown.py",
+    "gui_startup/bootstrap.py",
+    "gui_startup/failure_probe.py",
+    "hash_displacement_fixture.py",
+    "houdini_system_input_fixture.py",
+    "hue_ramp_fixture.py",
+    "identity_subdivision_fixture.py",
+    "independent_binding_fixture.py",
+    "ipr_update_checks.py",
+    "light_shader_fixture.py",
+    "material_expression_fixture.py",
+    "material_ramp_override_fixture.py",
+    "mesh_field_fixture.py",
+    "mesh_island_fixture.py",
+    "mix_nodes_fixture.py",
+    "multipart_fixture.py",
+    "named_attribute_fixture.py",
+    "named_capture_fixture.py",
+    "named_field_displacement_fixture.py",
+    "native_compiler.py",
+    "native_curve_reference.py",
+    "native_object_fixture.py",
+    "native_runtime_identity.py",
+    "native_test_entry.py",
+    "native_test_runtime.py",
+    "native_window_capture.py",
+    "packed_cd_fixture.py",
+    "packed_deformation_fixture.py",
+    "packed_instance_attribute_fixture.py",
+    "packed_source_recovery_fixture.py",
+    "packed_velocity_fixture.py",
+    "panel_navigation_checks.py",
+    "panorama_fixture.py",
+    "parameter_template_checks.py",
+    "parametric_curve_fixture.py",
+    "parametric_curve_recovery_fixture.py",
+    "particle_attribute_fixture.py",
+    "pass_fixtures.py",
+    "point_curve_reference.py",
+    "point_instance_oracle.py",
+    "point_instancing_common.py",
+    "point_subject_stylesheet_fixture.py",
+    "pointiness_fixture.py",
+    "python_status_conversion_contract.cpp",
+    "ramp_table_reference.py",
+    "recovery_geometry_fixture.py",
+    "sampled_attribute_displacement_fixture.py",
+    "sampled_displacement_fixture.py",
+    "sampled_instance_attribute_fixture.py",
+    "sampled_override_fixture.py",
+    "scene_query_displacement_fixture.py",
+    "session_soak_fixture.py",
+    "shader_bypass_preview_fixture.py",
+    "shader_curve_fixture.py",
+    "shader_source_recovery_fixture.py",
+    "shutter_coordinate_recovery_fixture.py",
+    "size_recovery_fixture.py",
+    "sky_source_recovery_fixture.py",
+    "soho_camera_probe.py",
+    "solver_idle_fixture.py",
+    "spatial_displacement_fixture.py",
+    "stylesheet_storage_fixture.py",
+    "subdivision_test_setup.py",
+    "support/__init__.py",
+    "support/artifacts.ps1",
+    "support/blender_viewport_gt_probe.cpp",
+    "support/catalogue.py",
+    "support/catalogue_pytest.py",
+    "support/devices.py",
+    "support/displayed_frame_metrics.py",
+    "support/images.py",
+    "support/multi_device_range_fault_harness.cpp",
+    "support/package_loader.py",
+    "support/paths.py",
+    "support/private_scenes.py",
+    "support/recipe_contracts.py",
+    "support/reports.py",
+    "support/scenes.py",
+    "support/worker_release_observations_harness.cpp",
+    "support/workers.py",
+    "system_input_evidence.py",
+    "system_input_mouse_observer.py",
+    "tangent_basis_fixture.py",
+    "tapered_volume_fixture.py",
+    "tapered_volume_reference.py",
+    "tapered_volume_source.py",
+    "temporal_displacement_fixture.py",
+    "transaction_scene_fixture.py",
+    "velocity_normal_fixture.py",
+    "volume_field_recovery_fixture.py",
+    "volume_shader_recovery_fixture.py",
+    "volume_vector_fixture.py",
+    "wire_instances20_fixture.cpp",
+    "worker_failure_fixture.py",
+    "worker_protocol_fixture.py",
+    "world_volume_fixture.py"
+  ],
+  "manual": [
+    "blend_asset_scan_smoke.py",
+    "blend_digest_blender_smoke.py",
+    "blend_list_contents_smoke.py",
+    "blend_material_export_smoke.py",
+    "blend_mesh_ingress_contract.cpp",
+    "blend_viewport_budget_smoke.py",
+    "blend_worker_progressive_smoke.py",
+    "blend_worker_smoke.py",
+    "blender_asset_export_smoke.py",
+    "blender_batch_export_smoke.py",
+    "blender_subdivision_export_smoke.py",
+    "core_volume_wire_smoke.py",
+    "display_stalled_peer/bootstrap.py",
+    "display_stalled_peer/gui_child.py",
+    "display_stalled_peer/run_trial.ps1",
+    "display_stalled_peer/run_trial.py",
+    "dlss_cmake_probe.cmake",
+    "embree_cmake_probe.cmake",
+    "embree_startup_imports.py",
+    "gaussian_splats_math_test.cpp",
+    "heavy_renderer_suites.py",
+    "houdini_asset_browser_smoke.py",
+    "houdini_attribute_tables_kept_smoke.py",
+    "houdini_background_pin_smoke.py",
+    "houdini_background_upgrade_smoke.py",
+    "houdini_blend_assets_plan_smoke.py",
+    "houdini_blend_converted_attributes_smoke.py",
+    "houdini_blend_dependency_reload_smoke.py",
+    "houdini_blend_file_node_smoke.py",
+    "houdini_blend_frame_cache_smoke.py",
+    "houdini_blend_integration_smoke.py",
+    "houdini_blend_material_import_smoke.py",
+    "houdini_blend_material_settings_parity_smoke.py",
+    "houdini_blend_memory_smoke.py",
+    "houdini_blend_node_coverage_smoke.py",
+    "houdini_blend_node_settings_parity_smoke.py",
+    "houdini_blend_subdivision_smoke.py",
+    "houdini_blend_sync_parity_smoke.py",
+    "houdini_blend_world_orientation_smoke.py",
+    "houdini_blender53_gsplats_grazing_smoke.py",
+    "houdini_blender_mesh_shading_smoke.py",
+    "houdini_blender_reference_layout_check.py",
+    "houdini_blender_viewport_gt_smoke.py",
+    "houdini_collapsed_instance_warning_smoke.py",
+    "houdini_convert_material_smoke.py",
+    "houdini_cpu_guiding_probe.py",
+    "houdini_curve_accel_reuse_smoke.py",
+    "houdini_curve_parallel_conversion_smoke.py",
+    "houdini_curve_subdivisions_smoke.py",
+    "houdini_device_update_memory_smoke.py",
+    "houdini_ipr_feedback_gate_smoke.py",
+    "houdini_ipr_gesture_capture_smoke.py",
+    "houdini_ipr_handle_drag_smoke.py",
+    "houdini_ipr_light_edit_tagging_smoke.py",
+    "houdini_ipr_light_parameters_smoke.py",
+    "houdini_ipr_light_value_read_smoke.py",
+    "houdini_ipr_many_instance_pose_smoke.py",
+    "houdini_ipr_material_edit_smoke.py",
+    "houdini_ipr_object_edit_smoke.py",
+    "houdini_ipr_root_pose_smoke.py",
+    "houdini_light_list_smoke.py",
+    "houdini_light_portal_smoke.py",
+    "houdini_material_motion_child_reuse_smoke.py",
+    "houdini_material_settings_smoke.py",
+    "houdini_mesh_parallel_conversion_smoke.py",
+    "houdini_mesh_refit_smoke.py",
+    "houdini_native_graph_roundtrip.py",
+    "houdini_native_persistence_probe.py",
+    "houdini_object_flags_partial_smoke.py",
+    "houdini_object_table_partial_smoke.py",
+    "houdini_offline_copies_smoke.py",
+    "houdini_offline_extended_smoke.py",
+    "houdini_offline_rop_smoke.py",
+    "houdini_offline_scene_smoke.py",
+    "houdini_output_formats_smoke.py",
+    "houdini_packed_blender_adapter_smoke.py",
+    "houdini_packed_blender_serialization.py",
+    "houdini_packed_fragment_smoke.py",
+    "houdini_packed_parallel_conversion_smoke.py",
+    "houdini_packed_recycled_conversion_smoke.py",
+    "houdini_patch_matrix_devices_smoke.py",
+    "houdini_rls_hair_smoke.py",
+    "houdini_rop_hooks_smoke.py",
+    "houdini_showcase_displacement_smoke.py",
+    "houdini_top_level_incremental_smoke.py",
+    "houdini_validation_parallel_smoke.py",
+    "houdini_velocity_motion_smoke.py",
+    "houdini_viewer_background_composites_smoke.py",
+    "houdini_viewer_display_modes_smoke.py",
+    "houdini_viewer_linear_background_smoke.py",
+    "houdini_volume_wire_smoke.py",
+    "houdini_warning_console_smoke.py",
+    "houdini_wire_gather_smoke.py",
+    "light_tree_first_frame_benchmark.cpp",
+    "native_external_binding_contract.cpp",
+    "native_external_binding_contract.py",
+    "ramp_curve_parity_gate.py",
+    "scoped_startup_integration_test.py",
+    "shader_switches_test.cpp",
+    "upstream/point_nonuniform_normal.cpp",
+    "wire_instances20_test.py"
+  ],
+  "gui": [
+    "camera_coordinate_displacement_viewer_workflow.py",
+    "hash_displacement_viewer_workflow.py",
+    "houdini_artist_blender_hulls_gui_smoke.py",
+    "houdini_artist_idle_gui_smoke.py",
+    "houdini_blender_reference_hulls_gui_smoke.py",
+    "houdini_blender_reference_timeline_gui_smoke.py",
+    "houdini_camera_dof_smoke.py",
+    "houdini_camera_feedback_trace.py",
+    "houdini_camera_tools_gui_smoke.py",
+    "houdini_cop_idle_gui_smoke.py",
+    "houdini_cop_resolution_navigation_gui_smoke.py",
+    "houdini_devices_ipr_smoke.py",
+    "houdini_dicing_ipr_gui_smoke.py",
+    "houdini_image_iris_color_smoke.py",
+    "houdini_image_iris_smoke.py",
+    "houdini_light_material_gui_smoke.py",
+    "houdini_local_final_hip_gui_smoke.py",
+    "houdini_local_final_two_viewer_gui_smoke.py",
+    "houdini_mplay_chain_gui_smoke.py",
+    "houdini_mplay_ipr_actions_gui_smoke.py",
+    "houdini_obj_lifecycle_audit.py",
+    "houdini_offline_copies_gui_smoke.py",
+    "houdini_panel_dpi_smoke.py",
+    "houdini_panel_lifecycle.py",
+    "houdini_panel_scene_replacement_smoke.py",
+    "houdini_render_view_active_quit_gui_smoke.py",
+    "houdini_render_view_controls_gui_smoke.py",
+    "houdini_render_view_presented_gui_smoke.py",
+    "houdini_rop_layout_gui_smoke.py",
+    "houdini_selective_rls_ipr_gui_smoke.py",
+    "houdini_session_soak.py",
+    "houdini_showcase_light_shadow_smoke.py",
+    "houdini_sky_ipr_smoke.py",
+    "houdini_solver_idle_gui_smoke.py",
+    "houdini_subnet_filter_ipr_smoke.py",
+    "houdini_timeline_update_controls_gui_smoke.py",
+    "houdini_transform_response_gui_smoke.py",
+    "houdini_ui_exit_smoke.py",
+    "houdini_vectors_output_smoke.py",
+    "houdini_viewer_channels_shortcuts_smoke.py",
+    "houdini_viewer_chrome_scale_gui_smoke.py",
+    "houdini_viewer_fullscreen_edges_smoke.py",
+    "houdini_viewer_fullscreen_gui_smoke.py",
+    "houdini_viewer_icon_theme_smoke.py",
+    "houdini_viewer_lifetime_gui_smoke.py",
+    "houdini_viewer_linked_resolution_gui_smoke.py",
+    "houdini_viewer_linked_resolution_smoke.py",
+    "houdini_viewer_native_geometry_gui_smoke.py",
+    "houdini_viewer_pick_tools_gui_smoke.py",
+    "houdini_viewer_reopen_gui_smoke.py",
+    "houdini_viewer_start_smoke.py",
+    "houdini_viewer_state_hip_smoke.py",
+    "houdini_viewer_toolbar_layout_gui_smoke.py",
+    "houdini_viewer_update_time_gui_smoke.py",
+    "houdini_viewport_mouse_probe.py",
+    "houdini_worker_ownership_ipr_smoke.py",
+    "houdini_worker_ownership_native_ipr_smoke.py",
+    "houdini_world_ipr_smoke.py",
+    "houdini_world_volume_response_probe.py",
+    "scene_query_displacement_viewer_workflow.py",
+    "sky_source_viewer_workflow.py",
+    "transaction_viewer_workflow.py"
+  ],
+  "benchmark": [
+    "benchmark_grid_comparison.py",
+    "benchmark_native_latency.py",
+    "benchmark_packed_capture.py",
+    "benchmark_packed_deformation_capture.py",
+    "benchmark_packed_deformation_heavy_capture.py",
+    "benchmark_packed_velocity_capture.py",
+    "houdini_artist_blender_frame_gui_benchmark.py",
+    "houdini_artist_camera_profile.py",
+    "houdini_background_stop_profile.py",
+    "houdini_blend_timeline_ipr_benchmark.py",
+    "houdini_color_latency_benchmark.py",
+    "houdini_diagnostics_scaling_profile.py",
+    "houdini_display_resolution_profile.py",
+    "houdini_displayed_frame_gui_benchmark.py",
+    "houdini_exr_bands_benchmark.py",
+    "houdini_heavy_animation_benchmark.py",
+    "houdini_heavy_dense_packed_preview_smoke.py",
+    "houdini_heavy_response_benchmark.py",
+    "houdini_heavy_viewport_baseline.py",
+    "houdini_host_cooking_response_benchmark.py",
+    "houdini_ipr_response_benchmark.py",
+    "houdini_multi_gpu_animation_smoke.py",
+    "houdini_packed_delivery_benchmark.py",
+    "houdini_packed_preview_benchmark.py",
+    "houdini_panel_light_drag_gui_benchmark.py",
+    "houdini_point_instancing_perf_benchmark.py",
+    "houdini_portable_texture_benchmark.py",
+    "houdini_selective_rls_benchmark.py",
+    "houdini_viewer_dock_latency_gui_benchmark.py",
+    "houdini_viewport_edit_baseline.py",
+    "houdini_viewport_transform_profile.py",
+    "light_tree_edit_benchmark.py",
+    "light_tree_first_frame_benchmark.py",
+    "progressive_buffer_probe.py"
+  ],
+  "review": "tests/test-dispositions.json",
+  "retired": {
+    "subdivision_options_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/subdivision_options_probe.py",
+      "sha256": "bd91245c442fa120cca061c35d3f7960569bd462ca90bab9ecfcc5ade524fd2d",
+      "reason": "One-off installed Subdivide SOP menu/value inspection. It prints observations and has no regression assertions; no active runtime or runner consumes it.",
+      "replacements": [
+        "tests/houdini_subdivision_smoke.py",
+        "tests/subdivision_test_setup.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "performance_geometry_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/performance_geometry_probe.py",
+      "sha256": "572cebaed906f1873f617c614d2826902387285a8dffa902163158def16e586c",
+      "reason": "One-off Grid SOP convention discovery. It records result=inspected, topology/menu observations and no assertions, rather than testing renderer behavior.",
+      "replacements": [
+        "tests/benchmark_grid_comparison.py",
+        "tests/benchmark_native_latency.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "create_soho_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/create_soho_probe.py",
+      "sha256": "d3477caae4a80057491ae81101585d2f1f855b4f2c6cefb31658396eea0e301f",
+      "reason": "Stage-1 feasibility experiment constructs an ad-hoc SOHO HDA through Hscript and invokes the companion observation program. The production ROP path now has dedicated lifecycle, action and camera regressions.",
+      "replacements": [
+        "tests/houdini_background_final_smoke.py",
+        "tests/houdini_rop_actions_gui_smoke.py",
+        "tests/camera_conventions_probe.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "soho_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/soho_probe.py",
+      "sha256": "f49b14b3778c157191a18238bae0aab9fc1341326075f71e311974bf6ac6e306",
+      "reason": "Companion observation-only SOHO program for create_soho_probe.py; its sole incoming reference is retired with that experiment. It writes lifecycle metadata without regression assertions.",
+      "replacements": [
+        "tests/houdini_background_final_smoke.py",
+        "tests/camera_conventions_probe.py",
+        "tests/soho_camera_probe.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_offline_datablock_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_offline_datablock_probe.py",
+      "sha256": "d9b9f28cc6fed02546c147d33ce9075c4a2e871f6ba65df9d2e6cae2d76e80d0",
+      "reason": "Explicit three-process serialization prototype using the custom cycles.offline.prototype data block and manually loaded CPIO. Production archive round-trip fixtures exercise the actual archive schema and recovery behavior.",
+      "replacements": [
+        "tests/houdini_offline_scene_smoke.py",
+        "tests/houdini_offline_extended_smoke.py",
+        "tests/offline_archive_test.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_offline_recovery_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_offline_recovery_probe.py",
+      "sha256": "976851703cbe6eb70bfbf835a97abbb979dc6a5e5b9eddbe1d154205e4e73fb9",
+      "reason": "One-off HOM rename/reference and intentional type-replacement API investigation. It records observations with zero assertions and unconditionally reports passed; it is not a production recovery regression.",
+      "replacements": [
+        "tests/houdini_offline_structure_smoke.py",
+        "tests/houdini_offline_scene_smoke.py",
+        "tests/houdini_offline_extended_smoke.py",
+        "tests/offline_archive_test.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_background_final_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_background_final_probe.py",
+      "sha256": "00597cc1f18a898457d8a611368a7212874d13be985d12f3ac4d5fd91b4b164d",
+      "reason": "Explicit observation of the inherited reserved background button. Its only assertion bounds elapsed time; separate_process is computed but not asserted. Dedicated production batch and GUI fixtures test actual process isolation, controls and cleanup.",
+      "replacements": [
+        "tests/houdini_background_final_smoke.py",
+        "tests/houdini_background_final_gui_smoke.py",
+        "tests/houdini_background_final_gui_cleanup_smoke.py",
+        "tests/houdini_background_jobs_gui_smoke.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    },
+    "houdini_artist_ui_probe.py": {
+      "recovery_commit": "73600da3a3447a24e346f070143c851d42d0a9c1",
+      "recovery_path": "tests/houdini_artist_ui_probe.py",
+      "sha256": "8a094f8127b64e9696d22213b956034e37b384a8229e87ef3e3a7326924542f4",
+      "reason": "One-off courtyard screenshot/window/menu observation with no assertions. The artist workflow and ROP layout regressions assert actual UI behavior and icon/layout contracts.",
+      "replacements": [
+        "tests/houdini_artist_workflow_smoke.py",
+        "tests/houdini_rop_layout_gui_smoke.py"
+      ],
+      "evidence": "Original raw source remains recoverable through Git; replacements identify maintained contract coverage, not an assertion that the exploratory observation was rerun or exactly duplicated."
+    }
+  }
+}

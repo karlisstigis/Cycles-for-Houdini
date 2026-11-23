@@ -1,0 +1,159 @@
+--- pristine/light_tree.cpp
++++ reference/light_tree.cpp
+@@ -9,7 +9,11 @@
+ #include "util/math_fast.h"
+ #include "util/progress.h"
+ 
++#include <cstdio>
+ CCL_NAMESPACE_BEGIN
++static LightTreeMeshKey light_tree_mesh_key(Object *object) {
++ return {static_cast<Mesh *>(object->get_geometry()),object->shader_palette_device_offset,object->get_light_set_membership()};
++}
+ 
+ float OrientationBounds::calculate_measure() const
+ {
+@@ -94,7 +98,8 @@
+     float3 vertices[3];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+     const Mesh::Triangle triangle = mesh->get_triangle(prim_id);
+-    Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
++    Shader *shader = object->effective_shader(mesh->get_shader()[prim_id]);
++    if (!shader) shader = scene->default_surface;
+ 
+     const packed_float3 *mesh_positions = mesh->get_position();
+     for (int i = 0; i < 3; i++) {
+@@ -254,11 +259,12 @@
+   }
+ }
+ 
+-bool LightTree::triangle_usable_as_light(Mesh *mesh, const int prim_id)
++bool LightTree::triangle_usable_as_light(Object *object, Mesh *mesh, const int prim_id)
+ {
+   const int shader_index = mesh->get_shader()[prim_id];
+   if (shader_index < mesh->get_used_shaders().size()) {
+-    Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[shader_index]);
++    Shader *shader = object->effective_shader(shader_index);
++    if (!shader) return false;
+     if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
+       return true;
+     }
+@@ -270,7 +276,7 @@
+ {
+   const size_t mesh_num_triangles = mesh->num_triangles();
+   for (size_t i = 0; i < mesh_num_triangles; i++) {
+-    if (triangle_usable_as_light(mesh, i)) {
++    if (triangle_usable_as_light(scene->objects[object_id], mesh, i)) {
+       emitters_.emplace_back(scene, i, object_id);
+     }
+   }
+@@ -322,9 +328,9 @@
+ 
+       /* Only count unique meshes. */
+       Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+-      auto map_it = offset_map_.find(mesh);
++      auto map_it = offset_map_.find(light_tree_mesh_key(object));
+       if (map_it == offset_map_.end()) {
+-        offset_map_[mesh] = num_triangles;
++        offset_map_[light_tree_mesh_key(object)] = num_triangles;
+         num_triangles += mesh->num_triangles();
+       }
+     }
+@@ -333,6 +339,7 @@
+ 
+ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+ {
++  if (std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE")) std::fprintf(stderr,"REFERENCE_PRISTINE_TREE_BUILD triangles=%d\n",num_triangles);
+   if (local_lights_.empty() && distant_lights_.empty() && mesh_lights_.empty()) {
+     return nullptr;
+   }
+@@ -342,7 +349,7 @@
+   const int num_distant_lights = distant_lights_.size();
+ 
+   /* Create a node for each mesh light, and keep track of unique mesh lights. */
+-  std::unordered_map<Mesh *, std::tuple<LightTreeNode *, int, int>> unique_mesh;
++  std::unordered_map<LightTreeMeshKey, std::tuple<LightTreeNode *, int, int>, LightTreeMeshKeyHash> unique_mesh;
+   uint *object_offsets = dscene->object_lookup_offset.alloc(scene->objects.size());
+   emitters_.reserve(num_triangles + num_local_lights + num_distant_lights);
+   for (LightTreeEmitter &emitter : mesh_lights_) {
+@@ -350,19 +357,19 @@
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+     emitter.root = create_node(LightTreeMeasure::empty, 0);
+ 
+-    auto map_it = unique_mesh.find(mesh);
++    auto map_it = unique_mesh.find(light_tree_mesh_key(object));
+     if (map_it == unique_mesh.end()) {
+       const int start = emitters_.size();
+       add_mesh(scene, mesh, emitter.object_id);
+       const int end = emitters_.size();
+ 
+-      unique_mesh[mesh] = std::make_tuple(emitter.root.get(), start, end);
++      unique_mesh[light_tree_mesh_key(object)] = std::make_tuple(emitter.root.get(), start, end);
+       emitter.root->object_id = emitter.object_id;
+     }
+     else {
+       emitter.root->make_instance(std::get<0>(map_it->second), emitter.object_id);
+     }
+-    object_offsets[emitter.object_id] = offset_map_[mesh];
++    object_offsets[emitter.object_id] = offset_map_[light_tree_mesh_key(object)];
+   }
+ 
+   /* Build a subtree for each unique mesh light. */
+@@ -380,7 +387,7 @@
+     Object *object = scene->objects[emitter.object_id];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+ 
+-    LightTreeNode *reference = std::get<0>(unique_mesh.find(mesh)->second);
++    LightTreeNode *reference = std::get<0>(unique_mesh.find(light_tree_mesh_key(object))->second);
+     emitter.measure = emitter.root->measure = reference->measure;
+ 
+     /* Transform measure. The measure is only directly transformable if the transformation has
+@@ -394,7 +401,7 @@
+       emitter.measure.reset();
+       size_t const mesh_num_triangles = mesh->num_triangles();
+       for (size_t i = 0; i < mesh_num_triangles; i++) {
+-        if (triangle_usable_as_light(mesh, i)) {
++        if (triangle_usable_as_light(object, mesh, i)) {
+           emitter.measure.add(LightTreeEmitter(scene, i, emitter.object_id, true).measure);
+         }
+       }
+--- pristine/light_tree.h
++++ reference/light_tree.h
+@@ -380,6 +380,20 @@
+  *
+  * BVH-like data structure that keeps track of lights
+  * and considers additional orientation and energy information */
++/* The triangle shape can be shared while its emission and linking differ. */
++struct LightTreeMeshKey {
++  Mesh *mesh;
++  int palette;
++  uint64_t membership;
++  bool operator==(const LightTreeMeshKey &b) const
++  { return mesh == b.mesh && palette == b.palette && membership == b.membership; }
++};
++struct LightTreeMeshKeyHash {
++  size_t operator()(const LightTreeMeshKey &key) const
++  { return std::hash<Mesh *>{}(key.mesh) ^ (std::hash<uint64_t>{}(key.membership) << 1) ^
++           (std::hash<int>{}(key.palette) << 2); }
++};
++
+ class LightTree {
+   unique_ptr<LightTreeNode> root_;
+ 
+@@ -390,7 +404,7 @@
+   vector<LightTreeEmitter> distant_lights_;
+   vector<LightTreeEmitter> mesh_lights_;
+ 
+-  std::unordered_map<Mesh *, int> offset_map_;
++  std::unordered_map<LightTreeMeshKey, int, LightTreeMeshKeyHash> offset_map_;
+ 
+   Progress &progress_;
+ 
+@@ -455,7 +469,7 @@
+                     int &split_dim);
+ 
+   /* Check whether the light tree can use this triangle as light-emissive. */
+-  bool triangle_usable_as_light(Mesh *mesh, const int prim_id);
++  bool triangle_usable_as_light(Object *object, Mesh *mesh, const int prim_id);
+ 
+   /* Add all the emissive triangles of a mesh to the light tree. */
+   void add_mesh(Scene *scene, Mesh *mesh, const int object_id);

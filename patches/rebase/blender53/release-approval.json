@@ -1,0 +1,353 @@
+{
+  "schema_version": 1,
+  "result": "approved",
+  "baseline_manifest_sha256": "645856da597edcdca7f521c1497f5bd8375e891e3ed8bd400fa8d91e5f12cb38",
+  "upstream": "77edc33168528e06b35540452bce5cce6068c3aa",
+  "authoring_tip": "e60784f1abfad2a435815e79f12812001f1d38e8",
+  "applied_patches": [
+    {
+      "path": "patches/0001-integration-build-hook.patch",
+      "sha256": "dfea783d01827dfefd64318f8966a35f0142d047b734132abdffe8ed6315f49d"
+    },
+    {
+      "path": "patches/0002-houdini-usd-link-libraries.patch",
+      "sha256": "9aa3896bd101fdce31749d9e22d30d85b194461f9bd9f6b30bdfa7d69da0948d"
+    },
+    {
+      "path": "patches/0003-point-nonuniform-normals.patch",
+      "sha256": "38f8a1f85b5fc21f07028201ec67e491067abadf66ffea57df322f184ee9f5bb"
+    },
+    {
+      "path": "patches/0004-volume-shutter-and-bounds.patch",
+      "sha256": "23e03c5f40043739c91d70c0a3b8b670ccf5dbcb5c19e7a18b0daa15bc8fc474"
+    },
+    {
+      "path": "patches/0005-point-lifetime-intersections.patch",
+      "sha256": "9063de1266e6ef7d1da6c2203c07f596999ae3456ffa70084972c5f6fa7412b5"
+    },
+    {
+      "path": "patches/0006-opt-in-phase-diagnostics.patch",
+      "sha256": "b27f6ff83abaa5689d41bb66df6940957269db31197f70e3457534bf75e484d4"
+    },
+    {
+      "path": "patches/0007-retain-clean-shader-buffers.patch",
+      "sha256": "5125f7a6426403dadb92aa0d487c1afdc8782c9398504f225bd64bde8021f3e1"
+    },
+    {
+      "path": "patches/0008-bounded-subdivision.patch",
+      "sha256": "602e37027e410728ac9ffb3895c585d9f3fb44bb7186e6ca9249d1056cb65883"
+    },
+    {
+      "path": "patches/0009-smooth-subdivision-color.patch",
+      "sha256": "ca0fcef1b25515fc68f716f2d6868f09529ca5bd3052b0a640f59afb02a97666"
+    },
+    {
+      "path": "patches/0010-texture-resource-revisions.patch",
+      "sha256": "8fc82ff6d5b2fb29d25e30b02b2ebeadcbb5f26df894028accb17671a0280b42"
+    },
+    {
+      "path": "patches/0013-texture-coverage-alpha.patch",
+      "sha256": "e947242040b013715129823ef3c7995f3929594217b1547c2f02e29f7d023601"
+    },
+    {
+      "path": "patches/0014-persistent-scene-sync.patch",
+      "sha256": "093b3dbe3b0dafef3eb627f502f7c8d0e342928dc1a4bee3a8216b0497c5a404"
+    },
+    {
+      "path": "patches/0015-fixed-subdivision-levels.patch",
+      "sha256": "c553beb5b80324e8a021da49c51d8d584315438680095aec15d54edc553c9712"
+    },
+    {
+      "path": "patches/0016-output-sample-statistics.patch",
+      "sha256": "8e527b2d5cee07ed7dd67b7fa1975fe33b635935b50e07cc0572f8f1e236d60c"
+    },
+    {
+      "path": "patches/0017-output-display-ownership.patch",
+      "sha256": "9f46b4a0d6c40c088a1782ba42434bd6b05928828009a2d8cd2beb8e94c97efc"
+    },
+    {
+      "path": "patches/0018-subdivision-interruption-safety.patch",
+      "sha256": "e56ced06733cedf900f0c1f7a51ea0761b0adfeed8367dc3a55e1aacf769568d"
+    },
+    {
+      "path": "patches/0019-world-shadow-catcher-reference.patch",
+      "sha256": "6dcef15ea91eff1fbe84ded810ca74c2a0c8135152d864a073049a8d44243c59"
+    },
+    {
+      "path": "patches/0020-world-auto-map-resolution.patch",
+      "sha256": "e04f7567cfc590f19c57273775cb745db0ee81d104e826582a0c29f2c030f4bf"
+    },
+    {
+      "path": "patches/0021-scene-sampling-interruption.patch",
+      "sha256": "55c297db52e710205133cf72116ab9c3942aeac81533f43ff4a98c3a6a6e7239"
+    },
+    {
+      "path": "patches/0022-progressive-output-layout.patch",
+      "sha256": "471583fcc6cdcb17ef041a165058dfee4fa365e582259055a987483cceb8b145"
+    },
+    {
+      "path": "patches/0023-object-motion-buffer-layout.patch",
+      "sha256": "7c80ea9b4fdd022056ed93c3c635010da463f3bddc09b6563dcb8c711241e5e8"
+    },
+    {
+      "path": "patches/0024-sampled-displacement.patch",
+      "sha256": "21c4674d6254420a84db37d5ac9de3dd101408a78ae142d51a3bbf35114bc3b4"
+    },
+    {
+      "path": "patches/0025-temporal-displacement-shaders.patch",
+      "sha256": "27672cef64ff152577541710463a85209334d2bc6a1e6d114a20e79fdceba7ba"
+    },
+    {
+      "path": "patches/0026-subdivision-motion-normal-stride.patch",
+      "sha256": "c229a5cba0904964facb1f7645f61a9a2a8718e7fcd266513e8a4abb042f65ef"
+    },
+    {
+      "path": "patches/0027-linear-subdivision-motion-normals.patch",
+      "sha256": "4214feb0d213ba2c4f1033dd9c7d4d351b0672e0e98c49e281307b965b9f7871"
+    },
+    {
+      "path": "patches/0028-sampled-mesh-attributes.patch",
+      "sha256": "672bdf5ee21d73d7097538aa95bfb00a3adb7696cbf708cbb2681544f46be094"
+    },
+    {
+      "path": "patches/0029-sampled-point-curve-attributes.patch",
+      "sha256": "a6a84a6f15437c6961e7fed49bcf4e9baf36cc58d3c7a6bacdb946f75ec86e10"
+    },
+    {
+      "path": "patches/0030-sampled-named-tangent-bases.patch",
+      "sha256": "652fee12fa863ea6903130af2c82c2369c984e32daf86e638bce1213de679bf3"
+    },
+    {
+      "path": "patches/0031-motion-normal-map-basis.patch",
+      "sha256": "e9dbb428177b9d9e655845f7759e975b825392080ca47fa06397448f7c381b03"
+    },
+    {
+      "path": "patches/0032-compact-output-passes.patch",
+      "sha256": "f6a3ba17df3bfd85f1511a8fc583a6c484f13e93ea4c70d98f8b9379157bf006"
+    },
+    {
+      "path": "patches/0033-local-light-tree-cache.patch",
+      "sha256": "68eb756a5dc02b74d9db611c311dc6fa2353ebb42c946b55fe2a0c3f239b4418"
+    },
+    {
+      "path": "patches/0034-light-tree-phase-diagnostics.patch",
+      "sha256": "6e2a496762398967c398e302df81bd99ec8b154d4bbb22950287aa5c3128410b"
+    },
+    {
+      "path": "patches/0035-flat-light-tree-views.patch",
+      "sha256": "0c32cdaf51c34975ea83fab030f3bbba7acc95f12aa946b0fda6b8f128efc6be"
+    },
+    {
+      "path": "patches/0036-cancel-diagnostics.patch",
+      "sha256": "2edb41f857f578be51f1dc5c4510e97d9946d66092d842d7fe996b65894e9c10"
+    },
+    {
+      "path": "patches/0037-latched-quick-cancellation.patch",
+      "sha256": "ca130e31e0ff9697e971a5db55bd13a98c1a972842c0533e4b66ba7ea7ff47a8"
+    },
+    {
+      "path": "patches/0038-displacement-dependency-hash.patch",
+      "sha256": "8aa692535553358c9192ee56f533925db653f1526640554b8a86a6494984f091"
+    },
+    {
+      "path": "patches/0039-owned-ies-text.patch",
+      "sha256": "9d4407f3e047c00617c4ab99cc5d38e051b92241b4ce912675c4bd3c18470fec"
+    },
+    {
+      "path": "patches/0040-independent-attribute-buffers.patch",
+      "sha256": "b7c3fdccd8e7401f7f63615714ba890838171b8aaa7209a1d89e19e4657dc136"
+    },
+    {
+      "path": "patches/0041-displacement-world-position.patch",
+      "sha256": "db52ee9aa683b25840d387eff0a0a512bfa1a12f1bc667d62bd5ee594d71de21"
+    },
+    {
+      "path": "patches/0042-camera-shutter-curve-endpoints.patch",
+      "sha256": "9b23db0f15183009ff958903ea6ec949d8a7d338871cc4b82052af4bddf79ff7"
+    },
+    {
+      "path": "patches/0043-panorama-projection-inverses.patch",
+      "sha256": "47441f8ef398b37ad3cd0284833e0c6526b91119e79af8b3e4ed8aa0f1fa3370"
+    },
+    {
+      "path": "patches/0044-panorama-motion-seams.patch",
+      "sha256": "1ed3733f75216998343ed9a400104e67f19660397fa4850ad79eb7127b25ada5"
+    },
+    {
+      "path": "patches/0046-emitter-dirty-state.patch",
+      "sha256": "fe43530ec73ac88b3177a62cbb32400307abeb28e25b6efd92769c7f2318eaee"
+    },
+    {
+      "path": "patches/0047-parallel-cached-light-tree-flatten.patch",
+      "sha256": "af9e63020b03a2d2c34c24f6589caa4d6a4c03567c19981721424078a07d5952"
+    },
+    {
+      "path": "patches/0048-constant-attribute-sampling.patch",
+      "sha256": "0de5bd01241969f3615309ccc40f0e1e03a5cf0732993183942cdae4284ad7c6"
+    },
+    {
+      "path": "patches/0049-retained-subdivision-shading.patch",
+      "sha256": "b7c0ea23fadbaf95dc9260c979e7abf9285459e6c2b0a4715232209dfa296c3b"
+    },
+    {
+      "path": "patches/0050-retained-mesh-shading.patch",
+      "sha256": "bdc8097b5853253b0fc5ef90bf8dbea911ce768e1291009d36d6a01843329f1c"
+    },
+    {
+      "path": "patches/0051-selective-shading-preparation.patch",
+      "sha256": "b36a166f6ee3ddb3a6fa85efb12c46f1ad7d347e39bd26a3455edb9b149e0b63"
+    },
+    {
+      "path": "patches/0052-owned-attribute-table-layout.patch",
+      "sha256": "c77d453f2acb62874072a23726c8402002ebb3b757d21362d74f1fe3265f84e5"
+    },
+    {
+      "path": "patches/0054-retained-light-tree-uploads.patch",
+      "sha256": "e6f621dbd60fabf6c9ed7af4801c2f93ea827c7fe7ba7668400e8c081c1548ad"
+    },
+    {
+      "path": "patches/0055-scalar-attribute-output-precision.patch",
+      "sha256": "31fb37d9918ecbc77cc2eada30d36ab237c6ef92a0fc6ccd15c49ae96469a493"
+    },
+    {
+      "path": "patches/0056-bounded-light-tree-compaction.patch",
+      "sha256": "afa665bdf9dfda9ce9803ebe2fec68b83c450b1fa4bd791c2e9ddfc563205d7c"
+    },
+    {
+      "path": "patches/0057-object-material-slots-and-shared-mesh-lights.patch",
+      "sha256": "667f2ea6a09d6f0ed1d9524a62a6e604fc415cf6581c5c0a6b82f22f4d60d9ce"
+    },
+    {
+      "path": "patches/0058-retain-exact-cached-light-tree-interiors.patch",
+      "sha256": "3d6c0ada66ddf553c0ef1ecfffd5745a5fa6de7e275595969ca49a69f659bd37"
+    },
+    {
+      "path": "patches/0059-upload-owned-light-tree-dirty-ranges.patch",
+      "sha256": "14726d18fa5566199c828949269c470e29388ee3fe5c1bf9f6056331a78ffeb0"
+    },
+    {
+      "path": "patches/0060-borrow-immutable-cached-triangle-emitters.patch",
+      "sha256": "112a6951e25041f011595526397d314e80abfa05ee16a9f47535089e63323683"
+    },
+    {
+      "path": "patches/0061-key-mesh-lights-by-exact-consumed-energy.patch",
+      "sha256": "ad15c71cb47fd9b1cad2b86809a585d3ef8af73f7042fcb5ed58e140b4dd2838"
+    },
+    {
+      "path": "patches/0062-profile-cold-light-tree-construction.patch",
+      "sha256": "5f305d75e0e8619693cfe67a433a3e87c4f47a6429d924efd0f11ba6f1781944"
+    },
+    {
+      "path": "patches/0063-preserve-shader-socket-float-bits.patch",
+      "sha256": "caaee35392af260c31f19416b1b844871bc333c31a1ac6378e548c710e3d0368"
+    },
+    {
+      "path": "patches/0064-houdini-sdk-oidn-runtime-provider.patch",
+      "sha256": "9b4d8c92272cd737ea41b785785908f43476a347fae7cc4ff9163569a482dcde"
+    },
+    {
+      "path": "patches/0065-shutter-sampled-object-attributes.patch",
+      "sha256": "6bab61c7a437f572b05c03b845801969cadc9b3020edbf4e90db7673c562d39a"
+    },
+    {
+      "path": "patches/0066-uniform-camera-exposure-cdf.patch",
+      "sha256": "c42c0fbd948e3750217f59405692bb85cbc137ca6665c594f152d885b0a816d1"
+    },
+    {
+      "path": "patches/0067-shutter-sampled-camera-optics.patch",
+      "sha256": "b5435d096b397fe314624f0b7fa9c3d86d17bdaca7c58e49b01d1a4c0ca6656a"
+    },
+    {
+      "path": "patches/0068-shutter-sampled-camera-intrinsics.patch",
+      "sha256": "60cf4380530e9f58e94414ece7df99e65f1b7b8c66b3e48484b0789a43f58762"
+    },
+    {
+      "path": "patches/0069-volume-zero-throughput.patch",
+      "sha256": "8497a0096bd90d065b17ab942afde2646138c77e006e82c2b656e50fb76405c9"
+    },
+    {
+      "path": "patches/0070-image-iris.patch",
+      "sha256": "5efd67d4e0322a56bef6ea0b79e6beb4782610ac47e8840b023eb2367a69788b"
+    },
+    {
+      "path": "patches/0071-colored-image-iris.patch",
+      "sha256": "fb3e93b3828fd6520372a711fdf7c527e35c644d17cab27a400307ce68c05fc8"
+    },
+    {
+      "path": "patches/0072-interactive-adaptive-target.patch",
+      "sha256": "5b2091290764c59f32188f2417cc429c18f4ed3b3b429a5f77505a9ccb15cedd"
+    },
+    {
+      "path": "patches/0073-resampled-light-sampling.patch",
+      "sha256": "3265ef74dc81fc71c301f60745619cac9d76661ab678320c21976a47eb9de3e1"
+    },
+    {
+      "path": "patches/0074-nested-dielectrics.patch",
+      "sha256": "4ae306d87cf7e99f7528956a4b86261dbafe649eb0d75466ee8ec411bd0dffb8"
+    },
+    {
+      "path": "patches/0075-subdivision-count-overflow.patch",
+      "sha256": "8c7df23c2811db9f9ced23997cae7772e835b0e2c06dd4de82119a000e1516de"
+    },
+    {
+      "path": "patches/0076-selective-resampled-light-sampling.patch",
+      "sha256": "99cbe42e03550cf2ecf8eac229dd053e4d8358f1a8d11873b9828b27007dbc8c"
+    },
+    {
+      "path": "patches/0077-houdini-dlss-project.patch",
+      "sha256": "fc773eb0b1b771de43f903a40c8b7408debe7d57e7b33b0abbaa4355e92bd826"
+    },
+    {
+      "path": "patches/0078-spectral-nested-medium-ior-and-53-kernel-types.patch",
+      "sha256": "b0d2bdc816092f198c4fcf7c3a5eb4fcd77e4f95f61afb18418ba849933e8295"
+    },
+    {
+      "path": "patches/0079-dlss-history-epoch.patch",
+      "sha256": "cb2e9d6d0762a1cc160ae0154013d1fdee4c28908d01ea4ee51ea23421d6a476"
+    },
+    {
+      "path": "patches/0080-blender53-native-attribute-and-tessellation-api.patch",
+      "sha256": "58fca40f6e731414e2512d269371351968cede214b5e2e5bcb884096d0dcafa7"
+    },
+    {
+      "path": "patches/0081-gsplat-retained-attribute-copies.patch",
+      "sha256": "b423ea9051a661587aa7178748b637de4d82acc425be4140b502fa5e07744da9"
+    },
+    {
+      "path": "patches/0082-hosted-ipr-gpu-state-budget.patch",
+      "sha256": "2f6d1e4540e7126d588f7ade7b03740ce478bec17e1f17e23ca433129030cba9"
+    },
+    {
+      "path": "patches/0083-full-precision-light-pass-weights.patch",
+      "sha256": "db53fe8d93bd9baa4861ba75b5a3cf5e74969f3b0397e3aadeb25df3fe03d9fd"
+    },
+    {
+      "path": "patches/0084-gsplat-point-lifetime-intersections.patch",
+      "sha256": "fb6fe2858334cb54c107383ec91e43fba4c7fb9550ec1d3efad0a2647172710d"
+    },
+    {
+      "path": "patches/0085-temporal-output-sample-count.patch",
+      "sha256": "55bdd8ee007c510e01777b780da059ed582c6431ca103e4023b7e127532b25cd"
+    },
+    {
+      "path": "patches/0086-tessellated-motion-normal-stride.patch",
+      "sha256": "99c85134fa2e69a887925bf09544f447c2066e63a17ad4c16f69d378c4b07de5"
+    },
+    {
+      "path": "patches/0087-volume-object-overlap-broad-phase.patch",
+      "sha256": "4600fb7d5db73b0443591c2a97f6c5725df1e5e304b7ec18795a327f821d0a0e"
+    },
+    {
+      "path": "patches/0088-static-triangle-normal-map.patch",
+      "sha256": "1135122d26f87947a45fa1cf98278cfadda90e11b597fce5967b94cebea04ae2"
+    }
+  ],
+  "engine_fingerprint": {
+    "dirty": false,
+    "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "untracked_files": []
+  },
+  "decision": "docs/decisions/0011-blender53-rebase-review.md",
+  "decision_sha256": "78e4a30c002c836a39c2c055f84ebe0a40ba983e4248dfc83de8479645628721"
+}

@@ -1,0 +1,169 @@
+From 5e0b073a81baade38a8a8f83d4b635c2a2cd0290 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 10:15:45 +0000
+Subject: [PATCH 111/111] Time only tessellation and tangents with their update
+ statistic
+
+The "device_update (tangents)" / "(tessellation and tangents)" timer of
+GeometryManager::device_update was declared at function scope, so it
+measured every later stage of the geometry update (displacement images,
+offsets, bottom level builds, bounds, the scene BVH, attributes and mesh
+copies) as tangents, double counting them in profiles. It now covers the
+tessellation and tangent loop only. Statistics only; no rendering change.
+
+Rationale: Profiles of pose-only updates on large scenes reported 184-199 ms of tangents that were really the scene BVH, bounds and attribute stages counted twice.
+Contract: Only the duration reported under the tessellation/tangents statistic changes; scene data, device data and images are unchanged.
+Tests: tests/houdini_top_level_incremental_smoke.py
+---
+ src/scene/geometry.cpp | 125 +++++++++++++++++++++--------------------
+ 1 file changed, 64 insertions(+), 61 deletions(-)
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 45e52c44f4f282c2db193a7a551894d195d2806f..8e14ef82ad1aabf03c22cb1d2765a4f9a257e143 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -922,80 +922,83 @@ void GeometryManager::device_update(Device *device,
+     return;
+   }
+ 
+-  /* Tessellate meshes that are using subdivision */
+-  const scoped_callback_timer timer([scene, num_tessellation](double time) {
+-    if (scene->update_stats) {
+-      scene->update_stats->geometry.times.add_entry(
+-          {(num_tessellation) ? "device_update (tessellation and tangents)" :
+-                                "device_update (tangents)",
+-           time});
++  /* Tessellate meshes that are using subdivision. The timer covers this block only: declared at
++   * function scope it measured every later stage of this update as tessellation and tangents. */
++  {
++    const scoped_callback_timer timer([scene, num_tessellation](double time) {
++      if (scene->update_stats) {
++        scene->update_stats->geometry.times.add_entry(
++            {(num_tessellation) ? "device_update (tessellation and tangents)" :
++                                  "device_update (tangents)",
++             time});
++      }
++    });
++
++    Camera *dicing_camera = scene->dicing_camera;
++    if (num_tessellation) {
++      dicing_camera->set_screen_size(dicing_camera->get_full_width(),
++                                     dicing_camera->get_full_height());
++      dicing_camera->update(scene);
+     }
+-  });
+ 
+-  Camera *dicing_camera = scene->dicing_camera;
+-  if (num_tessellation) {
+-    dicing_camera->set_screen_size(dicing_camera->get_full_width(),
+-                                   dicing_camera->get_full_height());
+-    dicing_camera->update(scene);
+-  }
++    size_t i = 0;
++    thread_mutex status_mutex;
++    parallel_for_each(scene->geometry.begin(), scene->geometry.end(), [&](Geometry *geom) {
++      if (progress.get_cancel()) {
++        return;
++      }
+ 
+-  size_t i = 0;
+-  thread_mutex status_mutex;
+-  parallel_for_each(scene->geometry.begin(), scene->geometry.end(), [&](Geometry *geom) {
+-    if (progress.get_cancel()) {
+-      return;
+-    }
++      if (!(geom->is_modified() && geom->is_mesh())) {
++        return;
++      }
+ 
+-    if (!(geom->is_modified() && geom->is_mesh())) {
+-      return;
+-    }
++      Mesh *mesh = static_cast<Mesh *>(geom);
++      /* Apply generated attribute if needed or remove if not needed */
++      mesh->update_generated(scene);
+ 
+-    Mesh *mesh = static_cast<Mesh *>(geom);
+-    /* Apply generated attribute if needed or remove if not needed */
+-    mesh->update_generated(scene);
++      if (num_tessellation && mesh->need_tessellation()) {
++        {
++          const thread_scoped_lock status_lock(status_mutex);
++          string msg = "Tessellating ";
++          if (mesh->name.empty()) {
++            msg += string_printf("%u/%u", (uint)(i + 1), (uint)num_tessellation);
++          }
++          else {
++            msg += string_printf(
++                "%s %u/%u", mesh->name.c_str(), (uint)(i + 1), (uint)num_tessellation);
++          }
+ 
+-    if (num_tessellation && mesh->need_tessellation()) {
+-      {
+-        const thread_scoped_lock status_lock(status_mutex);
+-        string msg = "Tessellating ";
+-        if (mesh->name.empty()) {
+-          msg += string_printf("%u/%u", (uint)(i + 1), (uint)num_tessellation);
++          progress.set_status("Updating Mesh", msg);
++          i++;
+         }
+-        else {
+-          msg += string_printf(
+-              "%s %u/%u", mesh->name.c_str(), (uint)(i + 1), (uint)num_tessellation);
++
++        SubdParams subd_params(mesh);
++        subd_params.dicing_rate = mesh->get_subd_dicing_rate();
++        subd_params.max_level = mesh->get_subd_max_level();
++        subd_params.progress = &progress;
++        subd_params.triangle_limit = mesh->subdivision_triangle_limit;
++        if (mesh->get_subd_adaptive_space() == Mesh::SUBDIVISION_ADAPTIVE_SPACE_PIXEL) {
++          subd_params.objecttoworld = mesh->get_subd_objecttoworld();
++          subd_params.camera = dicing_camera;
+         }
+ 
+-        progress.set_status("Updating Mesh", msg);
+-        i++;
++        mesh->tessellate(subd_params);
+       }
+ 
+-      SubdParams subd_params(mesh);
+-      subd_params.dicing_rate = mesh->get_subd_dicing_rate();
+-      subd_params.max_level = mesh->get_subd_max_level();
+-      subd_params.progress = &progress;
+-      subd_params.triangle_limit = mesh->subdivision_triangle_limit;
+-      if (mesh->get_subd_adaptive_space() == Mesh::SUBDIVISION_ADAPTIVE_SPACE_PIXEL) {
+-        subd_params.objecttoworld = mesh->get_subd_objecttoworld();
+-        subd_params.camera = dicing_camera;
++      /* Dicing allocates the final buffers before filling them. An interrupted
++       * or failed tessellation can leave triangles incomplete; neither tangent
++       * generation nor any later geometry/device stage may consume them. */
++      if (progress.get_cancel() || progress.get_error()) {
++        return;
+       }
+ 
+-      mesh->tessellate(subd_params);
+-    }
+-
+-    /* Dicing allocates the final buffers before filling them. An interrupted
+-     * or failed tessellation can leave triangles incomplete; neither tangent
+-     * generation nor any later geometry/device stage may consume them. */
+-    if (progress.get_cancel() || progress.get_error()) {
+-      return;
+-    }
+-
+-    /* Apply tangents for generated and UVs (if any need them) or remove if not needed */
+-    mesh->update_tangents(scene, true, &progress);
+-    if (!mesh->has_true_displacement() || mesh->can_reuse_displacement()) {
+-      mesh->update_tangents(scene, false, &progress);
+-    }
+-  });
++      /* Apply tangents for generated and UVs (if any need them) or remove if not needed */
++      mesh->update_tangents(scene, true, &progress);
++      if (!mesh->has_true_displacement() || mesh->can_reuse_displacement()) {
++        mesh->update_tangents(scene, false, &progress);
++      }
++    });
++  }
+ 
+   if (progress.get_cancel() || progress.get_error()) {
+     return;

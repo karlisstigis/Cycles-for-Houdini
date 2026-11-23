@@ -1,0 +1,58 @@
+From 3ba5cfd5f2b49db1c88e934e81298107184121c1 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini candidate rebase <candidate@localhost>
+Date: Thu, 19 Nov 2026 18:44:44 +0100
+Subject: [PATCH] Keep camera lookup tables during progressive resolution
+ changes
+
+Rationale: Resizing preview rasters invalidated the authored iris and shutter sockets, forcing the shared lookup buffer to be uploaded after each resolution change.
+Contract: Preview resolution refreshes camera matrices and device parameters while unchanged shutter and image iris tables remain resident.
+Tests: tests/core_image_iris_smoke.py
+---
+ src/scene/camera.cpp | 7 +++++--
+ src/scene/camera.h   | 1 +
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index b245ae6027ff2dd6e89c51b13fcbdb20f27c47ee..29c02627d6fc228210cb3e1e73216792031febfe 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -275,7 +275,7 @@ void Camera::update(Scene *scene)
+     need_device_update = true;
+   }
+ 
+-  if (!is_modified()) {
++  if (!is_modified() && !screen_size_modified) {
+     return;
+   }
+ 
+@@ -614,6 +614,7 @@ void Camera::update(Scene *scene)
+ 
+   /* Set further update flags */
+   clear_modified();
++  screen_size_modified = false;
+   need_device_update = true;
+   need_flags_update = true;
+   previous_need_motion = need_motion;
+@@ -1155,7 +1156,9 @@ bool Camera::set_screen_size(const int width_, const int height_)
+   if (width_ != width || height_ != height) {
+     width = width_;
+     height = height_;
+-    tag_modified();
++    /* Progressive resolution changes affect the camera matrices without
++     * changing the authored sockets or their lookup tables. */
++    screen_size_modified = true;
+     return true;
+   }
+ 
+diff --git a/src/scene/camera.h b/src/scene/camera.h
+index 6047369a07772bddb069a91f07adb2e65d30c75c..5d8e56d291d9b099160eff8b0aa31e58d4fed275 100644
+--- a/src/scene/camera.h
++++ b/src/scene/camera.h
+@@ -228,6 +228,7 @@ class Camera : public Node {
+  private:
+   int width = 1024;
+   int height = 512;
++  bool screen_size_modified = false;
+ 
+  public:
+   /* functions */

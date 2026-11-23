@@ -1,0 +1,57 @@
+From 59eb8efde658dcb027982fd08e57ebefd8ea84e9 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:35 +0100
+Subject: [PATCH] displacement dependency hash
+
+Locked-Patch: patches/0038-displacement-dependency-hash.patch
+Locked-Patch-SHA256: e269f42450a4bf5b4216884e50f69700f6394ec872e07914d8811bd428244b8c
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_sampled_displacement_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 2c0f206728bed03d747ed5d7b1ac2b284ff89a89
+Previous-Patch: patches/0038-displacement-dependency-hash.patch
+Previous-Patch-SHA256: e269f42450a4bf5b4216884e50f69700f6394ec872e07914d8811bd428244b8c
+Rationale: Displacement hashes should enumerate only consumed dependencies in socket order, including distinct node outputs; global node numbering causes false invalidation.
+Contract: displacement dependency hash
+Tests: tests/houdini_sampled_displacement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/shader_graph.cpp b/src/scene/shader_graph.cpp
+index c8004cdc6d0db1225cc139a7f11056de56667cd1..ddb09a5a116b0a34ba5bea62d618c98d668fcb57 100644
+--- a/src/scene/shader_graph.cpp
++++ b/src/scene/shader_graph.cpp
+@@ -775,14 +775,31 @@ void ShaderGraph::compute_displacement_hash()
+     return;
+   }
+ 
+-  ShaderNodeSet nodes_displace;
+-  find_dependencies(nodes_displace, displacement_in);
++  /* Number only displacement dependencies, in input socket order. Global node
++   * IDs depend on unrelated surface nodes and on graph construction order. A
++   * surface-only edit must not invalidate otherwise identical displacement. */
++  vector<ShaderNode *> nodes_displace = {displacement_in->link->parent};
++  map<ShaderNode *, int> displacement_ids = {{nodes_displace[0], 1}};
++  for (size_t index = 0; index < nodes_displace.size(); ++index) {
++    for (ShaderInput *input : nodes_displace[index]->inputs) {
++      if (input->link) {
++        ShaderNode *dependency = input->link->parent;
++        if (!displacement_ids.contains(dependency)) {
++          const int id = int(displacement_ids.size()) + 1;
++          displacement_ids.emplace(dependency, id);
++          nodes_displace.push_back(dependency);
++        }
++      }
++    }
++  }
+ 
+   MD5Hash md5;
++  /* The same node can expose several outputs with different meanings. */
++  md5.append(displacement_in->link->name().c_str());
+   for (ShaderNode *node : nodes_displace) {
+     node->hash(md5);
+     for (ShaderInput *input : node->inputs) {
+-      int link_id = (input->link) ? input->link->parent->id : 0;
++      const int link_id = (input->link) ? displacement_ids.at(input->link->parent) : 0;
+       md5.append((uint8_t *)&link_id, sizeof(link_id));
+       md5.append((input->link) ? input->link->name().c_str() : "");
+     }

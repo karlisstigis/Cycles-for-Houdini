@@ -1,0 +1,420 @@
+From 701e987593fcfb7207cd4a37f97985e71882c31e Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:41 +0100
+Subject: [PATCH] image iris
+
+Locked-Patch: patches/0070-image-iris.patch
+Locked-Patch-SHA256: 2579412a0b0cf84d839902c6becdfe2813ac7ce8e7383b882c408a3b4ad26452
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_release_runtime_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 4b91134f2632b073d689468ed635393c36e724cb
+Previous-Patch: patches/0070-image-iris.patch
+Previous-Patch-SHA256: 2579412a0b0cf84d839902c6becdfe2813ac7ce8e7383b882c408a3b4ad26452
+Rationale: Image Iris adds a packed aperture resource, two sampling methods, coordinate conventions and host camera sockets; it is a coherent maintained camera feature.
+Contract: image iris
+Tests: tests/houdini_release_runtime_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/device/cuda/device_impl.cpp b/src/device/cuda/device_impl.cpp
+index 93b8737943082664c4bfec974a738e6a92c54dc9..ce55b2fecc4bc11aa15ca7b60ea4c6e5b0273862 100644
+--- a/src/device/cuda/device_impl.cpp
++++ b/src/device/cuda/device_impl.cpp
+@@ -246,6 +246,10 @@ string CUDADevice::compile_kernel_get_common_cflags(const uint64_t kernel_featur
+     cflags += string(" ") + string(extra_cflags);
+   }
+ 
++#  ifdef WITH_IMAGE_IRIS
++  cflags += " -DWITH_IMAGE_IRIS";
++#  endif
++
+ #  ifdef WITH_NANOVDB
+   cflags += " -DWITH_NANOVDB";
+ #  endif
+diff --git a/src/kernel/CMakeLists.txt b/src/kernel/CMakeLists.txt
+index 7d803ea19fc98bb107a18107e88d945fa8922c94..a53d8873923b5dd4f97d7a9b551e40640d89542e 100644
+--- a/src/kernel/CMakeLists.txt
++++ b/src/kernel/CMakeLists.txt
+@@ -167,6 +167,7 @@ set(SRC_KERNEL_BVH_HEADERS
+ 
+ set(SRC_KERNEL_CAMERA_HEADERS
+   camera/camera.h
++  camera/image_iris.h
+   camera/projection.h
+ )
+ 
+diff --git a/src/kernel/camera/camera.h b/src/kernel/camera/camera.h
+index 2f3f881a9c559c9122f0493012d1c2894d46ba03..30f078d8a95e6dfebd189a7738dde84daf1e4e8f 100644
+--- a/src/kernel/camera/camera.h
++++ b/src/kernel/camera/camera.h
+@@ -10,6 +10,9 @@
+ #include "kernel/sample/mapping.h"
+ #include "kernel/util/differential.h"
+ #include "kernel/util/lookup_table.h"
++#ifdef WITH_IMAGE_IRIS
++#  include "kernel/camera/image_iris.h"
++#endif
+ 
+ #ifdef WITH_OSL
+ #  include "kernel/osl/camera.h"
+@@ -78,13 +81,41 @@ ccl_device_inline float3 camera_dof_normalize(const float3 value)
+   return normalize(value / scale);
+ }
+ 
+-ccl_device float2 camera_sample_aperture(const float blades,
++#ifdef WITH_IMAGE_IRIS
++struct ImageIrisKernelTable {
++  KernelGlobals kg;
++  int offset;
++  ccl_device_inline_method float operator()(const int index) const
++  {
++    return kernel_data_fetch(lookup_table, offset + index);
++  }
++};
++#endif
++
++ccl_device float2 camera_sample_aperture(KernelGlobals kg, const float blades,
+                                        const float rotation,
+                                        const float inverse_ratio,
+                                        const float2 rand)
+ {
+   float2 bokeh;
+ 
++#ifdef WITH_IMAGE_IRIS
++#  ifndef __KERNEL_GPU__
++  /* Host panorama dicing has no kernel globals and samples the analytic center.
++   * Conservative support bounds include the full image aperture separately. */
++  if (kg != nullptr && kernel_data.cam.image_iris_method != 0 && kernel_data.cam.image_iris_offset >= 0) {
++#  else
++  if (kernel_data.cam.image_iris_method != 0 && kernel_data.cam.image_iris_offset >= 0) {
++#  endif
++    const float2 uv = image_iris_sample(ImageIrisKernelTable{kg, kernel_data.cam.image_iris_offset},
++                                       kernel_data.cam.image_iris_method, rand);
++    /* Image rows run downward; camera lens Y and raster Y point upward. */
++    const float2 p = make_float2(2.0f * uv.x - 1.0f, 1.0f - 2.0f * uv.y);
++    const float cosine = cosf(rotation), sine = sinf(rotation);
++    bokeh = make_float2(cosine * p.x - sine * p.y, sine * p.x + cosine * p.y);
++  }
++  else
++#endif
+   if (blades == 0.0f) {
+     /* sample disk */
+     bokeh = sample_uniform_disk(rand);
+@@ -144,7 +175,7 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+ 
+   if (aperturesize > 0.0f) {
+     /* sample point on aperture */
+-    const float2 lens_uv = camera_sample_aperture(kernel_data.cam.blades, optics.z,
++    const float2 lens_uv = camera_sample_aperture(kg, kernel_data.cam.blades, optics.z,
+                                                  1.0f / optics.w, rand_lens) * aperturesize;
+ 
+     /* compute point on plane of focus */
+@@ -272,7 +303,7 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+ 
+   if (aperturesize > 0.0f) {
+     /* sample point on aperture */
+-    const float2 lens_uv = camera_sample_aperture(kernel_data.cam.blades, optics.z,
++    const float2 lens_uv = camera_sample_aperture(kg, kernel_data.cam.blades, optics.z,
+                                                  1.0f / optics.w, rand_lens) * aperturesize;
+ 
+     /* compute point on plane of focus */
+@@ -462,7 +493,7 @@ ccl_device_inline float3 camera_panorama_direction(ccl_constant KernelCamera *ca
+   return panorama_to_direction(cam, intrinsic, Pcamera.x, Pcamera.y);
+ }
+ 
+-ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam,
++ccl_device_inline Spectrum camera_sample_panorama(KernelGlobals kg, ccl_constant KernelCamera *cam,
+                                                   const ccl_global DecomposedTransform *cam_motion,
+                                                   const ccl_global float4 *dof_motion,
+                                                   const ccl_global KernelCameraIntrinsic *intrinsic_motion,
+@@ -497,7 +528,7 @@ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam
+ 
+   if (aperturesize > 0.0f) {
+     /* Sample a point on the aperture. */
+-    const float2 lens_uv = camera_sample_aperture(cam->blades, optics.z,
++    const float2 lens_uv = camera_sample_aperture(kg, cam->blades, optics.z,
+                                                  1.0f / optics.w, rand_lens) * aperturesize;
+ 
+     /* Compute the intersection of the original ray with the focal plane. */
+@@ -611,7 +642,7 @@ ccl_device_inline Spectrum camera_sample(KernelGlobals kg,
+   }
+   if (kernel_data.cam.type == CAMERA_PANORAMA) {
+     const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
+-    return camera_sample_panorama(&kernel_data.cam, cam_motion,
++    return camera_sample_panorama(kg, &kernel_data.cam, cam_motion,
+                                    kernel_data_array(camera_dof_motion), kernel_data_array(camera_intrinsic_motion), raster, lens_uv, ray);
+   }
+   if (kernel_data.cam.type == CAMERA_CUSTOM) {
+diff --git a/src/kernel/camera/image_iris.h b/src/kernel/camera/image_iris.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..ebdd3b12688e67e6dd39d26f525d1af3bcb22caf
+--- /dev/null
++++ b/src/kernel/camera/image_iris.h
+@@ -0,0 +1,90 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++
++CCL_NAMESPACE_BEGIN
++
++/* Packed resource: width, height, padded hierarchy side, reserved, pixel offset,
++ * conditional CDF offset, marginal CDF offset, hierarchy offset. The hierarchy
++ * stores square levels root first. Image vertices define bilinear cells.
++ * Both mappings consume only the camera's original two lens dimensions. */
++ccl_device_inline float image_iris_linear_sample(const float u, const float a, const float b)
++{
++  const float denominator = a + sqrtf((1.0f - u) * a * a + u * b * b);
++  return denominator > 0.0f ? saturatef(u * (a + b) / denominator) : u;
++}
++
++template<typename Table>
++ccl_device_inline int image_iris_cdf_sample(const Table &table,
++                                            const int offset,
++                                            const int count,
++                                            ccl_private float &u)
++{
++  /* upper_bound skips zero-mass intervals, including an empty leading row. */
++  int first = 0, last = count;
++  while (first < last) {
++    const int middle = (first + last) / 2;
++    if (table(offset + middle + 1) <= u) first = middle + 1;
++    else last = middle;
++  }
++  const int index = min(first, count - 1);
++  const float low = table(offset + index), high = table(offset + index + 1);
++  u = high > low ? saturatef((u - low) / (high - low)) : 0.5f;
++  return index;
++}
++
++template<typename Table>
++ccl_device_inline float2 image_iris_sample(const Table &table,
++                                          const int method,
++                                          const float2 random)
++{
++  const int width = int(table(0)), height = int(table(1));
++  const int cells_x = width - 1, cells_y = height - 1;
++  /* Cycles lens values are half-open. Keep diagnostics and rounded remaps safe. */
++  float u = clamp(random.x, 0.0f, 0.99999994f);
++  float v = clamp(random.y, 0.0f, 0.99999994f);
++  int x = 0, y = 0;
++  if (method == 2) {
++    const int side = int(table(2));
++    int level_width = 1, offset = int(table(7));
++    while (level_width < side) {
++      offset += level_width * level_width;
++      level_width *= 2;
++      x *= 2;
++      y *= 2;
++      const int child = offset + y * level_width + x;
++      const float a = table(child), b = table(child + 1);
++      const float c = table(child + level_width), d = table(child + level_width + 1);
++      const float upper = a + b, lower = c + d;
++      const float row_probability = upper / (upper + lower);
++      const bool second_row = v >= row_probability;
++      if (second_row) {
++        ++y;
++        v = (v - row_probability) / (1.0f - row_probability);
++      }
++      else v /= row_probability;
++      const float left = second_row ? c : a, right = second_row ? d : b;
++      const float column_probability = left / (left + right);
++      if (u >= column_probability) {
++        ++x;
++        u = (u - column_probability) / (1.0f - column_probability);
++      }
++      else u /= column_probability;
++      u = clamp(u, 0.0f, 0.99999994f);
++      v = clamp(v, 0.0f, 0.99999994f);
++    }
++  }
++  else {
++    y = image_iris_cdf_sample(table, int(table(6)), cells_y, v);
++    x = image_iris_cdf_sample(table, int(table(5)) + y * (cells_x + 1), cells_x, u);
++  }
++  const int pixel = int(table(4)) + y * width + x;
++  const float a = table(pixel), b = table(pixel + 1);
++  const float c = table(pixel + width), d = table(pixel + width + 1);
++  /* Exact bilinear patch inverse: first its linear Y marginal, then X|Y. */
++  v = image_iris_linear_sample(v, a + b, c + d);
++  u = image_iris_linear_sample(u, mix(a, c, v), mix(b, d, v));
++  return make_float2((float(x) + u) / float(cells_x),
++                     (float(y) + v) / float(cells_y));
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/device/cuda/CMakeLists.txt b/src/kernel/device/cuda/CMakeLists.txt
+index 406cbde5c4ac12dcd23431c6a352f5d5cf61939f..a5a080e1b1aa7e2d79429b3bfbd9d9d477c2b860 100644
+--- a/src/kernel/device/cuda/CMakeLists.txt
++++ b/src/kernel/device/cuda/CMakeLists.txt
+@@ -173,6 +173,10 @@ endfunction()
+ function(cuda_add_common_flags cuda_version arch in_flags out_flags)
+   set(flags ${in_flags})
+ 
++  if(CH_IMAGE_IRIS)
++    set(flags ${flags} -D WITH_IMAGE_IRIS)
++  endif()
++
+   if(CUDA_HOST_COMPILER)
+     set(flags ${flags} -ccbin="${CUDA_HOST_COMPILER}")
+   endif()
+diff --git a/src/kernel/osl/services_shared.h b/src/kernel/osl/services_shared.h
+index 14a41ab5029462ea4a1b40f6d0c592f0284616a0..3d1a559cd4774ab0e247129ff4a7a2acb5f01928 100644
+--- a/src/kernel/osl/services_shared.h
++++ b/src/kernel/osl/services_shared.h
+@@ -1336,7 +1336,7 @@ ccl_device_inline bool osl_shared_get_camera_attribute(KernelGlobals kg,
+   if (name == DeviceStrings::u_aperture_position) {
+     /* The random numbers for aperture sampling are packed into N. */
+     const float2 rand_lens = make_float2(sg->N.x, sg->N.y);
+-    const float2 pos = camera_sample_aperture(kernel_data.cam.blades,
++    const float2 pos = camera_sample_aperture(kg, kernel_data.cam.blades,
+                                             kernel_data.cam.bladesrotation,
+                                             kernel_data.cam.inv_aperture_ratio,
+                                             rand_lens);
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index 4f649b1e574a6ec0a5bb1125af3919872526424c..a64718740b0e2e3ec813fc759b29f6f8b83207d2 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1231,6 +1231,11 @@ struct KernelCamera {
+   int type;
+   int use_dof_or_motion_blur;
+ 
++  /* Optional image iris. Keep camera layout identical across feature builds. */
++  int image_iris_offset;
++  int image_iris_method;
++  int image_iris_pad[2];
++
+   /* depth of field */
+   float aperturesize;
+   float blades;
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index 64be9028630a62b9e893996c8bb3d5263f796b7f..434ff251efa4979928b28190f037509e7534561e 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -101,6 +101,8 @@ NODE_DEFINE(Camera)
+   SOCKET_FLOAT(focaldistance, "Focal Distance", 10.0f);
+   SOCKET_FLOAT_ARRAY(dof_motion, "Depth of Field Motion", array<float>());
+   SOCKET_FLOAT_ARRAY(intrinsic_motion, "Projection Intrinsic Motion", array<float>());
++  SOCKET_FLOAT_ARRAY(image_iris, "Image Iris", array<float>());
++  SOCKET_INT(image_iris_method, "Image Iris Sampling", 0);
+   SOCKET_UINT(blades, "Blades", 0);
+   SOCKET_FLOAT(bladesrotation, "Blades Rotation", 0.0f);
+ 
+@@ -209,6 +211,9 @@ NODE_DEFINE(Camera)
+ Camera::Camera() : Node(get_node_type())
+ {
+   shutter_table_offset = TABLE_OFFSET_INVALID;
++  image_iris_table_offset = TABLE_OFFSET_INVALID;
++  need_image_iris_update = true;
++  need_shutter_table_update = true;
+ 
+   use_perspective_motion = false;
+ 
+@@ -277,6 +282,9 @@ void Camera::update(Scene *scene)
+     }
+   });
+ 
++  need_image_iris_update |= image_iris_is_modified();
++  need_shutter_table_update |= shutter_curve_is_modified();
++
+   /* Full viewport to camera border in the viewport. */
+   const Transform fulltoborder = transform_from_viewplane(viewport_camera_border);
+   const Transform bordertofull = transform_inverse(fulltoborder);
+@@ -642,13 +650,35 @@ void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scen
+     }
+   });
+ 
+-  scene->lookup_tables->remove_table(&shutter_table_offset);
+-  if (kernel_camera.shuttertime != -1.0f) {
++  /* Do not reupload a large immutable image table when only the lens transform
++   * changes. LookupTables uploads its shared allocation on any table change,
++   * so the shutter table must also retain its unchanged allocation. */
++  if (kernel_camera.shuttertime == -1.0f) {
++    scene->lookup_tables->remove_table(&shutter_table_offset);
++  }
++  else if (need_shutter_table_update || shutter_table_offset == TABLE_OFFSET_INVALID) {
++    scene->lookup_tables->remove_table(&shutter_table_offset);
+     vector<float> shutter_table;
+     camera_shutter_curve_table(shutter_curve, shutter_table);
+     shutter_table_offset = scene->lookup_tables->add_table(dscene, shutter_table);
+-    kernel_camera.shutter_table_offset = (int)shutter_table_offset;
+   }
++  kernel_camera.shutter_table_offset = (int)shutter_table_offset;
++  need_shutter_table_update = false;
++#ifdef WITH_IMAGE_IRIS
++  if (need_image_iris_update) {
++    scene->lookup_tables->remove_table(&image_iris_table_offset);
++    if (!image_iris.empty()) {
++      vector<float> table(image_iris.begin(), image_iris.end());
++      image_iris_table_offset = scene->lookup_tables->add_table(dscene, table);
++    }
++    need_image_iris_update = false;
++  }
++  kernel_camera.image_iris_offset = (int)image_iris_table_offset;
++  kernel_camera.image_iris_method = image_iris_table_offset == TABLE_OFFSET_INVALID ? 0 : image_iris_method;
++#else
++  kernel_camera.image_iris_offset = -1;
++  kernel_camera.image_iris_method = 0;
++#endif
+ 
+   dscene->data.cam = kernel_camera;
+ 
+@@ -735,6 +765,9 @@ void Camera::device_update_volume(Device * /*device*/, DeviceScene *dscene, Scen
+ void Camera::device_free(Device * /*device*/, DeviceScene *dscene, Scene *scene)
+ {
+   scene->lookup_tables->remove_table(&shutter_table_offset);
++  scene->lookup_tables->remove_table(&image_iris_table_offset);
++  need_image_iris_update = true;
++  need_shutter_table_update = true;
+   dscene->camera_motion.free();
+   dscene->camera_dof_motion.free();
+   dscene->camera_intrinsic_motion.free();
+@@ -793,7 +826,11 @@ BoundBox Camera::viewplane_bounds_get()
+   /* Extrema bound all interpolated pupil samples, including an aperture that
+    * is larger only away from the requested frame. Compute intermediates in
+    * double precision; the host validates the resulting float range. */
+-  const double max_aperture_size = max_aperture * std::max(1.0, 1.0 / min_ratio);
++  double max_aperture_size = max_aperture * std::max(1.0, 1.0 / min_ratio);
++#ifdef WITH_IMAGE_IRIS
++  /* A rotated square image can reach sqrt(2) times the analytic disk radius. */
++  if (image_iris_method != 0 && !image_iris.empty()) max_aperture_size *= 1.4142135623730950488;
++#endif
+ 
+   if (camera_type == CAMERA_PANORAMA || camera_type == CAMERA_CUSTOM) {
+     const float extend = float(max_aperture_size + max_near);
+@@ -1024,17 +1061,17 @@ float Camera::world_to_raster_size(const float3 P)
+ 
+       ray.t = 1.0f;
+       camera_sample_panorama(
+-          &kernel_camera, kernel_camera_motion.data(), raster.x, raster.y, 0.0f, 0.0f, &ray);
++          nullptr, &kernel_camera, kernel_camera_motion.data(), raster.x, raster.y, 0.0f, 0.0f, &ray);
+       if (ray.t == 0.0f) {
+         /* No differentials, just use from directly ahead. */
+-        camera_sample_panorama(&kernel_camera,
++        camera_sample_panorama(nullptr, &kernel_camera,
+                               kernel_camera_motion.data(),
+                               0.5f * make_float2(full_width, full_height),
+                               zero_float2(),
+                               &ray);
+       }
+ #else
+-      camera_sample_panorama(&kernel_camera,
++      camera_sample_panorama(nullptr, &kernel_camera,
+                              kernel_camera_motion.data(),
+                              nullptr, /* Dicing footprints use requested-frame DOF. */
+                              nullptr, /* Projection dicing uses conservative host bounds. */
+diff --git a/src/scene/camera.h b/src/scene/camera.h
+index d0e38b511cb8d989a3e1042ffde2e240dd939513..010723d045800ac53213913dcf6a0d82ebd536c7 100644
+--- a/src/scene/camera.h
++++ b/src/scene/camera.h
+@@ -82,6 +82,12 @@ class Camera : public Node {
+   /* Complete chronological samples: aperture, focus, rotation, ratio. */
+   NODE_SOCKET_API_ARRAY(array<float>, dof_motion)
+   NODE_SOCKET_API_ARRAY(array<float>, intrinsic_motion)
++  /* Optional normalized image aperture distribution; zero selects analytic DOF. */
++  NODE_SOCKET_API_ARRAY(array<float>, image_iris)
++  NODE_SOCKET_API(int, image_iris_method)
++  size_t image_iris_table_offset;
++  bool need_image_iris_update;
++  bool need_shutter_table_update;
+   NODE_SOCKET_API(uint, blades)
+   NODE_SOCKET_API(float, bladesrotation)
+ 

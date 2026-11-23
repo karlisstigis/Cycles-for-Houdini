@@ -1,0 +1,42 @@
+From d720b43e4a41f0ff7a68750a23da67f41efd4d6a Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:38 +0100
+Subject: [PATCH] scalar attribute output precision
+
+Locked-Patch: patches/0055-scalar-attribute-output-precision.patch
+Locked-Patch-SHA256: d0a7869b3cdf012e67ba24c7a0bfab8fe7c7eccdcabd042ac1ee867fe85a0522
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_pass_outputs_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 142e1297132690316c1eeb9c2333ab91edbfa243
+Previous-Patch: patches/0055-scalar-attribute-output-precision.patch
+Previous-Patch-SHA256: d0a7869b3cdf012e67ba24c7a0bfab8fe7c7eccdcabd042ac1ee867fe85a0522
+Rationale: Replicating a scalar into RGB and averaging can change its last bits; direct scalar extraction preserves the original attribute output precision.
+Contract: scalar attribute output precision
+Tests: tests/houdini_pass_outputs_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/svm/attribute.h b/src/kernel/svm/attribute.h
+index b3dcd75565efce3dd3ca4b946b43b2a9c042afb7..01d332406784e9230993bc937470fe3877fe669c 100644
+--- a/src/kernel/svm/attribute.h
++++ b/src/kernel/svm/attribute.h
+@@ -56,8 +56,18 @@ ccl_device_inline void svm_node_attr_store(const NodeAttributeOutputType type,
+   if (type == NODE_ATTR_OUTPUT_FLOAT3) {
+     stack_store(stack, out_offset, f);
+   }
++  else if constexpr (is_dual_v<Float3Type>) {
++    /* Scalar attributes are carried as three identical components. Averaging
++     * them again can change their last bits, moving a ramp step or changing a
++     * White Noise hash. Preserve exact scalar values and derivatives. */
++    FloatType scalar = average(f);
++    scalar.val = attribute_select_constant(f.val.x, f.val.y, f.val.z, f.val.x, scalar.val);
++    scalar.dx = attribute_select_constant(f.dx.x, f.dx.y, f.dx.z, f.dx.x, scalar.dx);
++    scalar.dy = attribute_select_constant(f.dy.x, f.dy.y, f.dy.z, f.dy.x, scalar.dy);
++    stack_store(stack, out_offset, scalar);
++  }
+   else {
+-    stack_store(stack, out_offset, FloatType(average(f)));
++    stack_store(stack, out_offset, attribute_select_constant(f.x, f.y, f.z, f.x, average(f)));
+   }
+ }
+ 

@@ -1,0 +1,2415 @@
+{
+  "provenance": "Reduced historical reports under artifacts; transparency numerical probes are independent analytic controls, not claimed runtime evidence.",
+  "reports": {
+    "houdini_panel_motion_timing_smoke.py": {
+      "result": "passed",
+      "checks": [
+        {
+          "name": "Half-frame velocity blur",
+          "expected_red": 0.32,
+          "measured_red": 0.32246264815330505,
+          "status": {
+            "state": "complete",
+            "generation": 1,
+            "error": "",
+            "geometry_conversions": 1,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 1,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Camera move retains geometry samples",
+          "expected_red": 0.32,
+          "measured_red": 0.32246264815330505,
+          "status": {
+            "state": "complete",
+            "generation": 2,
+            "error": "",
+            "geometry_conversions": 1,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 2,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Warm camera move uses camera-only capture",
+          "expected_red": 0.32,
+          "measured_red": 0.32246264815330505,
+          "status": {
+            "state": "complete",
+            "generation": 3,
+            "error": "",
+            "geometry_conversions": 1,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 3,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Quarter-frame shutter refreshes geometry motion",
+          "expected_red": 0.64,
+          "measured_red": 0.64333176612854,
+          "status": {
+            "state": "complete",
+            "generation": 4,
+            "error": "",
+            "geometry_conversions": 2,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 4,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "FPS changes resample velocity in seconds",
+          "expected_red": 0.8,
+          "measured_red": 0.8000308275222778,
+          "status": {
+            "state": "complete",
+            "generation": 5,
+            "error": "",
+            "geometry_conversions": 3,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 5,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Restoring FPS restores the trail",
+          "expected_red": 0.64,
+          "measured_red": 0.64333176612854,
+          "status": {
+            "state": "complete",
+            "generation": 6,
+            "error": "",
+            "geometry_conversions": 4,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 6,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Five shutter samples replace the old sample layout",
+          "expected_red": 0.64,
+          "measured_red": 0.64333176612854,
+          "status": {
+            "state": "complete",
+            "generation": 7,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 7,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Disabling blur restores the static particle",
+          "expected_red": 0.8,
+          "measured_red": 0.8000308275222778,
+          "status": {
+            "state": "complete",
+            "generation": 8,
+            "error": "",
+            "geometry_conversions": 6,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 8,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Re-enabling blur restores velocity",
+          "expected_red": 0.64,
+          "measured_red": 0.64333176612854,
+          "status": {
+            "state": "complete",
+            "generation": 9,
+            "error": "",
+            "geometry_conversions": 7,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 9,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Missing velocity updates the panel with static geometry",
+          "expected_red": 0.8,
+          "measured_red": 0.8000308275222778,
+          "status": {
+            "state": "complete",
+            "generation": 10,
+            "error": "",
+            "geometry_conversions": 8,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 10,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Restored velocity updates the panel with blur",
+          "expected_red": 0.64,
+          "measured_red": 0.64333176612854,
+          "status": {
+            "state": "complete",
+            "generation": 11,
+            "error": "",
+            "geometry_conversions": 9,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 11,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Malformed velocity stays visible in the panel",
+          "expected_red": 0.8,
+          "measured_red": 0.8000308275222778,
+          "status": {
+            "state": "complete",
+            "generation": 12,
+            "error": "",
+            "geometry_conversions": 10,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 12,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        },
+        {
+          "name": "Repairing velocity clears the panel warning",
+          "expected_red": 0.64,
+          "measured_red": 0.64333176612854,
+          "status": {
+            "state": "complete",
+            "generation": 13,
+            "error": "",
+            "geometry_conversions": 11,
+            "geometry_resources": 1,
+            "packed_instances": 0,
+            "displacement_rebuilds": 0,
+            "committed_generation": 13,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 42664,
+            "backend_epoch": 1,
+            "points": 1,
+            "curves": 0
+          }
+        }
+      ]
+    },
+    "houdini_transparency_batch_smoke.py": {
+      "result": "passed",
+      "cases": [
+        {
+          "geometry": "surface",
+          "frames": [
+            {
+              "frame": 1,
+              "transparent": true,
+              "background_rgba": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "foreground_rgba": [
+                0.4,
+                0.2,
+                0.1,
+                1
+              ]
+            },
+            {
+              "frame": 2,
+              "transparent": false,
+              "background_rgba": [
+                0.05,
+                0.1,
+                0.15,
+                1
+              ],
+              "foreground_rgba": [
+                0.4,
+                0.2,
+                0.1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "geometry": "emission",
+          "frames": [
+            {
+              "frame": 1,
+              "transparent": true,
+              "background_rgba": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "foreground_rgba": [
+                0.5625,
+                0.28125,
+                0.140625,
+                0
+              ]
+            },
+            {
+              "frame": 2,
+              "transparent": false,
+              "background_rgba": [
+                0.05,
+                0.1,
+                0.15,
+                1
+              ],
+              "foreground_rgba": [
+                0.6125,
+                0.38125,
+                0.290625,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "geometry": "surface",
+          "frames": [
+            {
+              "frame": 1,
+              "transparent": true,
+              "background_rgba": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "foreground_rgba": [
+                0.4,
+                0.2,
+                0.1,
+                1
+              ]
+            },
+            {
+              "frame": 2,
+              "transparent": false,
+              "background_rgba": [
+                0.05,
+                0.1,
+                0.15,
+                1
+              ],
+              "foreground_rgba": [
+                0.4,
+                0.2,
+                0.1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "geometry": "emission",
+          "frames": [
+            {
+              "frame": 1,
+              "transparent": true,
+              "background_rgba": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "foreground_rgba": [
+                0.5625,
+                0.28125,
+                0.140625,
+                0
+              ]
+            },
+            {
+              "frame": 2,
+              "transparent": false,
+              "background_rgba": [
+                0.05,
+                0.1,
+                0.15,
+                1
+              ],
+              "foreground_rgba": [
+                0.6125,
+                0.38125,
+                0.290625,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "houdini_queued_worker_smoke.py": {
+      "result": "passed",
+      "cases": [
+        {
+          "name": "paused update and lossless coalescing",
+          "rmse": 6.257135781728707e-11,
+          "before": {
+            "state": "complete",
+            "generation": 2,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "committed_generation": 2,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 6972,
+            "backend_epoch": 1,
+            "points": 360,
+            "curves": 265
+          },
+          "after": {
+            "state": "complete",
+            "generation": 5,
+            "error": "",
+            "geometry_conversions": 6,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 2,
+            "committed_generation": 5,
+            "pending_update": false,
+            "coalesced_updates": 2,
+            "renderer_pid": 6972,
+            "backend_epoch": 1,
+            "points": 360,
+            "curves": 265
+          }
+        },
+        {
+          "name": "forced renderer termination and recovery",
+          "failure": {
+            "state": "failed",
+            "generation": 5,
+            "error": "[Errno 22] Invalid argument",
+            "geometry_conversions": 6,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 2,
+            "committed_generation": 5,
+            "pending_update": false,
+            "coalesced_updates": 2,
+            "renderer_pid": 6972,
+            "backend_epoch": 1,
+            "points": 360,
+            "curves": 265
+          },
+          "recovered": {
+            "state": "complete",
+            "generation": 6,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "committed_generation": 6,
+            "pending_update": false,
+            "coalesced_updates": 2,
+            "renderer_pid": 568,
+            "backend_epoch": 2,
+            "points": 360,
+            "curves": 265
+          }
+        },
+        {
+          "name": "explicit cancel while paused and restart"
+        },
+        {
+          "name": "immediate Stop -> Render retains the new generation",
+          "pending": {
+            "state": "rendering",
+            "generation": 8,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "committed_generation": 7,
+            "pending_update": true,
+            "coalesced_updates": 2,
+            "renderer_pid": 568,
+            "backend_epoch": 2,
+            "points": 360,
+            "curves": 265
+          },
+          "after": {
+            "state": "complete",
+            "generation": 8,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "committed_generation": 8,
+            "pending_update": false,
+            "coalesced_updates": 2,
+            "renderer_pid": 568,
+            "backend_epoch": 2,
+            "points": 360,
+            "curves": 265
+          }
+        },
+        {
+          "name": "Stop discards pending edits; restart captures the current scene",
+          "stopped": {
+            "state": "cancelled",
+            "generation": 10,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "committed_generation": 9,
+            "pending_update": false,
+            "coalesced_updates": 2,
+            "renderer_pid": 568,
+            "backend_epoch": 2,
+            "points": 360,
+            "curves": 265
+          },
+          "after": {
+            "state": "complete",
+            "generation": 11,
+            "error": "",
+            "geometry_conversions": 6,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "committed_generation": 11,
+            "pending_update": false,
+            "coalesced_updates": 2,
+            "renderer_pid": 568,
+            "backend_epoch": 2,
+            "points": 360,
+            "curves": 265
+          }
+        }
+      ],
+      "images": {
+        "sync": {
+          "status": {
+            "state": "complete",
+            "generation": 1,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "points": 360,
+            "curves": 265
+          }
+        },
+        "worker": {
+          "status": {
+            "state": "complete",
+            "generation": 1,
+            "error": "",
+            "geometry_conversions": 5,
+            "geometry_resources": 5,
+            "packed_instances": 54,
+            "displacement_rebuilds": 1,
+            "committed_generation": 1,
+            "pending_update": false,
+            "coalesced_updates": 0,
+            "renderer_pid": 6972,
+            "backend_epoch": 1,
+            "points": 360,
+            "curves": 265
+          },
+          "baseline_rmse": 4.850638662436124e-13
+        }
+      }
+    },
+    "houdini_light_parenting_smoke.py": {
+      "result": "passed",
+      "cases": [
+        {
+          "name": "fresh parent rotation (0, 0, 0)",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.739942111693848,
+            0.19826689127414615,
+            0.6427876096865393,
+            0.0,
+            -0.49696712011754673,
+            0.8051169255389006,
+            0.3237443709670646,
+            0.0,
+            -0.4533313940861815,
+            -0.5589964007355274,
+            0.6942720440148838,
+            0.0,
+            3.0,
+            2.0,
+            4.0,
+            1.0
+          ],
+          "proxy": [
+            0.739942111693848,
+            0.19826689127414615,
+            0.6427876096865393,
+            0.0,
+            -0.49696712011754673,
+            0.8051169255389006,
+            0.3237443709670646,
+            0.0,
+            -0.4533313940861815,
+            -0.5589964007355274,
+            0.6942720440148838,
+            0.0,
+            3.0,
+            2.0,
+            4.0,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh parent rotation (0, 60, 0)",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.9266414550733433,
+            0.19826689127414615,
+            -0.3194148612135052,
+            0.0,
+            0.031887289530917795,
+            0.8051169255389006,
+            0.5922583363509204,
+            0.0,
+            0.37459153021114655,
+            -0.5589964007355274,
+            0.7397325256190898,
+            0.0,
+            4.964101615137755,
+            2.0,
+            -0.5980762113533156,
+            1.0
+          ],
+          "proxy": [
+            0.9266414550733433,
+            0.19826689127414615,
+            -0.3194148612135052,
+            0.0,
+            0.031887289530917795,
+            0.8051169255389006,
+            0.5922583363509204,
+            0.0,
+            0.37459153021114655,
+            -0.5589964007355274,
+            0.7397325256190898,
+            0.0,
+            4.964101615137755,
+            2.0,
+            -0.5980762113533156,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh parent rotation (20, 60, 10)",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.943160009645762,
+            0.1322508284570943,
+            -0.3048916439940889,
+            0.0,
+            0.1374543385019514,
+            0.6800352972289039,
+            0.7201793522101195,
+            0.0,
+            0.3025813957136112,
+            -0.7211530440171549,
+            0.6232036473519666,
+            0.0,
+            5.177558004618322,
+            1.4321355373391929,
+            -0.37667082645582983,
+            1.0
+          ],
+          "proxy": [
+            0.943160009645762,
+            0.1322508284570943,
+            -0.3048916439940889,
+            0.0,
+            0.1374543385019514,
+            0.6800352972289039,
+            0.7201793522101195,
+            0.0,
+            0.3025813957136112,
+            -0.7211530440171549,
+            0.6232036473519666,
+            0.0,
+            5.177558004618322,
+            1.4321355373391929,
+            -0.37667082645582983,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh nested rotated nonuniform parent",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.4915687047539792,
+            0.5964808172958853,
+            -0.6344847067666952,
+            0.0,
+            0.1339514405429098,
+            0.6681286071032129,
+            0.731888773228206,
+            0.0,
+            0.8604749968964,
+            -0.444763757120057,
+            0.24853164899653524,
+            0.0,
+            3.510415542035094,
+            13.043674189023363,
+            -2.698201720962639,
+            1.0
+          ],
+          "proxy": [
+            0.4915687047539792,
+            0.5964808172958853,
+            -0.6344847067666952,
+            0.0,
+            0.1339514405429098,
+            0.6681286071032129,
+            0.731888773228206,
+            0.0,
+            0.8604749968964,
+            -0.444763757120057,
+            0.24853164899653524,
+            0.0,
+            3.510415542035094,
+            13.043674189023363,
+            -2.698201720962639,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh pretransform",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.08477254546313473,
+            0.8501810332248414,
+            -0.51962084886724,
+            0.0,
+            0.5469338694241572,
+            0.3962066970082382,
+            0.737484641049705,
+            0.0,
+            0.8328727142927089,
+            -0.3467166922283359,
+            -0.4314053519481662,
+            0.0,
+            7.563664908909262,
+            13.011583693363841,
+            -5.124440367069702,
+            1.0
+          ],
+          "proxy": [
+            0.08477254546313473,
+            0.8501810332248414,
+            -0.51962084886724,
+            0.0,
+            0.5469338694241572,
+            0.3962066970082382,
+            0.737484641049705,
+            0.0,
+            0.8328727142927089,
+            -0.3467166922283359,
+            -0.4314053519481662,
+            0.0,
+            7.563664908909262,
+            13.011583693363841,
+            -5.124440367069702,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh point inherited glyph",
+          "kind": "point",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.029497572941386684,
+            0.811477080790779,
+            -0.5836393071400455,
+            0.0,
+            0.6164334795255675,
+            0.4448708479038812,
+            0.6496919993865975,
+            0.0,
+            0.7868542804689165,
+            -0.37893914648836,
+            -0.4870990301150282,
+            0.0,
+            6.8728712230977855,
+            12.527884747210974,
+            -6.663447981085663,
+            1.0
+          ],
+          "proxy": [
+            0.029497572941386684,
+            0.811477080790779,
+            -0.5836393071400455,
+            0.0,
+            0.6164334795255675,
+            0.4448708479038812,
+            0.6496919993865975,
+            0.0,
+            0.7868542804689165,
+            -0.37893914648836,
+            -0.4870990301150282,
+            0.0,
+            6.8728712230977855,
+            12.527884747210974,
+            -6.663447981085663,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh spot inherited glyph",
+          "kind": "spot",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.031756320392036144,
+            0.7685866429340228,
+            -0.6389570476296795,
+            0.0,
+            0.6766507526386942,
+            0.48703543646812564,
+            0.5522139464369424,
+            0.0,
+            0.7356189878146225,
+            -0.4148144846272773,
+            -0.5355311836696168,
+            0.0,
+            6.033588214534509,
+            11.940212457923646,
+            -8.088211236790366,
+            1.0
+          ],
+          "proxy": [
+            -0.031756320392036144,
+            0.7685866429340228,
+            -0.6389570476296795,
+            0.0,
+            0.6766507526386942,
+            0.48703543646812564,
+            0.5522139464369424,
+            0.0,
+            0.7356189878146225,
+            -0.4148144846272773,
+            -0.5355311836696168,
+            0.0,
+            6.033588214534509,
+            11.940212457923646,
+            -8.088211236790366,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh grid inherited glyph",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.09807598007256224,
+            0.722149117294216,
+            -0.6847494102378331,
+            0.0,
+            0.7266879879188213,
+            0.5220718858024433,
+            0.4465036554507108,
+            0.0,
+            0.6799306365339418,
+            -0.4538078879844803,
+            -0.5759798007553726,
+            0.0,
+            5.058327659771123,
+            11.257327665759739,
+            -9.377490195673733,
+            1.0
+          ],
+          "proxy": [
+            -0.09807598007256224,
+            0.722149117294216,
+            -0.6847494102378331,
+            0.0,
+            0.7266879879188213,
+            0.5220718858024433,
+            0.4465036554507108,
+            0.0,
+            0.6799306365339418,
+            -0.4538078879844803,
+            -0.5759798007553726,
+            0.0,
+            5.058327659771123,
+            11.257327665759739,
+            -9.377490195673733,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh disk inherited glyph",
+          "kind": "disk",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.16847273272727542,
+            0.6728567804199013,
+            -0.7203337363107729,
+            0.0,
+            0.7657992454378171,
+            0.5494578831461053,
+            0.3341370233858294,
+            0.0,
+            0.6206194116784565,
+            -0.49533805472874215,
+            -0.6078418856561436,
+            0.0,
+            3.9616284473784447,
+            10.489410610093735,
+            -10.512064678032663,
+            1.0
+          ],
+          "proxy": [
+            -0.16847273272727542,
+            0.6728567804199013,
+            -0.7203337363107729,
+            0.0,
+            0.7657992454378171,
+            0.5494578831461053,
+            0.3341370233858294,
+            0.0,
+            0.6206194116784565,
+            -0.49533805472874215,
+            -0.6078418856561436,
+            0.0,
+            3.9616284473784447,
+            10.489410610093735,
+            -10.512064678032663,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh distant inherited glyph",
+          "kind": "distant",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.24189712491771304,
+            0.6214444675196908,
+            -0.7451795455075116,
+            0.0,
+            0.793401466430354,
+            0.5687851663564101,
+            0.21678917791427194,
+            0.0,
+            0.5585695070002471,
+            -0.5387858657296183,
+            -0.6306424480734476,
+            0.0,
+            2.7598398366049848,
+            9.647909165495582,
+            -11.475020791580892,
+            1.0
+          ],
+          "proxy": [
+            -0.24189712491771304,
+            0.6214444675196908,
+            -0.7451795455075116,
+            0.0,
+            0.793401466430354,
+            0.5687851663564101,
+            0.21678917791427194,
+            0.0,
+            0.5585695070002471,
+            -0.5387858657296183,
+            -0.6306424480734476,
+            0.0,
+            2.7598398366049848,
+            9.647909165495582,
+            -11.475020791580892,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh sun inherited glyph",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.3172545680734439,
+            0.5686786177618384,
+            -0.7589164440398474,
+            0.0,
+            0.8090831653571504,
+            0.579765610156888,
+            0.09620950512676335,
+            0.0,
+            0.4947059436595972,
+            -0.5835036141976748,
+            -0.6440415841377815,
+            0.0,
+            1.470877727578519,
+            8.745368180288565,
+            -12.252003078625528,
+            1.0
+          ],
+          "proxy": [
+            -0.3172545680734439,
+            0.5686786177618384,
+            -0.7589164440398474,
+            0.0,
+            0.8090831653571504,
+            0.579765610156888,
+            0.09620950512676335,
+            0.0,
+            0.4947059436595972,
+            -0.5835036141976748,
+            -0.6440415841377815,
+            0.0,
+            1.470877727578519,
+            8.745368180288565,
+            -12.252003078625528,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh reflected ancestor",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.7810283405897063,
+            0.24394072622199636,
+            0.5748805559270935,
+            0.0,
+            0.6168283321710955,
+            0.44514732670276197,
+            0.6491276193646982,
+            0.0,
+            0.09755787998240026,
+            -0.8615896821698377,
+            0.4981422288909081,
+            0.0,
+            -7.7297740141726035,
+            2.3030024742721342,
+            14.20874657590122,
+            1.0
+          ],
+          "proxy": [
+            -0.7810283405897063,
+            0.24394072622199636,
+            0.5748805559270935,
+            0.0,
+            0.6168283321710955,
+            0.44514732670276197,
+            0.6491276193646982,
+            0.0,
+            0.09755787998240026,
+            -0.8615896821698377,
+            0.4981422288909081,
+            0.0,
+            -7.7297740141726035,
+            2.3030024742721342,
+            14.20874657590122,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh reparent",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.384560056873879,
+            0.869331024301088,
+            -0.31044666666720694,
+            0.0,
+            -0.345239851918461,
+            0.4473504508163747,
+            0.8250375862963488,
+            0.0,
+            0.8561092262699181,
+            -0.2100979398804454,
+            0.4721608289063321,
+            0.0,
+            9.992664388660316,
+            10.987242734465603,
+            8.58411374772181,
+            1.0
+          ],
+          "proxy": [
+            0.384560056873879,
+            0.869331024301088,
+            -0.31044666666720694,
+            0.0,
+            -0.345239851918461,
+            0.4473504508163747,
+            0.8250375862963488,
+            0.0,
+            0.8561092262699181,
+            -0.2100979398804454,
+            0.4721608289063321,
+            0.0,
+            9.992664388660316,
+            10.987242734465603,
+            8.58411374772181,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh disconnected parent",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.7479815931589855,
+            0.5772443130466173,
+            0.3275859266676224,
+            0.0,
+            -0.6251871253624278,
+            0.44703974571310245,
+            0.6397628654695651,
+            0.0,
+            0.22285554643402955,
+            -0.6833333511604008,
+            0.6952632139092981,
+            0.0,
+            4.0626103827554605,
+            1.4223279188481959,
+            5.812132510979992,
+            1.0
+          ],
+          "proxy": [
+            0.7479815931589855,
+            0.5772443130466173,
+            0.3275859266676224,
+            0.0,
+            -0.6251871253624278,
+            0.44703974571310245,
+            0.6397628654695651,
+            0.0,
+            0.22285554643402955,
+            -0.6833333511604008,
+            0.6952632139092981,
+            0.0,
+            4.0626103827554605,
+            1.4223279188481959,
+            5.812132510979992,
+            1.0
+          ]
+        },
+        {
+          "name": "fresh restored parent",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.7810283405897063,
+            0.24394072622199636,
+            0.5748805559270935,
+            0.0,
+            0.6168283321710955,
+            0.44514732670276197,
+            0.6491276193646982,
+            0.0,
+            0.09755787998240026,
+            -0.8615896821698377,
+            0.4981422288909081,
+            0.0,
+            -7.7297740141726035,
+            2.3030024742721342,
+            14.20874657590122,
+            1.0
+          ],
+          "proxy": [
+            -0.7810283405897063,
+            0.24394072622199636,
+            0.5748805559270935,
+            0.0,
+            0.6168283321710955,
+            0.44514732670276197,
+            0.6491276193646982,
+            0.0,
+            0.09755787998240026,
+            -0.8615896821698377,
+            0.4981422288909081,
+            0.0,
+            -7.7297740141726035,
+            2.3030024742721342,
+            14.20874657590122,
+            1.0
+          ]
+        },
+        {
+          "name": "saved parent rotation (0, 0, 0)",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.6545370348699358,
+            0.741470222966041,
+            0.1476589937604948,
+            0.0,
+            0.6732908866050458,
+            -0.48284091836697085,
+            -0.5599500241674532,
+            0.0,
+            -0.34389046511682153,
+            0.46592548331812617,
+            -0.8152624068338405,
+            0.0,
+            -3.0167140482898542,
+            4.13408794119218,
+            -6.717771269140641,
+            1.0
+          ],
+          "proxy": [
+            0.6545370348699358,
+            0.741470222966041,
+            0.1476589937604948,
+            0.0,
+            0.6732908866050458,
+            -0.48284091836697085,
+            -0.5599500241674532,
+            0.0,
+            -0.34389046511682153,
+            0.46592548331812617,
+            -0.8152624068338405,
+            0.0,
+            -3.0167140482898542,
+            4.13408794119218,
+            -6.717771269140641,
+            1.0
+          ]
+        },
+        {
+          "name": "saved parent rotation (0, 60, 0)",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.4551449571288043,
+            0.741470222966041,
+            -0.4930162030348578,
+            0.0,
+            -0.14828550247620187,
+            -0.48284091836697085,
+            -0.8630620240202441,
+            0.0,
+            -0.8779831876269608,
+            0.46592548331812617,
+            -0.1098133245065066,
+            0.0,
+            -7.326117600033951,
+            4.13408794119218,
+            -0.7463346327979119,
+            1.0
+          ],
+          "proxy": [
+            0.4551449571288043,
+            0.741470222966041,
+            -0.4930162030348578,
+            0.0,
+            -0.14828550247620187,
+            -0.48284091836697085,
+            -0.8630620240202441,
+            0.0,
+            -0.8779831876269608,
+            0.46592548331812617,
+            -0.1098133245065066,
+            0.0,
+            -7.326117600033951,
+            4.13408794119218,
+            -0.7463346327979119,
+            1.0
+          ]
+        },
+        {
+          "name": "saved parent rotation (20, 60, 10)",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.5447006548078569,
+            0.7522666435756288,
+            -0.37066979053512,
+            0.0,
+            -0.21254401212006396,
+            -0.3037300833038109,
+            -0.9287481248477254,
+            0.0,
+            -0.8112498009637955,
+            0.5846733562081634,
+            -0.0055522046507723855,
+            0.0,
+            -6.736947587292331,
+            5.089852651358816,
+            0.1632016319866194,
+            1.0
+          ],
+          "proxy": [
+            0.5447006548078569,
+            0.7522666435756288,
+            -0.37066979053512,
+            0.0,
+            -0.21254401212006396,
+            -0.3037300833038109,
+            -0.9287481248477254,
+            0.0,
+            -0.8112498009637955,
+            0.5846733562081634,
+            -0.0055522046507723855,
+            0.0,
+            -6.736947587292331,
+            5.089852651358816,
+            0.1632016319866194,
+            1.0
+          ]
+        },
+        {
+          "name": "saved nested rotated nonuniform parent",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.12396495499546253,
+            0.9173715783033334,
+            -0.3782354792735142,
+            0.0,
+            -0.4651729160384046,
+            -0.39042233332003473,
+            -0.7944712454929904,
+            0.0,
+            -0.8764969186016487,
+            0.07745830907905434,
+            0.47513509905583273,
+            0.0,
+            -19.015943580382242,
+            10.03926517404717,
+            10.418960998330313,
+            1.0
+          ],
+          "proxy": [
+            -0.12396495499546253,
+            0.9173715783033334,
+            -0.3782354792735142,
+            0.0,
+            -0.4651729160384046,
+            -0.39042233332003473,
+            -0.7944712454929904,
+            0.0,
+            -0.8764969186016487,
+            0.07745830907905434,
+            0.47513509905583273,
+            0.0,
+            -19.015943580382242,
+            10.03926517404717,
+            10.418960998330313,
+            1.0
+          ]
+        },
+        {
+          "name": "saved pretransform",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.27065223700690333,
+            0.9550629421639001,
+            0.12083933127934934,
+            0.0,
+            -0.8443662044752056,
+            -0.17522223987410257,
+            -0.5063031497116138,
+            0.0,
+            -0.462377637374667,
+            -0.2390647272977191,
+            0.8538471623536049,
+            0.0,
+            -4.790773218610228,
+            -1.6333834862048349,
+            8.174025187587652,
+            1.0
+          ],
+          "proxy": [
+            -0.27065223700690333,
+            0.9550629421639001,
+            0.12083933127934934,
+            0.0,
+            -0.8443662044752056,
+            -0.17522223987410257,
+            -0.5063031497116138,
+            0.0,
+            -0.462377637374667,
+            -0.2390647272977191,
+            0.8538471623536049,
+            0.0,
+            -4.790773218610228,
+            -1.6333834862048349,
+            8.174025187587652,
+            1.0
+          ]
+        },
+        {
+          "name": "saved point inherited glyph",
+          "kind": "point",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.2605799943836924,
+            0.9621156023753494,
+            0.08019747545003929,
+            0.0,
+            -0.8900733607282585,
+            -0.20722673523261925,
+            -0.4059882913841193,
+            0.0,
+            -0.3739886084235525,
+            -0.17717406293111243,
+            0.9103526087375771,
+            0.0,
+            -4.040906335034128,
+            -1.1083210416710267,
+            8.792933948092852,
+            1.0
+          ],
+          "proxy": [
+            -0.2605799943836924,
+            0.9621156023753494,
+            0.08019747545003929,
+            0.0,
+            -0.8900733607282585,
+            -0.20722673523261925,
+            -0.4059882913841193,
+            0.0,
+            -0.3739886084235525,
+            -0.17717406293111243,
+            0.9103526087375771,
+            0.0,
+            -4.040906335034128,
+            -1.1083210416710267,
+            8.792933948092852,
+            1.0
+          ]
+        },
+        {
+          "name": "saved spot inherited glyph",
+          "kind": "spot",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.2546400857615819,
+            0.966274771168828,
+            0.038360059979222455,
+            0.0,
+            -0.9254254384347821,
+            -0.23198052653410248,
+            -0.2996210827378727,
+            0.0,
+            -0.2806175061999666,
+            -0.11179491330320823,
+            0.9532867945246357,
+            0.0,
+            -3.2348434799067,
+            -0.5439097542399605,
+            9.295668012761498,
+            1.0
+          ],
+          "proxy": [
+            -0.2546400857615819,
+            0.966274771168828,
+            0.038360059979222455,
+            0.0,
+            -0.9254254384347821,
+            -0.23198052653410248,
+            -0.2996210827378727,
+            0.0,
+            -0.2806175061999666,
+            -0.11179491330320823,
+            0.9532867945246357,
+            0.0,
+            -3.2348434799067,
+            -0.5439097542399605,
+            9.295668012761498,
+            1.0
+          ]
+        },
+        {
+          "name": "saved grid inherited glyph",
+          "kind": "grid",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.25292106149683924,
+            0.9674784449173663,
+            -0.004049215631824237,
+            0.0,
+            -0.9498954195419992,
+            -0.249114591765225,
+            -0.18878721386004402,
+            0.0,
+            -0.18365627877802382,
+            -0.04390193094829785,
+            0.9820096698942608,
+            0.0,
+            -2.384601193807307,
+            0.05143630379149089,
+            9.674732774628026,
+            1.0
+          ],
+          "proxy": [
+            -0.25292106149683924,
+            0.9674784449173663,
+            -0.004049215631824237,
+            0.0,
+            -0.9498954195419992,
+            -0.249114591765225,
+            -0.18878721386004402,
+            0.0,
+            -0.18365627877802382,
+            -0.04390193094829785,
+            0.9820096698942608,
+            0.0,
+            -2.384601193807307,
+            0.05143630379149089,
+            9.674732774628026,
+            1.0
+          ]
+        },
+        {
+          "name": "saved disk inherited glyph",
+          "kind": "disk",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.2554485482818527,
+            0.9657086796177745,
+            -0.04639812676428853,
+            0.0,
+            -0.9631185129928836,
+            -0.25837350147798593,
+            -0.07513896245387527,
+            0.0,
+            -0.0845503947294731,
+            0.02549275614343483,
+            0.9960930429315913,
+            0.0,
+            -1.5028546308733943,
+            0.6688418939483189,
+            9.924477251186293,
+            1.0
+          ],
+          "proxy": [
+            -0.2554485482818527,
+            0.9657086796177745,
+            -0.04639812676428853,
+            0.0,
+            -0.9631185129928836,
+            -0.25837350147798593,
+            -0.07513896245387527,
+            0.0,
+            -0.0845503947294731,
+            0.02549275614343483,
+            0.9960930429315913,
+            0.0,
+            -1.5028546308733943,
+            0.6688418939483189,
+            9.924477251186293,
+            1.0
+          ]
+        },
+        {
+          "name": "saved distant inherited glyph",
+          "kind": "distant",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.2621848671101743,
+            0.9609918583943997,
+            -0.0880553486946973,
+            0.0,
+            -0.964897592920605,
+            -0.2596192266544538,
+            0.039629437816212636,
+            0.0,
+            0.015222705483384422,
+            0.0953546330230304,
+            0.9953269629826293,
+            0.0,
+            -0.6027486014467487,
+            1.2991029209408675,
+            10.041178327522928,
+            1.0
+          ],
+          "proxy": [
+            -0.2621848671101743,
+            0.9609918583943997,
+            -0.0880553486946973,
+            0.0,
+            -0.964897592920605,
+            -0.2596192266544538,
+            0.039629437816212636,
+            0.0,
+            0.015222705483384422,
+            0.0953546330230304,
+            0.9953269629826293,
+            0.0,
+            -0.6027486014467487,
+            1.2991029209408675,
+            10.041178327522928,
+            1.0
+          ]
+        },
+        {
+          "name": "saved sun inherited glyph",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.2730295949837201,
+            0.95339829818751,
+            -0.12839986819242463,
+            0.0,
+            -0.9552061373411644,
+            -0.2528331964015049,
+            0.1538070544462573,
+            0.0,
+            0.11417563474202518,
+            0.16464222001786283,
+            0.9797228505349156,
+            0.0,
+            0.3022983867724762,
+            1.9328236445259623,
+            10.023096259385323,
+            1.0
+          ],
+          "proxy": [
+            -0.2730295949837201,
+            0.95339829818751,
+            -0.12839986819242463,
+            0.0,
+            -0.9552061373411644,
+            -0.2528331964015049,
+            0.1538070544462573,
+            0.0,
+            0.11417563474202518,
+            0.16464222001786283,
+            0.9797228505349156,
+            0.0,
+            0.3022983867724762,
+            1.9328236445259623,
+            10.023096259385323,
+            1.0
+          ]
+        },
+        {
+          "name": "saved reflected ancestor",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.4295267357364582,
+            0.8438178205241769,
+            0.3216803847440147,
+            0.0,
+            -0.6325935504538958,
+            -0.026937431141704653,
+            -0.7740153582080163,
+            0.0,
+            0.6444627090310682,
+            0.535953226850223,
+            -0.5453640576152645,
+            0.0,
+            5.443998758832815,
+            5.53308100425828,
+            -4.764252524428246,
+            1.0
+          ],
+          "proxy": [
+            -0.4295267357364582,
+            0.8438178205241769,
+            0.3216803847440147,
+            0.0,
+            -0.6325935504538958,
+            -0.026937431141704653,
+            -0.7740153582080163,
+            0.0,
+            0.6444627090310682,
+            0.535953226850223,
+            -0.5453640576152645,
+            0.0,
+            5.443998758832815,
+            5.53308100425828,
+            -4.764252524428246,
+            1.0
+          ]
+        },
+        {
+          "name": "saved reparent",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.35211885204078486,
+            0.9021525139105411,
+            -0.24926523159552502,
+            0.0,
+            -0.03438359864163948,
+            -0.2786103482246385,
+            -0.9597885402559232,
+            0.0,
+            -0.9353235173895342,
+            -0.32938900331832066,
+            0.12912320593538928,
+            0.0,
+            0.309856127848688,
+            3.290718890940119,
+            10.206625740789585,
+            1.0
+          ],
+          "proxy": [
+            -0.35211885204078486,
+            0.9021525139105411,
+            -0.24926523159552502,
+            0.0,
+            -0.03438359864163948,
+            -0.2786103482246385,
+            -0.9597885402559232,
+            0.0,
+            -0.9353235173895342,
+            -0.32938900331832066,
+            0.12912320593538928,
+            0.0,
+            0.309856127848688,
+            3.290718890940119,
+            10.206625740789585,
+            1.0
+          ]
+        },
+        {
+          "name": "saved disconnected parent",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            0.20782512538504308,
+            0.9779793469818936,
+            0.01910796000519685,
+            0.0,
+            0.5028700783552189,
+            -0.09006606313935811,
+            -0.859656785330979,
+            0.0,
+            -0.8390056028142524,
+            0.1882671005445355,
+            -0.510514541711445,
+            0.0,
+            -6.194529576349382,
+            -0.2904013665862981,
+            -1.0786902636527111,
+            1.0
+          ],
+          "proxy": [
+            0.20782512538504308,
+            0.9779793469818936,
+            0.01910796000519685,
+            0.0,
+            0.5028700783552189,
+            -0.09006606313935811,
+            -0.859656785330979,
+            0.0,
+            -0.8390056028142524,
+            0.1882671005445355,
+            -0.510514541711445,
+            0.0,
+            -6.194529576349382,
+            -0.2904013665862981,
+            -1.0786902636527111,
+            1.0
+          ]
+        },
+        {
+          "name": "saved restored parent",
+          "kind": "sun",
+          "max_native_matrix_error": 0.0,
+          "position_error": 0.0,
+          "reference": [
+            -0.4295267357364582,
+            0.8438178205241769,
+            0.3216803847440147,
+            0.0,
+            -0.6325935504538958,
+            -0.026937431141704653,
+            -0.7740153582080163,
+            0.0,
+            0.6444627090310682,
+            0.535953226850223,
+            -0.5453640576152645,
+            0.0,
+            5.443998758832815,
+            5.53308100425828,
+            -4.764252524428246,
+            1.0
+          ],
+          "proxy": [
+            -0.4295267357364582,
+            0.8438178205241769,
+            0.3216803847440147,
+            0.0,
+            -0.6325935504538958,
+            -0.026937431141704653,
+            -0.7740153582080163,
+            0.0,
+            0.6444627090310682,
+            0.535953226850223,
+            -0.5453640576152645,
+            0.0,
+            5.443998758832815,
+            5.53308100425828,
+            -4.764252524428246,
+            1.0
+          ]
+        }
+      ]
+    },
+    "houdini_texture_cache_smoke.py": {
+      "result": "passed",
+      "cases": [
+        {
+          "cache": false,
+          "automatic_generation": false,
+          "result": "passed",
+          "initial": [
+            0.20000001788139343,
+            0.40000003576278687,
+            0.8000000715255737
+          ],
+          "updated": [
+            0.6999999284744263,
+            0.29999998211860657,
+            1.1999999284744263
+          ],
+          "tx_files": []
+        },
+        {
+          "cache": true,
+          "automatic_generation": true,
+          "result": "passed",
+          "initial": [
+            0.20000001788139343,
+            0.40000003576278687,
+            0.8000000715255737
+          ],
+          "updated": [
+            0.6999999284744263,
+            0.29999998211860657,
+            1.1999999284744263
+          ],
+          "tx_files": [
+            {
+              "bytes": 2640
+            },
+            {
+              "bytes": 2414
+            }
+          ]
+        },
+        {
+          "cache": true,
+          "automatic_generation": false,
+          "result": "passed",
+          "initial": [
+            0.20000001788139343,
+            0.40000003576278687,
+            0.8000000715255737
+          ],
+          "updated": [
+            0.6999999284744263,
+            0.29999998211860657,
+            1.1999999284744263
+          ],
+          "tx_files": []
+        },
+        {
+          "cache": false,
+          "automatic_generation": false,
+          "result": "passed",
+          "initial": [
+            0.20000001788139343,
+            0.40000003576278687,
+            0.8000000715255737
+          ],
+          "updated": [
+            0.6999999284744263,
+            0.29999998211860657,
+            1.1999999284744263
+          ],
+          "tx_files": []
+        },
+        {
+          "cache": true,
+          "automatic_generation": true,
+          "result": "passed",
+          "initial": [
+            0.20000001788139343,
+            0.40000003576278687,
+            0.8000000715255737
+          ],
+          "updated": [
+            0.6999999284744263,
+            0.29999998211860657,
+            1.1999999284744263
+          ],
+          "tx_files": [
+            {
+              "bytes": 2416
+            },
+            {
+              "bytes": 2642
+            }
+          ]
+        },
+        {
+          "cache": true,
+          "automatic_generation": false,
+          "result": "passed",
+          "initial": [
+            0.20000001788139343,
+            0.40000003576278687,
+            0.8000000715255737
+          ],
+          "updated": [
+            0.6999999284744263,
+            0.29999998211860657,
+            1.1999999284744263
+          ],
+          "tx_files": []
+        }
+      ]
+    },
+    "houdini_texture_normal_smoke.py": {
+      "result": "passed",
+      "devices": [
+        {
+          "result": "passed",
+          "checks": [
+            {
+              "name": "OpenGL tangent normal in the independently defined UV basis",
+              "measured": [
+                0.5,
+                0.75,
+                0.9330124855041504
+              ]
+            },
+            {
+              "name": "DirectX convention reverses the tangent green channel",
+              "measured": [
+                0.5,
+                0.25,
+                0.9330124855041504
+              ]
+            },
+            {
+              "name": "World normal follows the specified world X axis",
+              "measured": [
+                1.0,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "name": "Texture bump agrees with height derivative du/dx = 1/8",
+              "measured": [
+                0.4379825294017792,
+                0.5,
+                0.9961391687393188
+              ]
+            },
+            {
+              "name": "Inverted bump reverses the analytic slope",
+              "measured": [
+                0.5620175004005432,
+                0.5,
+                0.9961391687393188
+              ]
+            }
+          ]
+        },
+        {
+          "result": "passed",
+          "checks": [
+            {
+              "name": "OpenGL tangent normal in the independently defined UV basis",
+              "measured": [
+                0.5,
+                0.75,
+                0.9330124258995056
+              ]
+            },
+            {
+              "name": "DirectX convention reverses the tangent green channel",
+              "measured": [
+                0.5,
+                0.2500000298023224,
+                0.9330124258995056
+              ]
+            },
+            {
+              "name": "World normal follows the specified world X axis",
+              "measured": [
+                1.0,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "name": "Texture bump agrees with height derivative du/dx = 1/8",
+              "measured": [
+                0.437978595495224,
+                0.5,
+                0.9961382746696472
+              ]
+            },
+            {
+              "name": "Inverted bump reverses the analytic slope",
+              "measured": [
+                0.5620214939117432,
+                0.5,
+                0.9961382746696472
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "houdini_texture_auto_batch_smoke.py": {
+      "result": "passed",
+      "cases": [
+        {
+          "cache": false,
+          "result": "passed",
+          "frames": [
+            {
+              "frame": 1,
+              "input_space": "Linear Rec.709 (sRGB)",
+              "measured": [
+                0.5915860533714294,
+                0.3975391685962677,
+                0.13809548318386078
+              ],
+              "expected": [
+                0.5915860533714294,
+                0.3975391685962677,
+                0.13809548318386078
+              ]
+            },
+            {
+              "frame": 2,
+              "input_space": "sRGB Encoded Rec.709 (sRGB)",
+              "measured": [
+                0.3601711094379425,
+                0.1431119441986084,
+                0.03138185665011406
+              ],
+              "expected": [
+                0.3601711392402649,
+                0.1431119441986084,
+                0.03138185665011406
+              ]
+            }
+          ]
+        },
+        {
+          "cache": true,
+          "result": "passed",
+          "frames": [
+            {
+              "frame": 1,
+              "input_space": "Linear Rec.709 (sRGB)",
+              "measured": [
+                0.5915860533714294,
+                0.3975391685962677,
+                0.13809548318386078
+              ],
+              "expected": [
+                0.5915860533714294,
+                0.3975391685962677,
+                0.13809548318386078
+              ]
+            },
+            {
+              "frame": 2,
+              "input_space": "sRGB Encoded Rec.709 (sRGB)",
+              "measured": [
+                0.3601711094379425,
+                0.1431119441986084,
+                0.03138185665011406
+              ],
+              "expected": [
+                0.3601711392402649,
+                0.1431119441986084,
+                0.03138185665011406
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostic": "<source>\\artifacts\\stage3\\color\\auto\\batch\\diagnostic.exr",
+      "repaired": "<source>\\artifacts\\stage3\\color\\auto\\batch\\repaired.exr"
+    },
+    "core_strand_material_smoke.py": {
+      "result": "passed",
+      "reports": [
+        {
+          "result": "passed",
+          "events": [
+            {
+              "kind": "points",
+              "checks": 13,
+              "result": "passed"
+            },
+            {
+              "kind": "curves",
+              "checks": 13,
+              "result": "passed"
+            },
+            {
+              "result": "passed",
+              "checks": 26
+            }
+          ],
+          "images": [
+            {
+              "kind": "points",
+              "maximum_absolute_rgba_difference": 0.0,
+              "reference": "<source>\\artifacts\\stage3\\materials\\strands\\core-cpu\\reference-points.exr"
+            },
+            {
+              "kind": "curves",
+              "maximum_absolute_rgba_difference": 0.0,
+              "reference": "<source>\\artifacts\\stage3\\materials\\strands\\core-cpu\\reference-curves.exr"
+            }
+          ]
+        },
+        {
+          "result": "passed",
+          "events": [
+            {
+              "kind": "points",
+              "checks": 13,
+              "result": "passed"
+            },
+            {
+              "kind": "curves",
+              "checks": 13,
+              "result": "passed"
+            },
+            {
+              "result": "passed",
+              "checks": 26
+            }
+          ],
+          "images": [
+            {
+              "kind": "points",
+              "maximum_absolute_rgba_difference": 0.0,
+              "reference": "<source>\\artifacts\\stage3\\materials\\strands\\core-optix\\reference-points.exr"
+            },
+            {
+              "kind": "curves",
+              "maximum_absolute_rgba_difference": 0.0,
+              "reference": "<source>\\artifacts\\stage3\\materials\\strands\\core-optix\\reference-curves.exr"
+            }
+          ]
+        }
+      ]
+    },
+    "core_volume_material_smoke.py": {
+      "result": "passed",
+      "reports": [
+        {
+          "result": "passed",
+          "events": [
+            {
+              "result": "passed",
+              "checks": 15
+            }
+          ],
+          "images": [
+            {
+              "kind": "absorption",
+              "maximum_absolute_rgba_difference": 0.005859375,
+              "mean_absolute_rgba_difference": 3.738403393072076e-05,
+              "working_space": "ACEScg"
+            },
+            {
+              "kind": "emission",
+              "maximum_absolute_rgba_difference": 0.005859375,
+              "mean_absolute_rgba_difference": 1.0665257832442876e-05,
+              "working_space": "ACEScg"
+            },
+            {
+              "kind": "blackbody",
+              "maximum_absolute_rgba_difference": 0.015625,
+              "mean_absolute_rgba_difference": 7.840026228222996e-05,
+              "working_space": "ACEScg"
+            }
+          ]
+        },
+        {
+          "result": "passed",
+          "events": [
+            {
+              "result": "passed",
+              "checks": 15
+            }
+          ],
+          "images": [
+            {
+              "kind": "absorption",
+              "maximum_absolute_rgba_difference": 0.005859375,
+              "mean_absolute_rgba_difference": 3.738403393072076e-05,
+              "working_space": "ACEScg"
+            },
+            {
+              "kind": "emission",
+              "maximum_absolute_rgba_difference": 0.005859375,
+              "mean_absolute_rgba_difference": 1.0665257832442876e-05,
+              "working_space": "ACEScg"
+            },
+            {
+              "kind": "blackbody",
+              "maximum_absolute_rgba_difference": 0.015625,
+              "mean_absolute_rgba_difference": 7.841051410650834e-05,
+              "working_space": "ACEScg"
+            }
+          ]
+        }
+      ]
+    },
+    "core_displacement_smoke.py": {
+      "result": "passed",
+      "reports": [
+        {
+          "result": "passed",
+          "events": [
+            {
+              "result": "passed",
+              "checks": 10
+            }
+          ],
+          "images": [
+            {
+              "kind": "plane",
+              "maximum_absolute_rgba_difference": 0.0,
+              "mean_absolute_rgba_difference": 0.0,
+              "interior_data_differences": {
+                "depth.Z": 0.0,
+                "position.Z": 0.0,
+                "normal.Z": 0.0
+              }
+            },
+            {
+              "kind": "seams",
+              "maximum_absolute_rgba_difference": 0.0,
+              "mean_absolute_rgba_difference": 0.0,
+              "interior_data_differences": {
+                "depth.Z": 0.0,
+                "position.Z": 0.0,
+                "normal.Z": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "result": "passed",
+          "events": [
+            {
+              "result": "passed",
+              "checks": 10
+            }
+          ],
+          "images": [
+            {
+              "kind": "plane",
+              "maximum_absolute_rgba_difference": 0.0,
+              "mean_absolute_rgba_difference": 0.0,
+              "interior_data_differences": {
+                "depth.Z": 0.0,
+                "position.Z": 0.0,
+                "normal.Z": 0.0
+              }
+            },
+            {
+              "kind": "seams",
+              "maximum_absolute_rgba_difference": 0.0,
+              "mean_absolute_rgba_difference": 0.0,
+              "interior_data_differences": {
+                "depth.Z": 0.0,
+                "position.Z": 0.0,
+                "normal.Z": 0.0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "core_subdivision_smoke.py": {
+      "result": "passed",
+      "reports": [
+        {
+          "result": "passed",
+          "events": [
+            {
+              "result": "passed",
+              "checks": 8
+            }
+          ],
+          "maximum_absolute_rgba_difference": 0.08750045299530029,
+          "mean_absolute_rgba_difference": 0.00014396574988495559,
+          "interior_data": {
+            "depth.Z": {
+              "maximum_absolute_difference": 0.0020961761474609375
+            },
+            "position.Z": {
+              "maximum_absolute_difference": 0.00209595263004303
+            },
+            "normal.Z": {
+              "maximum_absolute_difference": 0.009089663624763489
+            }
+          }
+        },
+        {
+          "result": "passed",
+          "events": [
+            {
+              "result": "passed",
+              "checks": 8
+            }
+          ],
+          "maximum_absolute_rgba_difference": 0.08750045299530029,
+          "mean_absolute_rgba_difference": 0.00014396574988495559,
+          "interior_data": {
+            "depth.Z": {
+              "maximum_absolute_difference": 0.0020961761474609375
+            },
+            "position.Z": {
+              "maximum_absolute_difference": 0.00209595263004303
+            },
+            "normal.Z": {
+              "maximum_absolute_difference": 0.009089618921279907
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,253 @@
+From b8261ce10d68d167c4bd7339d4c81c4880a3c241 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:44 +0100
+Subject: [PATCH] volume object overlap broad phase
+
+Replace repeated all-object/all-volume-object bounds scans with a balanced
+conservative broad phase. Leaf tests still call BoundBox::intersects, preserving
+its rounded center/size arithmetic rather than substituting endpoint overlap.
+Invalid or nonfinite bounds retain the original exact linear predicate. The
+existing flag updates, self exclusion and pre-bounds fallback are unchanged.
+
+Rationale: Large instanced scenes repeat quadratic object-volume bounds searches during flag updates even when most candidates are spatially separated.
+Contract: Preserve exact overlap results, object identity exclusion, invalid-bound fallback, pre-bounds behavior, packed-bit OR semantics and valid-pass host boolean resets.
+Tests: tests/core_object_volume_bounds_smoke.py, scripts/verify-upstream-patches.py
+
+Rebased-From: b2e6b875571979ee570592db50e5a2bde28599db
+Previous-Patch: patches/0087-volume-object-overlap-broad-phase.patch
+Previous-Patch-SHA256: f4be8f2ad5a02a62e1db421feb97740f4932f9a6e5e29bd1490c7ac277e71957
+Rationale: Large instanced scenes repeatedly scan every object against every volume-object bound during flag updates. A conservative spatial broad phase avoids this quadratic search while exact leaves retain the existing rounded center/size predicate.
+Contract: Bound object-volume overlap flag queries with a conservative spatial broad phase while retaining exact BoundBox::intersects leaf tests, self exclusion, invalid-bound fallback and the existing packed-flag update semantics.
+Tests: tests/core_object_volume_bounds_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 81dcf44b0928bd246f31efe51021044298b0d18d..e2a8702e30d4411bfe858ca865a776e0f00448d1 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -19,6 +19,7 @@
+ #include "scene/stats.h"
+ #include "scene/volume.h"
+ 
++#include "util/boundbox_overlap.h"
+ #include "util/hash.h"
+ #include "util/log.h"
+ #include "util/map.h"
+@@ -1168,7 +1169,7 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
+   uint *object_flag = dscene->object_flag.data();
+ 
+   /* Object volume intersection. */
+-  vector<Object *> volume_objects;
++  vector<BoundBoxOverlapIndex::Entry> volume_bounds;
+   bool has_volume_objects = false;
+   for (Object *object : scene->objects) {
+     if (object->geometry->has_volume) {
+@@ -1176,12 +1177,14 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
+        * the step size is not needed for the displacement. So, delay calculation of the volume
+        * step size until the final bounds are known. */
+       if (bounds_valid) {
+-        volume_objects.push_back(object);
++        volume_bounds.push_back({&object->bounds, object});
+       }
+       has_volume_objects = true;
+     }
+   }
+ 
++  const BoundBoxOverlapIndex volume_objects(std::move(volume_bounds));
++
+   for (Object *object : scene->objects) {
+     if (object->geometry->has_volume) {
+       object_flag[object->index] |= SD_OBJECT_HAS_VOLUME;
+@@ -1222,15 +1225,9 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
+ 
+     if (bounds_valid) {
+       object->intersects_volume = false;
+-      for (Object *volume_object : volume_objects) {
+-        if (object == volume_object) {
+-          continue;
+-        }
+-        if (object->bounds.intersects(volume_object->bounds)) {
+-          object_flag[object->index] |= SD_OBJECT_INTERSECTS_VOLUME;
+-          object->intersects_volume = true;
+-          break;
+-        }
++      if (volume_objects.intersects(object->bounds, object)) {
++        object_flag[object->index] |= SD_OBJECT_INTERSECTS_VOLUME;
++        object->intersects_volume = true;
+       }
+     }
+     else if (has_volume_objects) {
+diff --git a/src/util/CMakeLists.txt b/src/util/CMakeLists.txt
+index 8a9ed254fd4955e3d508d8fcc70129e5729fbc33..0cc7d9b8f4d0a48d6526d329a180b01d137aa69d 100644
+--- a/src/util/CMakeLists.txt
++++ b/src/util/CMakeLists.txt
+@@ -54,6 +54,7 @@ set(SRC_HEADERS
+   array.h
+   atomic.h
+   boundbox.h
++  boundbox_overlap.h
+   cache_limiter.h
+   color.h
+   colorspace.h
+diff --git a/src/util/boundbox_overlap.h b/src/util/boundbox_overlap.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..020db05c78fae714e4b28866273afc1c8060ca22
+--- /dev/null
++++ b/src/util/boundbox_overlap.h
+@@ -0,0 +1,157 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++#include <algorithm>
++#include <utility>
++
++#include "util/boundbox.h"
++#include "util/vector.h"
++
++CCL_NAMESPACE_BEGIN
++
++/* An exact any-overlap broad phase for BoundBox::intersects. The referenced bounds and
++ * identities must remain alive and unchanged until the index is discarded. */
++class BoundBoxOverlapIndex {
++ public:
++  struct Entry {
++    const BoundBox *bounds;
++    const void *identity;
++  };
++
++  explicit BoundBoxOverlapIndex(vector<Entry> entries) : entries_(std::move(entries))
++  {
++    if (entries_.size() <= 8) {
++      return;
++    }
++    const auto fallback_begin = std::partition(
++        entries_.begin(), entries_.end(), [](const Entry &entry) {
++          return indexable(*entry.bounds);
++        });
++    fallback_.assign(fallback_begin, entries_.end());
++    entries_.erase(fallback_begin, entries_.end());
++    if (entries_.size() > 8) {
++      nodes_.reserve(entries_.size() / 2 + 1);
++      build(0, entries_.size());
++    }
++  }
++
++  bool intersects(BoundBox bounds, const void *excluded_identity) const
++  {
++    /* Empty and small volume scenes retain the cheap linear path, without any
++     * query validity/center calculations or tree allocation. */
++    if (nodes_.empty()) {
++      return intersects_entries(bounds, excluded_identity, entries_, 0, entries_.size()) ||
++             intersects_entries(bounds, excluded_identity, fallback_, 0, fallback_.size());
++    }
++    /* Invalid boxes can still intersect according to the legacy center/size predicate.
++     * Keep their exact behavior, including inverted intervals, infinities and NaNs. */
++    if (!indexable(bounds)) {
++      return intersects_entries(bounds, excluded_identity, entries_, 0, entries_.size()) ||
++             intersects_entries(bounds, excluded_identity, fallback_, 0, fallback_.size());
++    }
++    return intersects_entries(bounds, excluded_identity, fallback_, 0, fallback_.size()) ||
++           (!nodes_.empty() && intersects_node(bounds, excluded_identity, 0));
++  }
++
++ private:
++  struct Node {
++    float3 center_min, center_max, max_size;
++    size_t begin, end, right;
++  };
++  vector<Entry> entries_, fallback_;
++  vector<Node> nodes_;
++
++  static bool indexable(const BoundBox &bounds)
++  {
++    /* Host MSVC uses /fp:fast. Inspect exponent bits so classification does not
++     * depend on the compiler preserving floating-point isfinite/NaN tests. */
++    const auto finite = [](const float3 value) {
++      return (__float_as_uint(value.x) & 0x7f800000u) != 0x7f800000u &&
++             (__float_as_uint(value.y) & 0x7f800000u) != 0x7f800000u &&
++             (__float_as_uint(value.z) & 0x7f800000u) != 0x7f800000u;
++    };
++    return finite(bounds.min) && finite(bounds.max) && bounds.valid() && finite(bounds.center()) &&
++           finite(bounds.size());
++  }
++
++  static bool intersects_entries(BoundBox &bounds,
++                                 const void *excluded_identity,
++                                 const vector<Entry> &entries,
++                                 const size_t begin,
++                                 const size_t end)
++  {
++    for (size_t i = begin; i < end; ++i) {
++      if (entries[i].identity != excluded_identity && bounds.intersects(*entries[i].bounds)) {
++        return true;
++      }
++    }
++    return false;
++  }
++
++  size_t build(const size_t begin, const size_t end)
++  {
++    const size_t index = nodes_.size();
++    Node node;
++    node.center_min = node.center_max = entries_[begin].bounds->center();
++    node.max_size = entries_[begin].bounds->size();
++    node.begin = begin;
++    node.end = end;
++    node.right = 0;
++    for (size_t i = begin + 1; i < end; ++i) {
++      const BoundBox &bounds = *entries_[i].bounds;
++      node.center_min = min(node.center_min, bounds.center());
++      node.center_max = max(node.center_max, bounds.center());
++      node.max_size = max(node.max_size, bounds.size());
++    }
++    nodes_.push_back(node);
++    if (end - begin > 8) {
++      /* Use double for the split extent: finite centers may span more than FLT_MAX. */
++      int axis = 0;
++      for (int i = 1; i < 3; ++i) {
++        if (double(node.center_max[i]) - node.center_min[i] >
++            double(node.center_max[axis]) - node.center_min[axis])
++        {
++          axis = i;
++        }
++      }
++      const size_t middle = begin + (end - begin) / 2;
++      std::nth_element(entries_.begin() + begin,
++                       entries_.begin() + middle,
++                       entries_.begin() + end,
++                       [axis](const Entry &a, const Entry &b) {
++                         return a.bounds->center()[axis] < b.bounds->center()[axis];
++                       });
++      build(begin, middle);
++      const size_t right = build(middle, end);
++      nodes_[index].right = right;
++    }
++    return index;
++  }
++
++  bool intersects_node(BoundBox &bounds, const void *excluded_identity, const size_t index) const
++  {
++    const Node &node = nodes_[index];
++    const float3 center = bounds.center();
++    const float3 nearest_center = min(max(center, node.center_min), node.center_max);
++    const float3 center_diff = center - nearest_center;
++    const float3 total_size = (bounds.size() + node.max_size) * 0.5f;
++    /* BoundBox::intersects compares rounded centers and size sums, not endpoints.
++     * Each node encloses the leaf centers and maximum sizes. Monotonic float
++     * operations make this conservative even at a rounded touch or size overflow. */
++    if (!(fabsf(center_diff.x) <= total_size.x && fabsf(center_diff.y) <= total_size.y &&
++          fabsf(center_diff.z) <= total_size.z))
++    {
++      return false;
++    }
++    if (!node.right) {
++      return intersects_entries(bounds, excluded_identity, entries_, node.begin, node.end);
++    }
++    return intersects_node(bounds, excluded_identity, index + 1) ||
++           intersects_node(bounds, excluded_identity, node.right);
++  }
++};
++
++CCL_NAMESPACE_END

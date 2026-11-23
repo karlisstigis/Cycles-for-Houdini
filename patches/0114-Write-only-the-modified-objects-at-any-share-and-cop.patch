@@ -1,0 +1,69 @@
+From 9bbb3209e8d44b7dc3631e89adf6b059daad0af0 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 11:54:17 +0000
+Subject: [PATCH] Write only the modified objects at any share and copy
+ scattered ranges whole
+
+The partial object table write was limited to updates that modified at
+most 1/16 of the objects. Writing only the modified objects is never more
+work than writing all of them; what made large shares slow was the upload,
+one synchronous copy per contiguous run of modified objects. The share
+limit is dropped, and device_memory::device_copy_to_ranges copies the whole
+host buffer, which is current everywhere, when the runs would cost more:
+one synchronous copy takes 9-12 us on the 3080 Ti and 4090, the time of
+copying about 128 KiB in one piece, so the whole buffer is copied when the
+number of runs times 128 KiB reaches its size. This also applies to the object flags (0113) and the top level
+instances (0110), which upload through the same function.
+
+CYCLES_FULL_OBJECT_TABLE_UPDATE still writes every object as before, as a
+reference; CYCLES_VERIFY_OBJECT_TABLE verifies a partial write at any
+share.
+
+Rationale: A pose move of 129k of 380k instances wrote and copied the whole object table and then rewrote every object's flags and geometry offsets, about 40 ms more than writing only the moved objects; scattered moves of many objects were slow only because of per-run copies.
+Contract: Object table, flags and instance data on every device equal a full write (checked by CYCLES_VERIFY_OBJECT_TABLE, CYCLES_VERIFY_OBJECT_FLAGS, CYCLES_VERIFY_TOP_LEVEL); only the decision of how to upload changes.
+Tests: tests/houdini_object_table_partial_smoke.py
+---
+ src/device/memory.cpp | 13 +++++++++++++
+ src/scene/object.cpp  |  5 ++++-
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/src/device/memory.cpp b/src/device/memory.cpp
+index d4bf2bfb3f3163b7f516311d4135b94093dd9d54..e52c33dfa0fccf243f6dd8b7a8ae562906054655 100644
+--- a/src/device/memory.cpp
++++ b/src/device/memory.cpp
+@@ -164,6 +164,19 @@ bool device_memory::device_copy_to_ranges(const vector<DeviceMemoryRange> &range
+   {
+     return false;
+   }
++  /* Every range is one synchronous copy of about 9-12 us on current GPUs (3080 Ti, 4090), the
++   * time of copying about 128 KiB in one piece at their ~12 GB/s host to device rate. When the
++   * runs cost more than copying the whole host buffer, which holds the current data everywhere,
++   * copy it whole: an 8 MB table after 64 runs, a 99 MB object table after about 800. */
++  constexpr size_t bytes_per_run = 128 * 1024;
++  if (ranges.size() * bytes_per_run >= memory_size()) {
++    const double start = device->stats.buffer_copy_callback ? time_dt() : 0;
++    device->mem_copy_to(*this);
++    if (device->stats.buffer_copy_callback) {
++      device->stats.buffer_copy_callback(global_name(), memory_size(), time_dt() - start);
++    }
++    return true;
++  }
+   for (const DeviceMemoryRange &range : ranges) {
+     const double start = device->stats.buffer_copy_callback ? time_dt() : 0;
+     device->mem_copy_to_range(*this, range.offset, range.size);
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index c5f6e3567a6bcc29ca372a199cbcfa44bf3dfd7c..f315c4e2f4fc230de257f1a6c20dc91b65c3e2c4 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1167,7 +1167,10 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+       /* Only light objects changed: they have no instance and no bounds in the top level. */
+       top_level_pending = top_level_pending_before;
+     }
+-    partial = partial && candidate && partial_objects.size() * 16 <= num_objects;
++    /* No share limit: writing only the modified objects is never more work than writing all of
++     * them, and the upload copies the whole table when the modified objects are scattered over
++     * many runs (see device_memory::device_copy_to_ranges). */
++    partial = partial && candidate;
+     if (scene->update_stats) {
+       /* Counts, not times: the modified objects found and the object count of the decision. */
+       scene->update_stats->object.times.add_entry(

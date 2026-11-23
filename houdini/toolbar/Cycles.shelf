@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<shelfDocument>
+  <toolshelf name="cycles_houdini" label="Cycles Tools">
+    <memberTool name="cycles_add_object_parameters"/>
+    <memberTool name="cycles_add_light_parameters"/>
+    <memberTool name="cycles_add_camera_parameters"/>
+    <memberTool name="cycles_remove_parameters"/>
+    <memberTool name="cycles_create_area_light"/>
+    <memberTool name="cycles_create_disk_light"/>
+    <memberTool name="cycles_create_point_light"/>
+    <memberTool name="cycles_create_spot_light"/>
+    <memberTool name="cycles_create_sun_light"/>
+    <memberTool name="cycles_create_environment"/>
+    <memberTool name="cycles_create_sky_world"/>
+    <memberTool name="cycles_create_light_material"/>
+    <memberTool name="cycles_create_rop"/>
+    <memberTool name="cycles_ipr"/>
+    <memberTool name="cycles_material_preview"/>
+    <memberTool name="cycles_import_blend"/>
+  </toolshelf>
+  <tool name="cycles_add_object_parameters" label="Add Object Tab" icon="cycles_add_object_tab">
+    <helpText>Add optional Cycles settings beside all existing Houdini controls on selected geometry objects, including SOP selections.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.add_properties('objects')]]></script>
+  </tool>
+  <tool name="cycles_add_light_parameters" label="Add Native Light Tab" icon="cycles_add_native_light_tab">
+    <helpText>Add optional Cycles light settings beside all existing Houdini controls on selected native lights.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.add_properties('lights')]]></script>
+  </tool>
+  <tool name="cycles_add_camera_parameters" label="Add Camera Tab" icon="cycles_add_camera_tab">
+    <helpText>Add optional Cycles lens, depth of field and shutter controls beside the existing camera tabs.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.add_properties('cameras')]]></script>
+  </tool>
+  <tool name="cycles_remove_parameters" label="Remove Tabs" icon="cycles_remove_tabs">
+    <helpText>Remove optional Cycles tabs from selected geometry objects, native lights, and cameras. Cycles Light keeps its permanent interface.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.remove_properties()]]></script>
+  </tool>
+  <tool name="cycles_create_area_light" label="Area Light" icon="cycles_area_light"><script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_light('grid')]]></script></tool>
+  <tool name="cycles_create_disk_light" label="Disk Light" icon="cycles_disk_light"><script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_light('disk')]]></script></tool>
+  <tool name="cycles_create_point_light" label="Point Light" icon="cycles_point_light"><script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_light('point')]]></script></tool>
+  <tool name="cycles_create_spot_light" label="Spot Light" icon="cycles_spot_light"><script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_light('spot')]]></script></tool>
+  <tool name="cycles_create_sun_light" label="Sun Light" icon="cycles_sun_light"><script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_light('sun')]]></script></tool>
+  <tool name="cycles_create_rop" label="Render ROP" icon="cycles_render_rop"><script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_rop()]]></script></tool>
+  <tool name="cycles_ipr" label="IPR" icon="cycles_ipr">
+    <helpText>Open the Cycles Render View in a separate window and start an interactive render. Uses the selected Cycles Render ROP, or the scene's first one; creates /out/cycles_render when the scene has none. Focuses the window if it is already open.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.start_ipr()]]></script>
+  </tool>
+  <tool name="cycles_material_preview" label="Material Preview" icon="cycles_material_preview">
+    <helpText>Render selected Cycles surface, volume or world materials into Houdini's native node thumbnails. Work is bounded and yields to the main IPR; no render viewer or scene objects are created. Preview warnings are available from the Cycles Viewer's information menu.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.materials.material_previews import preview_selected
+preview_selected()]]></script></tool>
+  <tool name="cycles_import_blend" label="Import .blend" icon="cycles_import_blend">
+    <helpText>Import collections and objects of a Blender .blend file: as live Blender References, as Houdini geometry kept in the scene, or as Houdini files in the asset folder. Needs the Blender bridge component and Blender. Also in File &gt; Import &gt; Blender (.blend).</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.blender import blend_import_dialog
+blend_import_dialog.open_dialog()]]></script>
+  </tool>
+  <tool name="cycles_create_environment" label="Environment Light" icon="cycles_environment_light">
+    <helpText>Create a native environment light with optional Cycles settings. The Cycles ROP uses it in Scene Environment Light mode. Set a file HDRI under the native Light tab; Houdini's rotation controls and environment icon stay available.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_environment()]]></script></tool>
+  <tool name="cycles_create_sky_world" label="Sky World" icon="cycles_sky_world">
+    <helpText>Create a native Cycles World Material with Sky Texture, Background and World Output. The horizon defaults to Houdini Y up. Select this material under Scene / Environment on your render ROP.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_sky_world()]]></script></tool>
+  <tool name="cycles_create_light_material" label="Light Material" icon="cycles_light_material">
+    <helpText>Create a Cycles Light Material with Emission and Light Output. Assign it under the light Emission panel, or use its + button to create and assign directly. Color/utility and IES nodes can modulate emission; light Color, Temperature and Power multiply the shader.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.create_light_material()]]></script></tool>
+  <tool name="cycles_subnetwork" label="Cycles Subnetwork" icon="VOP_subnet">
+    <toolMenuContext name="network"><contextOpType>Vop/subnet</contextOpType></toolMenuContext>
+    <toolSubmenu>Cycles/Network</toolSubmenu>
+    <helpText>Create a native Cycles group with typed subnet ports. Its graph remains editable when Cycles is unavailable.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.materials import create_subnet_tool
+create_subnet_tool(kwargs)]]></script>
+  </tool>
+  <tool name="cycles_subnet_connector" label="Cycles Subnet Connector" icon="VOP_subnetconnector">
+    <toolMenuContext name="network"><contextOpType>Vop/subnetconnector</contextOpType></toolMenuContext>
+    <toolSubmenu>Cycles/Network</toolSubmenu>
+    <helpText>Create Houdini's native typed subnet connector inside a Cycles subnetwork. Its interface remains intact when Cycles is unavailable.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.materials import create_connector_tool
+create_connector_tool(kwargs)]]></script>
+  </tool>
+</shelfDocument>

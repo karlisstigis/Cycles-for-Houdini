@@ -1,0 +1,139 @@
+From d82e76cbfda7817ce2a54599fc60cf2b3a02f113 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:29 +0100
+Subject: [PATCH] Allow quiet, accumulated engine update statistics, add a
+ complete scene-update timer and expose an optional logical buffer-copy
+ callback. Existing default reporting remains unchanged.
+
+Locked-Patch: patches/0006-opt-in-phase-diagnostics.patch
+Locked-Patch-SHA256: 41a5c958ef734448fb7939b6fcb06463ceada161e79f7b6d62b8e4f357a29660
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_scene_interruption_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: e6ebdc6ed1a87ef6ad9d3c26aa9f13d096cd2242
+Previous-Patch: patches/0006-opt-in-phase-diagnostics.patch
+Previous-Patch-SHA256: 41a5c958ef734448fb7939b6fcb06463ceada161e79f7b6d62b8e4f357a29660
+Rationale: Quiet accumulated phase reporting and a host copy callback serve the integration diagnostics contract; unconditional reporting would change other consumers.
+Contract: Allow quiet, accumulated engine update statistics, add a complete scene-update timer and expose an optional logical buffer-copy callback. Existing default reporting remains unchanged.
+Tests: tests/houdini_scene_interruption_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/device/memory.cpp b/src/device/memory.cpp
+index 8308a5317fd685e467c58d148eba1fd404a42684..848c5847e00fe9285068d15b0debb64e881a632b 100644
+--- a/src/device/memory.cpp
++++ b/src/device/memory.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "device/memory.h"
+ #include "device/device.h"
++#include "util/time.h"
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -141,7 +142,14 @@ void device_memory::device_alloc()
+ void device_memory::device_copy_to()
+ {
+   if (host_pointer) {
+-    device->mem_copy_to(*this);
++    if (device->stats.buffer_copy_callback) {
++      const double start = time_dt();
++      device->mem_copy_to(*this);
++      device->stats.buffer_copy_callback(global_name(), memory_size(), time_dt() - start);
++    }
++    else {
++      device->mem_copy_to(*this);
++    }
+   }
+ }
+ 
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index abbb17a86011d1fc692bd2631a35999f2dd2e481..b5d5d08f764d7c7cf1af16c0f895cc7b61a93f03 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -175,6 +175,11 @@ void Scene::free_memory(bool final)
+ 
+ void Scene::device_update(Device *device_, Progress &progress)
+ {
++  const scoped_callback_timer total_timer([this](double time) {
++    if (update_stats && update_stats_accumulate) {
++      update_stats->scene.times.add_entry({"device_update_total", time});
++    }
++  });
+   if (!device) {
+     device = device_;
+   }
+@@ -183,7 +188,7 @@ void Scene::device_update(Device *device_, Progress &progress)
+   bool kernels_reloaded = false;
+ 
+   while (true) {
+-    if (update_stats) {
++    if (update_stats && !update_stats_accumulate) {
+       update_stats->clear();
+     }
+ 
+@@ -191,7 +196,7 @@ void Scene::device_update(Device *device_, Progress &progress)
+       if (update_stats) {
+         update_stats->scene.times.add_entry({"device_update", time});
+ 
+-        if (print_stats) {
++        if (print_stats && update_stats_print_report) {
+           printf("Update statistics:\n%s\n", update_stats->full_report().c_str());
+         }
+       }
+@@ -536,8 +541,10 @@ void Scene::collect_statistics(RenderStats *stats)
+   image_manager->collect_statistics(stats, this);
+ }
+ 
+-void Scene::enable_update_stats()
++void Scene::enable_update_stats(const bool print_report, const bool accumulate)
+ {
++  update_stats_print_report = print_report;
++  update_stats_accumulate = accumulate;
+   if (!update_stats) {
+     update_stats = make_unique<SceneUpdateStats>();
+   }
+diff --git a/src/scene/scene.h b/src/scene/scene.h
+index 4fae2b1751436be8922a66aa0526e22c933b75c1..d20846843f37738ad60c5d056ffeeadad0b2f9fd 100644
+--- a/src/scene/scene.h
++++ b/src/scene/scene.h
+@@ -195,6 +195,8 @@ class Scene : public NodeOwner {
+ 
+   /* scene update statistics */
+   unique_ptr<SceneUpdateStats> update_stats;
++  bool update_stats_print_report = true;
++  bool update_stats_accumulate = false;
+ 
+   Scene(const SceneParams &params, Device *device);
+   ~Scene() override;
+@@ -216,7 +218,7 @@ class Scene : public NodeOwner {
+ 
+   void collect_statistics(RenderStats *stats);
+ 
+-  void enable_update_stats();
++  void enable_update_stats(bool print_report = true, bool accumulate = false);
+ 
+   bool update(Progress &progress);
+   bool update_camera_resolution(Progress &progress, int width, int height);
+diff --git a/src/util/stats.h b/src/util/stats.h
+index 2fccc1f84764e9c40b2164dc7323feed57b0c96c..102c849ff511f006d1248a9941e1a8b70471a02d 100644
+--- a/src/util/stats.h
++++ b/src/util/stats.h
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include "util/atomic.h"
++#include <functional>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -29,6 +30,10 @@ class Stats {
+ 
+   size_t mem_used;
+   size_t mem_peak;
++
++  /* Optional logical buffer-copy diagnostic, set only while rendering is
++   * stopped. This counts high-level requests, not physical bus traffic. */
++  std::function<void(const char *, size_t, double)> buffer_copy_callback;
+ };
+ 
+ CCL_NAMESPACE_END

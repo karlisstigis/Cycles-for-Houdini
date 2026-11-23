@@ -1,0 +1,217 @@
+From 8f5237e6da233ee884a580df7c1c9263d893ab8b Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:43 +0100
+Subject: [PATCH] Initialize the independent Houdini native DLSS project and
+ retain per-session NGX runtime identity without Blender session dependencies.
+
+Locked-Patch: patches/0077-houdini-dlss-project.patch
+Locked-Patch-SHA256: fcd9639f809bbd7a5c5ac8171865c09fb470062f257361c458ca8c9a5be87c97
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_dlss_worker_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 0008fb9e482a35d496bf3366d6db5f6a68c74b46
+Previous-Patch: patches/0077-houdini-dlss-project.patch
+Previous-Patch-SHA256: fcd9639f809bbd7a5c5ac8171865c09fb470062f257361c458ca8c9a5be87c97
+Rationale: The DLSS NGX project/runtime identity belongs to the independent Houdini application, removing Blender session assumptions.
+Contract: Initialize the independent Houdini native DLSS project and retain per-session NGX runtime identity without Blender session dependencies.
+Tests: tests/houdini_dlss_worker_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/denoiser_dlss.cpp b/src/integrator/denoiser_dlss.cpp
+index a242cee9335c2a9d48ad162490029d72caccb297..0559c76c4b33265695704f68625c8d0c7c94ef96 100644
+--- a/src/integrator/denoiser_dlss.cpp
++++ b/src/integrator/denoiser_dlss.cpp
+@@ -12,6 +12,8 @@
+ 
+ #  include "util/path.h"
+ 
++#  include <atomic>
++#  include <mutex>
+ #  define NVSDK_NGX_HEADER_ONLY
+ #  include <nvsdk_ngx.h>
+ #  include <nvsdk_ngx_defs.h>
+@@ -19,8 +21,18 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+-/* Application ID for Blender from NVIDIA. */
+-static const int NGX_APPLICATION_ID = 100334311;
++/* Independent NGX project identity shared by discovery and initialization. */
++static constexpr char ngx_project_id[] = "09f76326-5bc2-49f7-81ed-e0731bd86f13";
++static constexpr char ngx_engine_version[] = "5.3.0";
++static std::atomic<bool> ngx_probe_enabled{false};
++static std::mutex ngx_mutex;
++static unsigned int ngx_users = 0;
++static CUcontext ngx_context = nullptr;
++
++void DLSSDenoiser::enable_device_probe()
++{
++  ngx_probe_enabled.store(true);
++}
+ 
+ static PassType get_actual_display_pass_type(const BufferParams &buffer_params)
+ {
+@@ -95,22 +107,25 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
+       };
+   feature_info.LoggingInfo.MinimumLoggingLevel = NVSDK_NGX_LOGGING_LEVEL_ON;
+ 
+-  /* Create a fixed handle for this particular CUDA context and queue combination, since NGX uses
+-   * it for lookup internally. */
+-  ngx_device_ = new NVSDK_NGX_CUDADevice{
+-      cuda_device->cuContext, static_cast<CUDADeviceQueue *>(denoiser_queue_.get())->stream()};
+-
+-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Init1(
+-      NGX_APPLICATION_ID, app_data_path.c_str(), ngx_device_, &feature_info);
+-
+-  if (result == NVSDK_NGX_Result_FAIL_FeatureNotSupported) {
+-    delete ngx_device_;
+-    ngx_device_ = nullptr;
+-    set_error("Failed to load NGX driver");
++  /* The project-ID API owns a process-wide binding. A Houdini render worker has one
++   * denoising device, including when it traces paths on multiple GPUs. */
++  const std::lock_guard<std::mutex> lock(ngx_mutex);
++  if (ngx_users && ngx_context != cuda_device->cuContext) {
++    set_error("Another CUDA context is already using DLSS in this worker");
++    return;
+   }
+-  else if (NVSDK_NGX_FAILED(result)) {
+-    set_error("Failed to initialize NGX driver");
++  if (!ngx_users) {
++    const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Init_with_ProjectID(
++        ngx_project_id, NVSDK_NGX_ENGINE_TYPE_CUSTOM, ngx_engine_version,
++        app_data_path.c_str(), &feature_info);
++    if (NVSDK_NGX_FAILED(result)) {
++      set_error("Failed to initialize DLSS for Cycles for Houdini");
++      return;
++    }
++    ngx_context = cuda_device->cuContext;
+   }
++  ++ngx_users;
++  ngx_initialized_ = true;
+ }
+ 
+ DLSSDenoiser::~DLSSDenoiser()
+@@ -127,7 +142,7 @@ DLSSDenoiser::~DLSSDenoiser()
+   tex_specular_motion_.destroy();
+   tex_output_.destroy();
+ 
+-  if (ngx_device_ == nullptr) {
++  if (!ngx_initialized_) {
+     return;
+   }
+ 
+@@ -135,23 +150,24 @@ DLSSDenoiser::~DLSSDenoiser()
+     NVSDK_NGX_CUDA_ReleaseFeature(handle_);
+   }
+ 
+-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Shutdown1(ngx_device_);
+-
+-  if (NVSDK_NGX_FAILED(result)) {
+-    set_error("Failed to shutdown NGX driver");
++  const std::lock_guard<std::mutex> lock(ngx_mutex);
++  if (--ngx_users == 0) {
++    if (NVSDK_NGX_FAILED(NVSDK_NGX_CUDA_Shutdown())) {
++      set_error("Failed to shut down NGX");
++    }
++    ngx_context = nullptr;
+   }
+-
+-  delete ngx_device_;
+ }
+ 
+ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
+ {
+-  if (device.type != DEVICE_CUDA && device.type != DEVICE_OPTIX) {
++  if (!ngx_probe_enabled.load() || (device.type != DEVICE_CUDA && device.type != DEVICE_OPTIX)) {
+     return false;
+   }
+ 
+   /* 'NVSDK_NGX_CUDA_GetFeatureRequirements' is an expensive call, so cache the result (since
+    * 'is_device_supported' is called a lot). */
++  const std::lock_guard<std::mutex> lock(ngx_mutex);
+   static ccl::map<int, NVSDK_NGX_Feature_Support_Result> supported_cache;
+   if (const auto it = supported_cache.find(device.num); it != supported_cache.end()) {
+     return it->second == NVSDK_NGX_FeatureSupportResult_Supported;
+@@ -167,8 +183,9 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
+   NVSDK_NGX_FeatureDiscoveryInfo discovery_info = {};
+   discovery_info.SDKVersion = NVSDK_NGX_Version_API;
+   discovery_info.FeatureID = NVSDK_NGX_Feature_RayReconstruction;
+-  discovery_info.Identifier.IdentifierType = NVSDK_NGX_Application_Identifier_Type_Application_Id;
+-  discovery_info.Identifier.v.ApplicationId = NGX_APPLICATION_ID;
++  discovery_info.Identifier.IdentifierType = NVSDK_NGX_Application_Identifier_Type_Project_Id;
++  discovery_info.Identifier.v.ProjectDesc = {
++      ngx_project_id, NVSDK_NGX_ENGINE_TYPE_CUSTOM, ngx_engine_version};
+   discovery_info.ApplicationDataPath = app_data_path.c_str();
+ 
+   NVSDK_NGX_FeatureRequirement requirement = {NVSDK_NGX_FeatureSupportResult_Supported};
+@@ -187,6 +204,9 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
+ 
+ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
+ {
++  if (!ngx_initialized_) {
++    return false;
++  }
+   const bool recreate_denoiser = last_width_ != context.denoised_buffer_params.width ||
+                                  last_height_ != context.denoised_buffer_params.height ||
+                                  last_upscale_factor_ != context.denoise_params.upscale_factor;
+@@ -270,8 +290,8 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
+    * safe to do since the denoiser queue is synchronized before release above. */
+   params->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
+ 
+-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_CreateFeature1(
+-      ngx_device_, NVSDK_NGX_Feature_RayReconstruction, params, &handle_);
++  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_CreateFeature(
++      NVSDK_NGX_Feature_RayReconstruction, params, &handle_);
+ 
+   NVSDK_NGX_CUDA_DestroyParameters(params);
+ 
+@@ -418,6 +438,11 @@ bool DLSSDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass
+   if (pass.type != get_actual_display_pass_type(context.buffer_params)) {
+     return true;
+   }
++  /* NGX chooses its own stream with the project-ID API. Cycles supplies input
++   * surfaces on a nonblocking queue and consumes the output on that same queue. */
++  if (!denoiser_queue_->synchronize()) {
++    return false;
++  }
+ 
+   NVSDK_NGX_Parameter *params = nullptr;
+   if (NVSDK_NGX_FAILED(NVSDK_NGX_CUDA_AllocateParameters(&params))) {
+@@ -453,7 +478,7 @@ bool DLSSDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass
+ 
+   NVSDK_NGX_CUDA_DestroyParameters(params);
+ 
+-  return NVSDK_NGX_SUCCEED(result);
++  return NVSDK_NGX_SUCCEED(result) && cuCtxSynchronize() == CUDA_SUCCESS;
+ }
+ 
+ CCL_NAMESPACE_END
+diff --git a/src/integrator/denoiser_dlss.h b/src/integrator/denoiser_dlss.h
+index 8be5c022e8e8229d128345420b7ddd5122fa0272..64094e0679c40acbaac7c60c9d80bcfd97eb3047 100644
+--- a/src/integrator/denoiser_dlss.h
++++ b/src/integrator/denoiser_dlss.h
+@@ -10,7 +10,6 @@
+ #  include "integrator/denoiser_gpu.h"
+ 
+ struct NVSDK_NGX_Handle;
+-struct NVSDK_NGX_CUDADevice;
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -20,6 +19,7 @@ class DLSSDenoiser : public DenoiserGPU {
+   DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params);
+   ~DLSSDenoiser();
+ 
++  static void enable_device_probe();
+   static bool is_device_supported(const DeviceInfo &device);
+ 
+  private:
+@@ -37,7 +37,7 @@ class DLSSDenoiser : public DenoiserGPU {
+   bool denoise_run(const DenoiseContext &context, const DenoisePass &pass) override;
+ 
+   NVSDK_NGX_Handle *handle_ = nullptr;
+-  NVSDK_NGX_CUDADevice *ngx_device_ = nullptr;
++  bool ngx_initialized_ = false;
+ 
+   struct CUDATexture {
+     void init(Device *device, int width, int height, int num_components);

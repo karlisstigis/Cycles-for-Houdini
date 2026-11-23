@@ -1,0 +1,1163 @@
+From 75a49cc93a37a8015a341056f93253dbb1732e56 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 09:32:34 +0000
+Subject: [PATCH 110/111] Rewrite only the changed instances of the OptiX top
+ level structure
+
+When only a few objects changed since the previous top level build (no
+geometry other than lights changed, no object added, removed or reordered,
+no bottom level structure built or refitted), the OptiX device keeps the
+instance and motion transform buffers of the previous build, rewrites the
+instances and motion transforms of the changed objects and uploads only
+those ranges before building the top level structure again. With no
+instance rewritten the previous structure is kept. Object bounds are
+computed only for the changed objects in that case.
+
+A change list is trusted only when every object written before it reached
+a completed geometry update: ObjectManager::top_level_pending is set
+whenever objects other than lights are updated and cleared only at the end
+of a GeometryManager::device_update that completed without cancel or error.
+Every early return in between (Scene::device_update after the object and
+particle updates; the geometry manager on cancel in preprocessing,
+attributes, displacement, curve shadow transparency, bottom level builds,
+bounds, the top level build or the copies after it; a verification error)
+leaves it set, and the next update builds every instance and bound.
+A progress cancel during a scene update comes, in Houdini sessions with
+persistent updates, only from stopping or closing the session
+(RenderSession::cancel/close), from a failed scene transaction, or from a
+path tracing error; a device error ends the update as well.
+
+CYCLES_FULL_TOP_LEVEL_BUILD writes every instance and computes every bound
+as before, as a reference. CYCLES_VERIFY_TOP_LEVEL compares the kept
+instance and motion transform data, on the host and on every device, and
+the bounds with a full rewrite, and reports any difference as an error.
+CYCLES_TEST_INTERRUPT_TOP_LEVEL=<name part> is a test hook that ends one
+update before the bounds and the top level build, as a cancel does.
+
+Rationale: On large instanced scenes the host preparation of the top level instances (slots, motion sizes, motion and instance uploads) costs about 130 ms per object move, while the build itself is a few milliseconds.
+Contract: Instances, motion transforms and bounds are identical to a full rewrite on every device (checked by CYCLES_VERIFY_TOP_LEVEL); any change of slots, child structures or motion transform sizes, and any object update whose top level build did not complete, takes the full path; the instance and motion buffers stay allocated between updates.
+Tests: tests/houdini_top_level_incremental_smoke.py
+---
+ src/bvh/bvh.h                    |   8 +
+ src/device/multi/device.cpp      |  16 +
+ src/device/optix/device_impl.cpp | 660 +++++++++++++++++++++----------
+ src/device/optix/device_impl.h   |  26 ++
+ src/scene/geometry.cpp           | 119 +++++-
+ src/scene/object.cpp             |  39 +-
+ src/scene/object.h               |  15 +
+ 7 files changed, 651 insertions(+), 232 deletions(-)
+
+diff --git a/src/bvh/bvh.h b/src/bvh/bvh.h
+index 43583074d106c05abba1d401ac3bf31485f60010..7b24da25fbd43f47334cd1c6b305f65c04980fe3 100644
+--- a/src/bvh/bvh.h
++++ b/src/bvh/bvh.h
+@@ -93,6 +93,14 @@ class BVH {
+    * sub-devices in parallel, -1 otherwise. A top level build then finds the bottom level
+    * structures of its own device through the geometry's BVHMulti instead of a swapped pointer. */
+   int multi_sub_index = -1;
++  /* Top level only, for one build: the objects whose instance may have changed when nothing else
++   * changed since the previous top level build (no object added, removed or reordered, no bottom
++   * level structure built or refitted). Null when unknown: then every instance is written. */
++  const vector<Object *> *changed_objects = nullptr;
++  /* Top level only, set by the build: the number of instances rewritten when only the changed
++   * objects were written (zero when none of them is in the structure), -1 when every instance was
++   * written. A multi-device structure reports -1 when any sub-device wrote every instance. */
++  int top_level_rewritten = -1;
+ 
+   static unique_ptr<BVH> create(const BVHParams &params,
+                                 const vector<Geometry *> &geometry,
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index 0fe5460680a83ab289bc0318120d0529fb7823e2..583816113c156e1ec85c5b264cd061dd59ad3e10 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -332,6 +332,7 @@ class MultiDevice : public Device {
+ 
+     /* Host data computed by the first sub-device and reused by the others for this build. */
+     BVHSharedBuild shared_build;
++    int rewritten = -1;
+ 
+     /* Broadcast acceleration structure build to all render devices */
+     size_t i = 0;
+@@ -393,13 +394,18 @@ class MultiDevice : public Device {
+           ~SharedBuildScope()
+           {
+             sub_bvh->shared_build = nullptr;
++            sub_bvh->changed_objects = nullptr;
+           }
+         } shared_scope{bvh_multi->sub_bvhs[i].get()};
+         shared_scope.sub_bvh->shared_build = &shared_build;
++        shared_scope.sub_bvh->changed_objects = bvh->changed_objects;
+         sub.device->build_bvh(shared_scope.sub_bvh, progress, refit);
++        const int sub_rewritten = shared_scope.sub_bvh->top_level_rewritten;
++        rewritten = (i == 0 || (rewritten >= 0 && sub_rewritten >= 0)) ? sub_rewritten : -1;
+       }
+       i++;
+     }
++    bvh->top_level_rewritten = rewritten;
+ 
+     /* Change BVH ownership back to Geometry. */
+     for (size_t k = 0; k < bvh->geometry.size(); ++k) {
+@@ -438,14 +444,24 @@ class MultiDevice : public Device {
+             {
+               sub_bvh->shared_build = nullptr;
+               sub_bvh->multi_sub_index = -1;
++              sub_bvh->changed_objects = nullptr;
+             }
+           } scope{bvh_multi->sub_bvhs[i].get()};
+           scope.sub_bvh->shared_build = &shared_build;
+           scope.sub_bvh->multi_sub_index = int(i);
++          scope.sub_bvh->changed_objects = bvh_multi->changed_objects;
+           subs[i]->device->build_bvh(scope.sub_bvh, progress, refit);
+         }
+       });
+     });
++
++    int rewritten = -1;
++    for (size_t i = 0; i < subs.size(); i++) {
++      const int sub_rewritten = bvh_multi->sub_bvhs[i] ? bvh_multi->sub_bvhs[i]->top_level_rewritten :
++                                                          -1;
++      rewritten = (i == 0 || (rewritten >= 0 && sub_rewritten >= 0)) ? sub_rewritten : -1;
++    }
++    bvh_multi->top_level_rewritten = rewritten;
+   }
+ 
+   OSLGlobals *get_cpu_osl_memory() override
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 19b6a1c8ada022c0b012556cb3fde3edde663f46..4dc9e9a1d50a7b4e4b493d635080086cb02f1d95 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -1965,12 +1965,8 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+     }
+   }
+   else {
+-    unsigned int num_instances = 0;
+     unsigned int max_num_instances = 0xFFFFFFFF;
+-
+-    bvh_optix->as_data->free();
+-    bvh_optix->traversable_handle = 0;
+-    bvh_optix->motion_transform_data->free();
++    bvh->top_level_rewritten = -1;
+ 
+     optixDeviceContextGetProperty(context,
+                                   OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID,
+@@ -1984,248 +1980,473 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+       return;
+     }
+ 
+-    /* Fill instance descriptions. */
+-    device_vector<OptixInstance> instances(this, "optix tlas instances", MEM_READ_ONLY);
+-    instances.alloc(bvh->objects.size());
+-
+-    /* Calculate total motion transform size and allocate memory for them. */
+-    size_t motion_transform_offset = 0;
+-    array<uint8_t> motion_transform_host;
+-    if (pipeline_options.usesMotionBlur) {
+-      size_t total_motion_transform_size = 0;
+-      for (Object *const ob : bvh->objects) {
+-        if (ob->is_traceable() && ob->use_motion()) {
+-          total_motion_transform_size = align_up(total_motion_transform_size,
+-                                                 OPTIX_TRANSFORM_BYTE_ALIGNMENT);
+-          const size_t motion_keys = max(ob->get_motion().size(), (size_t)2) - 2;
+-          total_motion_transform_size = total_motion_transform_size +
+-                                        sizeof(OptixSRTMotionTransform) +
+-                                        motion_keys * sizeof(OptixSRTData);
+-        }
+-      }
+-
+-      assert(bvh_optix->motion_transform_data->device == this);
+-      bvh_optix->motion_transform_data->alloc_to_device(total_motion_transform_size);
+-      /* Fill all motion transforms on the host and upload them with a single copy, instead of
+-       * one small synchronous copy per object. */
+-      motion_transform_host.resize(total_motion_transform_size);
++    /* When only a few objects changed since the previous top level build, rewrite and upload only
++     * their instances and motion transforms in the kept buffers. CYCLES_FULL_TOP_LEVEL_BUILD writes
++     * every instance as before, as a reference. */
++    static const bool full_top_level = getenv("CYCLES_FULL_TOP_LEVEL_BUILD") != nullptr;
++    size_t rewritten = 0;
++    const bool incremental = !full_top_level && bvh->changed_objects &&
++                             bvh_optix->traversable_handle != 0 &&
++                             update_top_level_instances(
++                                 bvh_optix, *bvh->changed_objects, rewritten);
++    if (have_error()) {
++      return;
++    }
++    /* With no instance rewritten, the structure built last time is the one a build would make. */
++    const bool keep_structure = incremental && rewritten == 0;
++    if (!keep_structure) {
++      bvh_optix->as_data->free();
++      bvh_optix->traversable_handle = 0;
+     }
++    if (!incremental) {
++      bvh_optix->motion_transform_data->free();
++      tlas_cache = make_unique<TopLevelCache>();
++      TopLevelCache &cache = *tlas_cache;
++      cache.instances = make_unique<device_vector<OptixInstance>>(
++          this, "optix tlas instances", MEM_READ_ONLY);
++      device_vector<OptixInstance> &instances = *cache.instances;
++      instances.alloc(bvh->objects.size());
++
++      /* Calculate total motion transform size and allocate memory for them. */
++      size_t motion_transform_offset = 0;
++      if (pipeline_options.usesMotionBlur) {
++        size_t total_motion_transform_size = 0;
++        for (Object *const ob : bvh->objects) {
++          if (ob->is_traceable() && ob->use_motion()) {
++            total_motion_transform_size = align_up(total_motion_transform_size,
++                                                   OPTIX_TRANSFORM_BYTE_ALIGNMENT);
++            const size_t motion_keys = max(ob->get_motion().size(), (size_t)2) - 2;
++            total_motion_transform_size = total_motion_transform_size +
++                                          sizeof(OptixSRTMotionTransform) +
++                                          motion_keys * sizeof(OptixSRTData);
++          }
++        }
+ 
+-    /* Assign instance slots and motion transform offsets in object order, then fill them in
+-     * parallel: each object only writes its own instance and motion transform. */
+-    struct InstanceSlot {
+-      Object *ob;
+-      OptixTraversableHandle handle;
+-      size_t motion_transform_offset;
+-    };
+-    vector<InstanceSlot> slots;
+-    slots.reserve(bvh->objects.size());
+-    for (Object *ob : bvh->objects) {
+-      /* Skip non-traceable objects. */
+-      if (!ob->is_traceable()) {
+-        continue;
++        assert(bvh_optix->motion_transform_data->device == this);
++        bvh_optix->motion_transform_data->alloc_to_device(total_motion_transform_size);
++        /* Fill all motion transforms on the host and upload them with a single copy, instead of
++         * one small synchronous copy per object. */
++        cache.motion_host.resize(total_motion_transform_size);
+       }
+ 
+-      BVH *child = ob->get_geometry()->bvh.get();
+-      if (child && child->params.bvh_layout == BVH_LAYOUT_MULTI_OPTIX) {
+-        /* Sub-devices build in parallel: the geometry keeps its multi-device BVH, so pick the
+-         * bottom level structure of this device (see MultiDevice::build_bvh). */
+-        assert(bvh->multi_sub_index >= 0);
+-        BVHMulti *const multi_child = static_cast<BVHMulti *>(child);
+-        if (bvh->multi_sub_index < 0 ||
+-            size_t(bvh->multi_sub_index) >= multi_child->sub_bvhs.size())
+-        {
++      /* Assign instance slots and motion transform offsets in object order, then fill them in
++       * parallel: each object only writes its own instance and motion transform. */
++      cache.slots.reserve(bvh->objects.size());
++      cache.object_slot.assign(bvh->objects.size(), -1);
++      for (size_t object_index = 0; object_index < bvh->objects.size(); object_index++) {
++        Object *ob = bvh->objects[object_index];
++        /* Skip non-traceable objects. */
++        if (!ob->is_traceable()) {
++          continue;
++        }
++        bool error = false;
++        const OptixTraversableHandle handle = top_level_child_handle(bvh, ob, error);
++        if (error) {
+           bvh_optix->motion_transform_data->free();
++          tlas_cache.reset();
+           progress.set_error(
+               "OptiX top level build has no sub-device index for a multi-device geometry");
+           return;
+         }
+-        child = multi_child->sub_bvhs[bvh->multi_sub_index].get();
++        if (handle == 0) {
++          continue;
++        }
++
++        size_t offset = SIZE_MAX;
++        size_t motion_transform_size = 0;
++        if (pipeline_options.usesMotionBlur && ob->use_motion()) {
++          const size_t motion_keys = max(ob->get_motion().size(), (size_t)2) - 2;
++          motion_transform_size = sizeof(OptixSRTMotionTransform) +
++                                  motion_keys * sizeof(OptixSRTData);
++          offset = align_up(motion_transform_offset, OPTIX_TRANSFORM_BYTE_ALIGNMENT);
++          motion_transform_offset = offset + motion_transform_size;
++          assert(motion_transform_offset <= cache.motion_host.size());
++        }
++        cache.object_slot[object_index] = int(cache.slots.size());
++        cache.slots.push_back({ob, handle, offset, motion_transform_size});
+       }
+-      if (child == nullptr) {
+-        continue;
++
++      parallel_for(blocked_range<size_t>(0, cache.slots.size(), 64),
++                   [&](const blocked_range<size_t> &r) {
++                     for (size_t slot_index = r.begin(); slot_index != r.end(); slot_index++) {
++                       fill_top_level_instance(cache, slot_index);
++                     }
++                   });
++
++      const CUDAContextScope scope(this);
++
++      /* Get traversable handles to motion transforms. The data is uploaded below, before the
++       * acceleration structure build reads it. */
++      cache.motion_pointer = bvh_optix->motion_transform_data->device_pointer;
++      for (size_t slot_index = 0; slot_index < cache.slots.size(); slot_index++) {
++        if (cache.slots[slot_index].motion_transform_offset != SIZE_MAX) {
++          optixConvertPointerToTraversableHandle(
++              context,
++              cache.motion_pointer + cache.slots[slot_index].motion_transform_offset,
++              OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM,
++              &instances[slot_index].traversableHandle);
++        }
+       }
+-      BVHOptiX *const blas = static_cast<BVHOptiX *>(child);
+-      const OptixTraversableHandle handle = blas->traversable_handle;
+-      if (handle == 0) {
+-        continue;
++
++      /* Upload motion transforms. */
++      if (motion_transform_offset > 0) {
++        cuda_assert(cuMemcpyHtoD(
++            cache.motion_pointer, cache.motion_host.data(), motion_transform_offset));
+       }
+ 
+-      size_t offset = SIZE_MAX;
+-      if (pipeline_options.usesMotionBlur && ob->use_motion()) {
+-        const size_t motion_keys = max(ob->get_motion().size(), (size_t)2) - 2;
+-        const size_t motion_transform_size = sizeof(OptixSRTMotionTransform) +
+-                                             motion_keys * sizeof(OptixSRTData);
+-        offset = align_up(motion_transform_offset, OPTIX_TRANSFORM_BYTE_ALIGNMENT);
+-        motion_transform_offset = offset + motion_transform_size;
+-        assert(motion_transform_offset <= motion_transform_host.size());
++      /* Upload instance descriptions. */
++      instances.resize(cache.slots.size());
++      instances.copy_to_device();
++      cache.owner = bvh;
++      cache.num_objects = bvh->objects.size();
++    }
++
++    /* Build top-level acceleration structure (TLAS) */
++    OptixBuildInput build_input = {};
++    build_input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
++    build_input.instanceArray.instances = tlas_cache->instances->device_pointer;
++    build_input.instanceArray.numInstances = (unsigned int)tlas_cache->slots.size();
++
++    if (!keep_structure &&
++        !build_optix_bvh(bvh_optix, OPTIX_BUILD_OPERATION_BUILD, build_input, 0))
++    {
++      progress.set_error("Failed to build OptiX acceleration structure");
++    }
++    tlas_handle = bvh_optix->traversable_handle;
++    if (incremental) {
++      bvh->top_level_rewritten = int(rewritten);
++    }
++
++    /* CYCLES_VERIFY_TOP_LEVEL: an incremental update must leave the same instance and motion
++     * transform data, on the host and on this device, as writing every instance again. */
++    static const bool verify = getenv("CYCLES_VERIFY_TOP_LEVEL") != nullptr;
++    if (incremental && verify && !have_error()) {
++      string difference;
++      if (!verify_top_level_instances(bvh_optix, difference)) {
++        progress.set_error("Top level verification failed: " + difference);
+       }
+-      slots.push_back({ob, handle, offset});
+-    }
+-    num_instances = (unsigned int)slots.size();
+-
+-    parallel_for(blocked_range<size_t>(0, slots.size(), 64), [&](const blocked_range<size_t> &r) {
+-      for (size_t slot_index = r.begin(); slot_index != r.end(); slot_index++) {
+-        const InstanceSlot &slot = slots[slot_index];
+-        Object *ob = slot.ob;
+-        const OptixTraversableHandle handle = slot.handle;
+-        OptixInstance &instance = instances[slot_index];
+-        memset(&instance, 0, sizeof(instance));
+-
+-        /* Clear transform to identity matrix. */
+-        instance.transform[0] = 1.0f;
+-        instance.transform[5] = 1.0f;
+-        instance.transform[10] = 1.0f;
+-
+-        /* Set user instance ID to object index. */
+-        instance.instanceId = ob->get_device_index();
+-
+-        /* Add some of the object visibility bits to the mask.
+-         * __prim_visibility contains the combined visibility bits of all instances, so is not
+-         * reliable if they differ between instances. But the OptiX visibility mask can only
+-         * contain 8 bits, so have to trade-off here and select just a few important ones.
+-         */
+-        instance.visibilityMask = ob->visibility_for_tracing() & 0xFF;
+-
+-        /* Have to have at least one bit in the mask, or else instance would always be culled. */
+-        if (0 == instance.visibilityMask) {
+-          instance.visibilityMask = 0xFF;
+-        }
++    }
++  }
++}
+ 
+-        if (ob->get_geometry()->is_hair()) {
+-          const Hair *hair = static_cast<const Hair *>(ob->get_geometry());
+-          if (hair->curve_shape == CURVE_RIBBON) {
+-            instance.sbtOffset = PG_HITD_CURVE_RIBBON - PG_HITD;
++OptixTraversableHandle OptiXDevice::top_level_child_handle(BVH *bvh, Object *ob, bool &error)
++{
++  BVH *child = ob->get_geometry()->bvh.get();
++  if (child && child->params.bvh_layout == BVH_LAYOUT_MULTI_OPTIX) {
++    /* Sub-devices build in parallel: the geometry keeps its multi-device BVH, so pick the
++     * bottom level structure of this device (see MultiDevice::build_bvh). */
++    assert(bvh->multi_sub_index >= 0);
++    BVHMulti *const multi_child = static_cast<BVHMulti *>(child);
++    if (bvh->multi_sub_index < 0 ||
++        size_t(bvh->multi_sub_index) >= multi_child->sub_bvhs.size())
++    {
++      error = true;
++      return 0;
++    }
++    child = multi_child->sub_bvhs[bvh->multi_sub_index].get();
++  }
++  if (child == nullptr) {
++    return 0;
++  }
++  return static_cast<BVHOptiX *>(child)->traversable_handle;
++}
+ 
+-            /* Also skip curve ribbons in local trace calls. */
+-            instance.visibilityMask |= 4;
+-          }
+-          else if (hair->curve_shape == CURVE_THICK_LINEAR) {
+-            instance.sbtOffset = PG_HITD_CURVE_LINEAR - PG_HITD;
+-            if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
+-              instance.sbtOffset = PG_HITD_CURVE_LINEAR_MOTION - PG_HITD;
+-            }
+-          }
+-          else {
+-            if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
+-              /* Select between motion blur and non-motion blur built-in intersection module. */
+-              instance.sbtOffset = PG_HITD_MOTION - PG_HITD;
+-            }
+-          }
+-        }
+-        else if (ob->get_geometry()->is_pointcloud()) {
+-          /* Use the hit group that has an intersection program for point clouds. */
+-          instance.sbtOffset = PG_HITD_POINTCLOUD - PG_HITD;
++void OptiXDevice::fill_top_level_instance(TopLevelCache &cache, const size_t slot_index)
++{
++  const TopLevelSlot &slot = cache.slots[slot_index];
++  Object *ob = slot.ob;
++  const OptixTraversableHandle handle = slot.handle;
++  OptixInstance &instance = (*cache.instances)[slot_index];
++  memset(&instance, 0, sizeof(instance));
++
++  /* Clear transform to identity matrix. */
++  instance.transform[0] = 1.0f;
++  instance.transform[5] = 1.0f;
++  instance.transform[10] = 1.0f;
++
++  /* Set user instance ID to object index. */
++  instance.instanceId = ob->get_device_index();
++
++  /* Add some of the object visibility bits to the mask.
++   * __prim_visibility contains the combined visibility bits of all instances, so is not
++   * reliable if they differ between instances. But the OptiX visibility mask can only
++   * contain 8 bits, so have to trade-off here and select just a few important ones.
++   */
++  instance.visibilityMask = ob->visibility_for_tracing() & 0xFF;
+ 
+-          /* Also skip point clouds in local trace calls. */
+-          instance.visibilityMask |= 4;
+-        }
+-        {
+-          /* Can disable __anyhit__kernel_optix_visibility_test by default (except for thick
+-           * curves, since it needs to filter out end-caps there).
+-           *
+-           * It is enabled where necessary (visibility mask exceeds 8 bits or the other any-hit
+-           * programs like __anyhit__kernel_optix_shadow_all_hit) via
+-           * OPTIX_RAY_FLAG_ENFORCE_ANYHIT.
+-           */
+-          instance.flags = OPTIX_INSTANCE_FLAG_DISABLE_ANYHIT;
+-        }
++  /* Have to have at least one bit in the mask, or else instance would always be culled. */
++  if (0 == instance.visibilityMask) {
++    instance.visibilityMask = 0xFF;
++  }
+ 
+-        /* Insert motion traversable if object has motion. */
+-        if (slot.motion_transform_offset != SIZE_MAX) {
+-          /* Fill host side memory for motion transform with transform data. */
+-          OptixSRTMotionTransform *motion_transform = reinterpret_cast<OptixSRTMotionTransform *>(
+-              motion_transform_host.data() + slot.motion_transform_offset);
+-          motion_transform->child = handle;
+-          motion_transform->motionOptions.numKeys = ob->get_motion().size();
+-          motion_transform->motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
+-          motion_transform->motionOptions.timeBegin = 0.0f;
+-          motion_transform->motionOptions.timeEnd = 1.0f;
+-
+-          OptixSRTData *const srt_data = motion_transform->srtData;
+-          array<DecomposedTransform> decomp(ob->get_motion().size());
+-          transform_motion_decompose(
+-              decomp.data(), ob->get_motion().data(), ob->get_motion().size());
+-
+-          for (size_t i = 0; i < ob->get_motion().size(); ++i) {
+-            /* Scale. */
+-            srt_data[i].sx = decomp[i].y.w; /* scale.x.x */
+-            srt_data[i].sy = decomp[i].z.w; /* scale.y.y */
+-            srt_data[i].sz = decomp[i].w.w; /* scale.z.z */
+-
+-            /* Shear. */
+-            srt_data[i].a = decomp[i].z.x; /* scale.x.y */
+-            srt_data[i].b = decomp[i].z.y; /* scale.x.z */
+-            srt_data[i].c = decomp[i].w.x; /* scale.y.z */
+-            assert(decomp[i].z.z == 0.0f); /* scale.y.x */
+-            assert(decomp[i].w.y == 0.0f); /* scale.z.x */
+-            assert(decomp[i].w.z == 0.0f); /* scale.z.y */
+-
+-            /* Pivot point. */
+-            srt_data[i].pvx = 0.0f;
+-            srt_data[i].pvy = 0.0f;
+-            srt_data[i].pvz = 0.0f;
+-
+-            /* Rotation. */
+-            srt_data[i].qx = decomp[i].x.x;
+-            srt_data[i].qy = decomp[i].x.y;
+-            srt_data[i].qz = decomp[i].x.z;
+-            srt_data[i].qw = decomp[i].x.w;
+-
+-            /* Translation. */
+-            srt_data[i].tx = decomp[i].y.x;
+-            srt_data[i].ty = decomp[i].y.y;
+-            srt_data[i].tz = decomp[i].y.z;
+-          }
+-        }
+-        else {
+-          instance.traversableHandle = handle;
++  if (ob->get_geometry()->is_hair()) {
++    const Hair *hair = static_cast<const Hair *>(ob->get_geometry());
++    if (hair->curve_shape == CURVE_RIBBON) {
++      instance.sbtOffset = PG_HITD_CURVE_RIBBON - PG_HITD;
+ 
+-          if (ob->get_geometry()->is_instanced()) {
+-            /* Set transform matrix. */
+-            memcpy(instance.transform, &ob->get_tfm(), sizeof(instance.transform));
+-          }
+-        }
++      /* Also skip curve ribbons in local trace calls. */
++      instance.visibilityMask |= 4;
++    }
++    else if (hair->curve_shape == CURVE_THICK_LINEAR) {
++      instance.sbtOffset = PG_HITD_CURVE_LINEAR - PG_HITD;
++      if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
++        instance.sbtOffset = PG_HITD_CURVE_LINEAR_MOTION - PG_HITD;
+       }
+-    });
+-
+-    const CUDAContextScope scope(this);
+-
+-    /* Get traversable handles to motion transforms. The data is uploaded below, before the
+-     * acceleration structure build reads it. */
+-    for (size_t slot_index = 0; slot_index < slots.size(); slot_index++) {
+-      if (slots[slot_index].motion_transform_offset != SIZE_MAX) {
+-        optixConvertPointerToTraversableHandle(context,
+-                                               bvh_optix->motion_transform_data->device_pointer +
+-                                                   slots[slot_index].motion_transform_offset,
+-                                               OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM,
+-                                               &instances[slot_index].traversableHandle);
++    }
++    else {
++      if (pipeline_options.usesMotionBlur && hair->has_motion_blur()) {
++        /* Select between motion blur and non-motion blur built-in intersection module. */
++        instance.sbtOffset = PG_HITD_MOTION - PG_HITD;
+       }
+     }
++  }
++  else if (ob->get_geometry()->is_pointcloud()) {
++    /* Use the hit group that has an intersection program for point clouds. */
++    instance.sbtOffset = PG_HITD_POINTCLOUD - PG_HITD;
+ 
+-    /* Upload motion transforms. */
+-    if (motion_transform_offset > 0) {
+-      cuda_assert(cuMemcpyHtoD(bvh_optix->motion_transform_data->device_pointer,
+-                               motion_transform_host.data(),
+-                               motion_transform_offset));
++    /* Also skip point clouds in local trace calls. */
++    instance.visibilityMask |= 4;
++  }
++  {
++    /* Can disable __anyhit__kernel_optix_visibility_test by default (except for thick
++     * curves, since it needs to filter out end-caps there).
++     *
++     * It is enabled where necessary (visibility mask exceeds 8 bits or the other any-hit
++     * programs like __anyhit__kernel_optix_shadow_all_hit) via
++     * OPTIX_RAY_FLAG_ENFORCE_ANYHIT.
++     */
++    instance.flags = OPTIX_INSTANCE_FLAG_DISABLE_ANYHIT;
++  }
++
++  /* Insert motion traversable if object has motion. */
++  if (slot.motion_transform_offset != SIZE_MAX) {
++    /* Fill host side memory for motion transform with transform data. */
++    OptixSRTMotionTransform *motion_transform = reinterpret_cast<OptixSRTMotionTransform *>(
++        cache.motion_host.data() + slot.motion_transform_offset);
++    motion_transform->child = handle;
++    motion_transform->motionOptions.numKeys = ob->get_motion().size();
++    motion_transform->motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
++    motion_transform->motionOptions.timeBegin = 0.0f;
++    motion_transform->motionOptions.timeEnd = 1.0f;
++
++    OptixSRTData *const srt_data = motion_transform->srtData;
++    array<DecomposedTransform> decomp(ob->get_motion().size());
++    transform_motion_decompose(
++        decomp.data(), ob->get_motion().data(), ob->get_motion().size());
++
++    for (size_t i = 0; i < ob->get_motion().size(); ++i) {
++      /* Scale. */
++      srt_data[i].sx = decomp[i].y.w; /* scale.x.x */
++      srt_data[i].sy = decomp[i].z.w; /* scale.y.y */
++      srt_data[i].sz = decomp[i].w.w; /* scale.z.z */
++
++      /* Shear. */
++      srt_data[i].a = decomp[i].z.x; /* scale.x.y */
++      srt_data[i].b = decomp[i].z.y; /* scale.x.z */
++      srt_data[i].c = decomp[i].w.x; /* scale.y.z */
++      assert(decomp[i].z.z == 0.0f); /* scale.y.x */
++      assert(decomp[i].w.y == 0.0f); /* scale.z.x */
++      assert(decomp[i].w.z == 0.0f); /* scale.z.y */
++
++      /* Pivot point. */
++      srt_data[i].pvx = 0.0f;
++      srt_data[i].pvy = 0.0f;
++      srt_data[i].pvz = 0.0f;
++
++      /* Rotation. */
++      srt_data[i].qx = decomp[i].x.x;
++      srt_data[i].qy = decomp[i].x.y;
++      srt_data[i].qz = decomp[i].x.z;
++      srt_data[i].qw = decomp[i].x.w;
++
++      /* Translation. */
++      srt_data[i].tx = decomp[i].y.x;
++      srt_data[i].ty = decomp[i].y.y;
++      srt_data[i].tz = decomp[i].y.z;
+     }
+-    motion_transform_host.clear();
++  }
++  else {
++    instance.traversableHandle = handle;
+ 
+-    /* Upload instance descriptions. */
+-    instances.resize(num_instances);
+-    instances.copy_to_device();
++    if (ob->get_geometry()->is_instanced()) {
++      /* Set transform matrix. */
++      memcpy(instance.transform, &ob->get_tfm(), sizeof(instance.transform));
++    }
++  }
++}
+ 
+-    /* Build top-level acceleration structure (TLAS) */
+-    OptixBuildInput build_input = {};
+-    build_input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+-    build_input.instanceArray.instances = instances.device_pointer;
+-    build_input.instanceArray.numInstances = num_instances;
++bool OptiXDevice::update_top_level_instances(BVHOptiX *bvh_optix,
++                                             const vector<Object *> &changed,
++                                             size_t &rewritten)
++{
++  rewritten = 0;
++  if (!tlas_cache || tlas_cache->owner != bvh_optix ||
++      tlas_cache->num_objects != bvh_optix->objects.size() ||
++      tlas_cache->motion_pointer != bvh_optix->motion_transform_data->device_pointer)
++  {
++    return false;
++  }
++  TopLevelCache &cache = *tlas_cache;
++  /* Every changed object must keep its slot, child structure and motion transform layout. */
++  vector<size_t> slot_indices;
++  slot_indices.reserve(changed.size());
++  for (Object *ob : changed) {
++    const int object_index = ob->get_device_index();
++    if (object_index < 0 || size_t(object_index) >= bvh_optix->objects.size() ||
++        bvh_optix->objects[object_index] != ob)
++    {
++      return false;
++    }
++    const int slot = cache.object_slot[object_index];
++    bool error = false;
++    const OptixTraversableHandle handle = ob->is_traceable() ?
++                                              top_level_child_handle(bvh_optix, ob, error) :
++                                              0;
++    if (error || (handle != 0) != (slot >= 0)) {
++      return false;
++    }
++    if (slot < 0) {
++      continue;
++    }
++    const TopLevelSlot &cached = cache.slots[slot];
++    const bool motion = pipeline_options.usesMotionBlur && ob->use_motion();
++    if (cached.ob != ob || cached.handle != handle || motion != (cached.motion_transform_offset != SIZE_MAX)) {
++      return false;
++    }
++    if (motion) {
++      /* The motion transform must keep its size, so it stays in place. */
++      const size_t motion_keys = max(ob->get_motion().size(), (size_t)2) - 2;
++      if (cached.motion_transform_size !=
++          sizeof(OptixSRTMotionTransform) + motion_keys * sizeof(OptixSRTData))
++      {
++        return false;
++      }
++    }
++    slot_indices.push_back(size_t(slot));
++  }
++  std::sort(slot_indices.begin(), slot_indices.end());
++  slot_indices.erase(std::unique(slot_indices.begin(), slot_indices.end()), slot_indices.end());
++
++  device_vector<OptixInstance> &instances = *cache.instances;
++  /* Rewrite the changed instances on all cores; a motion transform stays at the same device
++   * address, so the instance keeps its motion traversable handle. */
++  parallel_for(blocked_range<size_t>(0, slot_indices.size(), 64), [&](const blocked_range<size_t> &r) {
++    for (size_t i = r.begin(); i != r.end(); i++) {
++      const size_t slot = slot_indices[i];
++      const OptixTraversableHandle motion_handle = instances[slot].traversableHandle;
++      fill_top_level_instance(cache, slot);
++      if (cache.slots[slot].motion_transform_offset != SIZE_MAX) {
++        instances[slot].traversableHandle = motion_handle;
++      }
++    }
++  });
+ 
+-    if (!build_optix_bvh(bvh_optix, OPTIX_BUILD_OPERATION_BUILD, build_input, 0)) {
+-      progress.set_error("Failed to build OptiX acceleration structure");
++  /* Upload contiguous runs of changed instances and motion transforms. */
++  const CUDAContextScope scope(this);
++  vector<DeviceMemoryRange> instance_ranges;
++  size_t motion_begin = 0, motion_end = 0;
++  auto flush_motion = [&]() {
++    if (motion_end > motion_begin) {
++      cuda_assert(cuMemcpyHtoD(cache.motion_pointer + motion_begin,
++                               cache.motion_host.data() + motion_begin,
++                               motion_end - motion_begin));
++    }
++    motion_begin = motion_end = 0;
++  };
++  for (size_t i = 0; i < slot_indices.size(); i++) {
++    const size_t slot = slot_indices[i];
++    const TopLevelSlot &cached = cache.slots[slot];
++    if (cached.motion_transform_offset != SIZE_MAX) {
++      /* Slots are sorted and motion transforms are laid out in slot order. */
++      const size_t begin = cached.motion_transform_offset;
++      const size_t end = begin + cached.motion_transform_size;
++      if (motion_end > motion_begin &&
++          align_up(motion_end, OPTIX_TRANSFORM_BYTE_ALIGNMENT) == begin &&
++          i > 0 && slot_indices[i - 1] + 1 == slot)
++      {
++        motion_end = end;
++      }
++      else {
++        flush_motion();
++        motion_begin = begin;
++        motion_end = end;
++      }
++    }
++    const size_t offset = slot * sizeof(OptixInstance);
++    if (!instance_ranges.empty() &&
++        instance_ranges.back().offset + instance_ranges.back().size == offset)
++    {
++      instance_ranges.back().size += sizeof(OptixInstance);
++    }
++    else {
++      instance_ranges.push_back({offset, sizeof(OptixInstance)});
++    }
++  }
++  flush_motion();
++  if (!instance_ranges.empty() && !instances.copy_to_device_ranges(instance_ranges)) {
++    instances.copy_to_device();
++  }
++  rewritten = slot_indices.size();
++  return !have_error();
++}
++
++bool OptiXDevice::verify_top_level_instances(BVHOptiX *bvh_optix, string &difference)
++{
++  TopLevelCache &cache = *tlas_cache;
++  /* Rewrite every instance and motion transform into a scratch copy of the cache. */
++  TopLevelCache full;
++  full.instances = make_unique<device_vector<OptixInstance>>(this, "optix tlas verify", MEM_READ_ONLY);
++  full.instances->alloc(cache.slots.size());
++  full.slots = cache.slots;
++  full.motion_host.resize(cache.motion_host.size());
++  for (size_t slot = 0; slot < cache.slots.size(); slot++) {
++    bool error = false;
++    Object *ob = cache.slots[slot].ob;
++    const OptixTraversableHandle handle = top_level_child_handle(bvh_optix, ob, error);
++    if (error || handle != cache.slots[slot].handle || !ob->is_traceable()) {
++      difference = string_printf("instance %zu (%s) child structure changed", slot, ob->name.c_str());
++      return false;
++    }
++    fill_top_level_instance(full, slot);
++    if (cache.slots[slot].motion_transform_offset != SIZE_MAX) {
++      (*full.instances)[slot].traversableHandle = (*cache.instances)[slot].traversableHandle;
++    }
++  }
++  for (size_t slot = 0; slot < cache.slots.size(); slot++) {
++    if (std::memcmp(&(*full.instances)[slot], &(*cache.instances)[slot], sizeof(OptixInstance)) != 0) {
++      difference = string_printf("instance %zu (%s) differs from a full rewrite", slot,
++                                 cache.slots[slot].ob->name.c_str());
++      return false;
+     }
+-    tlas_handle = bvh_optix->traversable_handle;
+   }
++  if (cache.motion_host.size() &&
++      std::memcmp(full.motion_host.data(), cache.motion_host.data(), cache.motion_host.size()) != 0)
++  {
++    difference = "motion transforms differ from a full rewrite";
++    return false;
++  }
++  /* The device copies hold the host data. */
++  const CUDAContextScope scope(this);
++  vector<OptixInstance> device_instances(cache.slots.size());
++  if (!device_instances.empty()) {
++    cuda_assert(cuMemcpyDtoH(device_instances.data(), (CUdeviceptr)cache.instances->device_pointer,
++                             device_instances.size() * sizeof(OptixInstance)));
++    if (std::memcmp(device_instances.data(), cache.instances->data(),
++                    device_instances.size() * sizeof(OptixInstance)) != 0)
++    {
++      difference = "device instances differ from the host on " + info.description;
++      return false;
++    }
++  }
++  if (cache.motion_host.size()) {
++    vector<uint8_t> device_motion(cache.motion_host.size());
++    cuda_assert(cuMemcpyDtoH(device_motion.data(), (CUdeviceptr)cache.motion_pointer, device_motion.size()));
++    if (std::memcmp(device_motion.data(), cache.motion_host.data(), device_motion.size()) != 0) {
++      difference = "device motion transforms differ from the host on " + info.description;
++      return false;
++    }
++  }
++  return true;
+ }
+ 
+ void OptiXDevice::release_bvh(BVH *bvh)
+@@ -2234,6 +2455,9 @@ void OptiXDevice::release_bvh(BVH *bvh)
+   /* Do delayed free of BVH memory, since geometry holding BVH might be deleted
+    * while GPU is still rendering. */
+   BVHOptiX *const bvh_optix = static_cast<BVHOptiX *>(bvh);
++  if (tlas_cache && tlas_cache->owner == bvh) {
++    tlas_cache.reset();
++  }
+ 
+   delayed_free_bvh_memory.emplace_back(std::move(bvh_optix->as_data));
+   delayed_free_bvh_memory.emplace_back(std::move(bvh_optix->motion_transform_data));
+diff --git a/src/device/optix/device_impl.h b/src/device/optix/device_impl.h
+index 6ce3e11e98f1ae0c7a5bdef836f2304e1dea8e6b..571e29ee073a8a2bae6d620221ea3b008f4ba343 100644
+--- a/src/device/optix/device_impl.h
++++ b/src/device/optix/device_impl.h
+@@ -16,6 +16,7 @@
+ CCL_NAMESPACE_BEGIN
+ 
+ class BVHOptiX;
++class Object;
+ struct KernelParamsOptiX;
+ 
+ /* List of OptiX program groups. */
+@@ -129,6 +130,31 @@ class OptiXDevice : public CUDADevice {
+    * and freed by release_bvh_build_memory(). Only used under bvh_build_mutex. */
+   unique_ptr<device_only_memory<char>> bvh_build_temp_mem;
+ 
++  /* Instance and motion transform buffers of the last top level build, kept so a following build
++   * where only a few objects changed rewrites and uploads only their instances. */
++  struct TopLevelSlot {
++    Object *ob = nullptr;
++    OptixTraversableHandle handle = 0;
++    size_t motion_transform_offset = SIZE_MAX;
++    size_t motion_transform_size = 0;
++  };
++  struct TopLevelCache {
++    const BVH *owner = nullptr;
++    size_t num_objects = 0;
++    unique_ptr<device_vector<OptixInstance>> instances;
++    vector<TopLevelSlot> slots;
++    vector<int> object_slot;
++    array<uint8_t> motion_host;
++    device_ptr motion_pointer = 0;
++  };
++  unique_ptr<TopLevelCache> tlas_cache;
++  OptixTraversableHandle top_level_child_handle(BVH *bvh, Object *ob, bool &error);
++  void fill_top_level_instance(TopLevelCache &cache, size_t slot_index);
++  bool update_top_level_instances(BVHOptiX *bvh_optix,
++                                  const vector<Object *> &changed,
++                                  size_t &rewritten);
++  bool verify_top_level_instances(BVHOptiX *bvh_optix, string &difference);
++
+  public:
+   OptiXDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
+   ~OptiXDevice() override;
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index a4f2177a4a45c47a9ea947af57bed91a0e7ea129..45e52c44f4f282c2db193a7a551894d195d2806f 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1153,6 +1153,8 @@ void GeometryManager::device_update(Device *device,
+       device->release_bvh_build_memory();
+     }
+   } bvh_build_memory_release{device};
++  /* Any geometry other than a light whose bottom level structure or bounds may change. */
++  bool geometry_structures_changed = displacement_done || curve_shadow_transparency_done;
+   {
+     const scoped_callback_timer timer([scene](double time) {
+       if (scene->update_stats) {
+@@ -1173,6 +1175,9 @@ void GeometryManager::device_update(Device *device,
+       }
+       if (geom->is_modified() || geom->need_update_bvh_for_offset) {
+         need_update_scene_bvh = true;
++        if (!geom->is_light()) {
++          geometry_structures_changed = true;
++        }
+ 
+         if (geom->need_build_bvh(bvh_layout)) {
+           i++;
+@@ -1202,6 +1207,29 @@ void GeometryManager::device_update(Device *device,
+   const Scene::MotionType need_motion = scene->need_motion();
+   const bool motion_blur = need_motion == Scene::MOTION_BLUR;
+ 
++  /* The objects whose instance and bounds may have changed, when nothing else did. */
++  const vector<Object *> *top_level_changed = nullptr;
++
++  /* Test hook (CYCLES_TEST_INTERRUPT_TOP_LEVEL=<name part>): once per process, end this update here,
++   * as a cancel at this point does, when an object whose name contains the given text is in the
++   * change list of the object update. Used by houdini_top_level_incremental_smoke.py to check that
++   * the next update takes the full path. */
++  {
++    static const char *interrupt = getenv("CYCLES_TEST_INTERRUPT_TOP_LEVEL");
++    static bool interrupted = false;
++    if (interrupt && *interrupt && !interrupted) {
++      for (const Object *ob : scene->object_manager->top_level_changed_objects) {
++        if (ob->name.string().find(interrupt) != string::npos) {
++          interrupted = true;
++          if (scene->update_stats) {
++            scene->update_stats->geometry.times.add_entry({"interrupted top level updates", 1.0});
++          }
++          return;
++        }
++      }
++    }
++  }
++
+   /* Update objects. */
+   {
+     const scoped_callback_timer timer([scene](double time) {
+@@ -1211,13 +1239,65 @@ void GeometryManager::device_update(Device *device,
+     });
+     /* Each object only writes its own bounds and reads its own transforms and the bounds of
+      * its geometry, which were computed before. With motion blur every moving object samples
+-     * its transform many times, so compute them in parallel. */
+-    parallel_for(blocked_range<size_t>(0, scene->objects.size(), 32),
+-                 [&](const blocked_range<size_t> &r) {
+-                   for (size_t i = r.begin(); i != r.end(); i++) {
+-                     scene->objects[i]->compute_bounds(motion_blur);
+-                   }
+-                 });
++     * its transform many times, so compute them in parallel.
++     *
++     * When no geometry and no object other than the changed ones changed (see
++     * ObjectManager::top_level_changed_objects), the other bounds are the ones computed before:
++     * compute only the changed objects. CYCLES_FULL_TOP_LEVEL_BUILD computes every object as
++     * before, as a reference, and CYCLES_VERIFY_TOP_LEVEL compares the result with computing
++     * every object. */
++    static const bool full_top_level = getenv("CYCLES_FULL_TOP_LEVEL_BUILD") != nullptr;
++    static const bool verify_top_level = getenv("CYCLES_VERIFY_TOP_LEVEL") != nullptr;
++    const ObjectManager *object_manager = scene->object_manager.get();
++    if (!full_top_level && object_manager->top_level_changed_valid &&
++        !geometry_structures_changed && scene->bvh != nullptr)
++    {
++      top_level_changed = &object_manager->top_level_changed_objects;
++    }
++    if (top_level_changed) {
++      const vector<Object *> &changed = *top_level_changed;
++      parallel_for(blocked_range<size_t>(0, changed.size(), 32),
++                   [&](const blocked_range<size_t> &r) {
++                     for (size_t i = r.begin(); i != r.end(); i++) {
++                       changed[i]->compute_bounds(motion_blur);
++                     }
++                   });
++      if (verify_top_level) {
++        vector<BoundBox> kept(scene->objects.size(), BoundBox::empty);
++        for (size_t i = 0; i < scene->objects.size(); i++) {
++          kept[i] = scene->objects[i]->bounds;
++        }
++        parallel_for(blocked_range<size_t>(0, scene->objects.size(), 32),
++                     [&](const blocked_range<size_t> &r) {
++                       for (size_t i = r.begin(); i != r.end(); i++) {
++                         scene->objects[i]->compute_bounds(motion_blur);
++                       }
++                     });
++        for (size_t i = 0; i < scene->objects.size(); i++) {
++          if (memcmp(&kept[i].min, &scene->objects[i]->bounds.min, sizeof(float3)) != 0 ||
++              memcmp(&kept[i].max, &scene->objects[i]->bounds.max, sizeof(float3)) != 0)
++          {
++            progress.set_error("Top level verification failed: bounds of object " +
++                               scene->objects[i]->name.string() +
++                               " differ from computing every object");
++            return;
++          }
++        }
++      }
++      if (scene->update_stats) {
++        /* Counts, not times. */
++        scene->update_stats->geometry.times.add_entry(
++            {"partial bounds objects", double(top_level_changed->size())});
++      }
++    }
++    else {
++      parallel_for(blocked_range<size_t>(0, scene->objects.size(), 32),
++                   [&](const blocked_range<size_t> &r) {
++                     for (size_t i = r.begin(); i != r.end(); i++) {
++                       scene->objects[i]->compute_bounds(motion_blur);
++                     }
++                   });
++    }
+   }
+ 
+   if (progress.get_cancel()) {
+@@ -1230,7 +1310,19 @@ void GeometryManager::device_update(Device *device,
+         scene->update_stats->geometry.times.add_entry({"device_update (build scene BVH)", time});
+       }
+     });
++    if (scene->bvh) {
++      scene->bvh->changed_objects = top_level_changed;
++    }
+     device_update_bvh(device, dscene, scene, progress);
++    if (scene->bvh) {
++      scene->bvh->changed_objects = nullptr;
++      if (scene->update_stats && scene->bvh->top_level_rewritten >= 0) {
++        /* Counts, not times: reported with the update statistics for tests and profiles. */
++        scene->update_stats->geometry.times.add_entry({"incremental top level updates", 1.0});
++        scene->update_stats->geometry.times.add_entry(
++            {"incremental top level instances", double(scene->bvh->top_level_rewritten)});
++      }
++    }
+     if (progress.get_cancel()) {
+       return;
+     }
+@@ -1299,6 +1391,19 @@ void GeometryManager::device_update(Device *device,
+     }
+   }
+ 
++  /* The hand-shake of ObjectManager::top_level_pending: this update completed, so every object
++   * written so far has its bounds, and its instance in the top level when one was built (an update
++   * that needs no top level build changed nothing an instance holds: transforms and visibility
++   * request one). Every return before this point (Scene::device_update after the object and
++   * particle updates on cancel or device error; this function on cancel during preprocessing,
++   * attributes, displacement, curve shadow transparency, bottom level builds, bounds, the top level
++   * build, attribute or mesh copies; a bounds verification error) leaves it set, and so does an
++   * update in which this function does not run after objects other than lights were written: the
++   * next update builds every instance and computes every bound. */
++  if (!progress.get_cancel() && !device->have_error() && !progress.get_error()) {
++    scene->object_manager->top_level_pending = false;
++  }
++
+   update_flags = UPDATE_NONE;
+ 
+   dscene->bvh_nodes.clear_modified();
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index f7f5c72a43465a9d57d8bc2d1f56abaf856aa018..27185b5bd4a176908cab52d4d125ab45477958dc 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1113,8 +1113,12 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+    * writes every object as before, as a reference. */
+   static const bool full_table = getenv("CYCLES_FULL_OBJECT_TABLE_UPDATE") != nullptr;
+   vector<Object *> partial_objects;
+-  bool partial = !full_table && !object_table_force_full && object_table_complete &&
+-                 !palette_offsets_changed &&
++  /* The same conditions decide whether the top level acceleration structure can rewrite only the
++   * instances of the modified objects, without the share limit of the object table (see
++   * top_level_changed_objects). */
++  top_level_changed_valid = false;
++  top_level_changed_objects.clear();
++  bool candidate = object_table_complete && !palette_offsets_changed &&
+                  !dscene->objects.need_realloc() && !dscene->object_motion.need_realloc() &&
+                  (update_flags & ~(OBJECT_MODIFIED | TRANSFORM_MODIFIED | VISIBILITY_MODIFIED |
+                                    HOLDOUT_MODIFIED)) == 0 &&
+@@ -1122,18 +1126,19 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+                  object_table_lightgroups == scene->lightgroups &&
+                  object_table_motion_offset.size() ==
+                      (state.need_motion == Scene::MOTION_BLUR ? num_objects : 0);
+-  if (partial) {
++  if (candidate) {
+     /* Light geometries do not contribute to the object table (no vertices, primitives, motion or
+      * attributes), and their modified state is only cleared by the geometry manager, which a light
+      * edit does not run: they do not block the partial write. */
+     for (const Geometry *geom : scene->geometry) {
+       if (geom->is_modified() && !geom->is_light()) {
+-        partial = false;
++        candidate = false;
+         break;
+       }
+     }
+   }
+-  if (partial) {
++  bool partial = candidate && !full_table && !object_table_force_full;
++  if (candidate) {
+     /* Modified objects in index order, found on all cores. */
+     vector<uint8_t> modified(num_objects);
+     parallel_for(blocked_range<size_t>(0, num_objects, 4096), [&](const blocked_range<size_t> &r) {
+@@ -1145,13 +1150,24 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+       if (modified[i]) {
+         Object *ob = scene->objects[i];
+         if (ob->geometry_is_modified() || size_t(ob->index) != i) {
+-          partial = false;
++          candidate = false;
+           break;
+         }
+         partial_objects.push_back(ob);
+       }
+     }
+-    partial = partial && partial_objects.size() * 16 <= num_objects;
++    if (candidate && !top_level_pending_before) {
++      top_level_changed_valid = true;
++      top_level_changed_objects = partial_objects;
++    }
++    if (candidate && std::all_of(partial_objects.begin(), partial_objects.end(), [](Object *ob) {
++          return ob->get_geometry()->is_light();
++        }))
++    {
++      /* Only light objects changed: they have no instance and no bounds in the top level. */
++      top_level_pending = top_level_pending_before;
++    }
++    partial = partial && candidate && partial_objects.size() * 16 <= num_objects;
+     if (scene->update_stats) {
+       /* Counts, not times: the modified objects found and the object count of the decision. */
+       scene->update_stats->object.times.add_entry(
+@@ -1386,9 +1402,18 @@ void ObjectManager::device_update(Device *device,
+                                   Scene *scene,
+                                   Progress &progress)
+ {
++  top_level_changed_objects.clear();
+   if (!need_update()) {
++    /* No object changed since the last complete object table write, and every object written
++     * since then reached a completed top level build. */
++    top_level_changed_valid = object_table_complete && !top_level_pending;
+     return;
+   }
++  top_level_changed_valid = false;
++  /* An earlier update wrote objects whose top level build did not complete: the change list of
++   * this update would not cover them. */
++  top_level_pending_before = top_level_pending;
++  top_level_pending = true;
+ 
+   if (update_flags & (OBJECT_ADDED | OBJECT_REMOVED)) {
+     dscene->objects.tag_realloc();
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 668981fbdf657aa1f5fd11eb06f314987fcbc299..bbcf59b968b89000829fba2befe2422c4ca1257a 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -193,6 +193,21 @@ class ObjectManager {
+   bool object_table_verify_pending = false;
+   bool object_table_force_full = false;
+   int object_table_partial_updates = 0;
++  /* Set by the object table write of a scene update: when valid, no geometry (other than lights),
++   * object count or object order changed, and these are the only objects that changed. The top
++   * level acceleration structure and the object bounds use it for that update only. */
++  bool top_level_changed_valid = false;
++  /* Hand-shake with the geometry manager: set whenever the objects are updated, cleared only by
++   * GeometryManager::device_update after the bounds and the top level build of a scene update
++   * completed without cancel or error. While it is set from an earlier update, a change list
++   * cannot be trusted to cover every object written since the last completed top level build, so
++   * top_level_changed_valid stays false and the next build is full. A scene update ends early on a
++   * progress cancel or a device error; in Houdini sessions (persistent updates, transactions between
++   * render iterations) the cancel comes only from stopping or closing the session
++   * (RenderSession::cancel/close), from a failed scene transaction, or from a path tracing error. */
++  bool top_level_pending = false;
++  bool top_level_pending_before = false;
++  vector<Object *> top_level_changed_objects;
+ 
+   /* Verification only, after the object flags of a scene update: when the object table was
+    * written partially, compare it on every device with the host table, then rewrite every object

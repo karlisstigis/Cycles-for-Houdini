@@ -1,0 +1,1541 @@
+[
+  {
+    "name": "ch_ipr",
+    "label": "IPR",
+    "join": true,
+    "hide_label": false
+  },
+  {
+    "name": "execute",
+    "label": "Render to Disk",
+    "join": true,
+    "hide_label": false
+  },
+  {
+    "name": "ch_render_mplay",
+    "label": "Render to MPlay",
+    "join": true,
+    "hide_label": false
+  },
+  {
+    "name": "renderdialog",
+    "label": "Controls...",
+    "join": false,
+    "hide_label": true
+  },
+  {
+    "name": "trange",
+    "label": "Valid Frame Range",
+    "join": false,
+    "hide_label": false
+  },
+  {
+    "name": "f",
+    "label": "Start/End/Inc",
+    "join": false,
+    "hide_label": false
+  },
+  {
+    "name": "take",
+    "label": "Render with Take",
+    "join": false,
+    "hide_label": false
+  },
+  {
+    "name": "ch_common_settings",
+    "label": "Common Settings",
+    "folder": "Simple",
+    "tags": {
+      "group_type": "simple"
+    },
+    "children": [
+      {
+        "name": "picture",
+        "label": "Output Picture",
+        "join": false,
+        "hide_label": false
+      },
+      {
+        "name": "camera",
+        "label": "Camera",
+        "join": false,
+        "hide_label": false
+      },
+      {
+        "name": "res",
+        "label": "Resolution",
+        "join": true
+      },
+      {
+        "name": "res_menu",
+        "label": "Choose Resolution",
+        "join": false,
+        "hide_label": true
+      },
+      {
+        "name": "resolution_percent",
+        "label": "Resolution %",
+        "join": false,
+        "hide_label": false
+      }
+    ]
+  },
+  {
+    "name": "ch_rendering",
+    "label": "Rendering",
+    "folder": "Tabs",
+    "tags": {},
+    "children": [
+      {
+        "name": "ch_rendering_sampling",
+        "label": "Sampling",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "ch_rendering_sampling_final_render",
+            "label": "Final Render",
+            "folder": "Collapsible",
+            "tags": {
+              "group_default": "1",
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "adaptive_sampling",
+                "label": "Adaptive Sampling",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "noise_threshold",
+                "label": "Noise Threshold",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "samples",
+                "label": "Max Samples",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "min_samples",
+                "label": "Min Samples",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "time_limit",
+                "label": "Time Limit (s)",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "use_denoise",
+                "label": "Denoise",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ch_rendering_sampling_final_render_denoising",
+                "label": "Denoising",
+                "folder": "Collapsible",
+                "tags": {
+                  "group_default": "1",
+                  "group_type": "collapsible",
+                  "sidefx::header_toggle": "use_denoise"
+                },
+                "children": [
+                  {
+                    "name": "denoiser",
+                    "label": "Denoiser",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "denoise_use_gpu",
+                    "label": "Use GPU",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "denoise_passes",
+                    "label": "Input Passes",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "denoise_quality",
+                    "label": "Quality",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "denoise_prefilter",
+                    "label": "Prefilter",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "denoise_start_sample",
+                    "label": "Start Sample",
+                    "join": false,
+                    "hide_label": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ch_rendering_sampling_light_sampling",
+            "label": "Light Sampling",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "light_tree",
+                "label": "Light Tree",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "light_threshold",
+                "label": "Light Threshold",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "resampled_light_sampling",
+                "label": "Resampled Light Sampling",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "use_guiding",
+                "label": "Path Guiding (CPU)",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_rendering_sampling_advanced",
+            "label": "Advanced",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "sampling_pattern",
+                "label": "Sampling Pattern",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "seed",
+                "label": "Seed",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "animate_seed",
+                "label": "Animate Seed",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "deterministic_guiding",
+                "label": "Deterministic Guiding",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ch_rendering_sampling_advanced_sample_subset_final_only",
+                "label": "Sample Subset (Final Only)",
+                "folder": "Collapsible",
+                "tags": {
+                  "group_type": "collapsible"
+                },
+                "children": [
+                  {
+                    "name": "sample_subset",
+                    "label": "Sample Subset",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "subset_offset",
+                    "label": "Sample Offset",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "subset_length",
+                    "label": "Sample Length",
+                    "join": false,
+                    "hide_label": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ch_rendering_ipr_settings",
+        "label": "IPR Settings",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "ch_rendering_sampling_interactive_render",
+            "label": "Sampling",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible",
+              "group_default": "1"
+            },
+            "children": [
+              {
+                "name": "ipr_resolution_percent",
+                "label": "Resolution %",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_adaptive_sampling",
+                "label": "Adaptive Sampling",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_noise_threshold",
+                "label": "Noise Threshold",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_samples",
+                "label": "Max Samples",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_min_samples",
+                "label": "Min Samples",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_use_denoise",
+                "label": "Denoise",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ch_rendering_sampling_interactive_render_denoising",
+                "label": "Denoising",
+                "folder": "Collapsible",
+                "tags": {
+                  "group_type": "collapsible",
+                  "sidefx::header_toggle": "ipr_use_denoise"
+                },
+                "children": [
+                  {
+                    "name": "ipr_denoiser",
+                    "label": "Denoiser",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "ipr_dlss_quality",
+                    "label": "DLSS Quality",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "ipr_denoise_use_gpu",
+                    "label": "Use GPU for Denoising",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "ipr_denoise_passes",
+                    "label": "Denoising Passes",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "ipr_denoise_quality",
+                    "label": "Quality",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "ipr_denoise_prefilter",
+                    "label": "Guide Prefilter",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "ipr_denoise_start_sample",
+                    "label": "Start Sample",
+                    "join": false,
+                    "hide_label": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "tessellation_update",
+            "label": "Adaptive Subdivision Update",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "refresh_tessellation",
+            "label": "Refresh Tessellation",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ipr_refit_meshes",
+            "label": "Refit Meshes While Interacting",
+            "join": false,
+            "hide_label": false
+          }
+        ]
+      },
+      {
+        "name": "ch_rendering_light_paths",
+        "label": "Light Paths",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "ch_rendering_light_paths_max_bounces",
+            "label": "Max Bounces",
+            "folder": "Collapsible",
+            "tags": {
+              "group_default": "1",
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "max_bounce",
+                "label": "Total",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "diffuse_bounce",
+                "label": "Diffuse",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "glossy_bounce",
+                "label": "Glossy",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "transmission_bounce",
+                "label": "Transmission",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "volume_bounce",
+                "label": "Volume",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "transparent_max_bounce",
+                "label": "Transparent",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_rendering_light_paths_minimum_bounces",
+            "label": "Minimum Bounces",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "min_bounce",
+                "label": "Min Light Bounces",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "transparent_min_bounce",
+                "label": "Min Transparent Bounces",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_rendering_light_paths_clamping",
+            "label": "Clamping",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "clamp_direct",
+                "label": "Direct Light",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "clamp_indirect",
+                "label": "Indirect Light",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_rendering_light_paths_caustics",
+            "label": "Caustics",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "filter_glossy",
+                "label": "Filter Glossy",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "caustics_reflective",
+                "label": "Reflective Caustics",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "caustics_refractive",
+                "label": "Refractive Caustics",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "nested_dielectrics",
+            "label": "Nested Dielectrics",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "fast_gi",
+            "label": "Fast GI Approximation",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ch_rendering_light_paths_fast_gi_approximation",
+            "label": "Fast GI Approximation",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible",
+              "sidefx::header_toggle": "fast_gi"
+            },
+            "children": [
+              {
+                "name": "fast_gi_method",
+                "label": "Method",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ao_factor",
+                "label": "AO Factor",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ao_distance",
+                "label": "AO Distance",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_ao_bounces",
+                "label": "Bounces",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ao_bounces",
+                "label": "Final Bounces",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ch_rendering_camera_effects",
+        "label": "Camera Effects",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "dof_mode",
+            "label": "Depth of Field",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ch_motion_blur_spacer",
+            "separator": true,
+            "tags": {
+              "sidefx::look": "blank"
+            }
+          },
+          {
+            "name": "allowmotionblur",
+            "label": "Motion Blur",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ch_rendering_camera_effects_motion_blur",
+            "label": "Motion Blur",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible",
+              "sidefx::header_toggle": "allowmotionblur"
+            },
+            "children": [
+              {
+                "name": "shutteroffset",
+                "label": "Shutter Offset",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "motion_samples",
+                "label": "Samples",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "geometry_motion",
+                "label": "Deformation",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ch_rendering_geometry",
+        "label": "Geometry",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "ch_rendering_geometry_subdivision",
+            "label": "Subdivision",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "dicing_rate",
+                "label": "Dicing Rate Render",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_dicing_rate",
+                "label": "Viewport",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "offscreen_dicing_scale",
+                "label": "Offscreen Scale",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "max_subdivisions",
+                "label": "Max Subdivisions",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "dicing_camera",
+                "label": "Dicing Camera",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "limit_subdivision",
+                "label": "Limit Subdivision Triangles",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "subdivision_limit",
+                "label": "Triangle Budget",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_rendering_geometry_points_and_curves",
+            "label": "Points and Curves",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "point_radius",
+                "label": "Point Radius",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "curve_width",
+                "label": "Curve Width",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "curve_subdivisions",
+                "label": "Curve Subdivisions",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "curve_segments",
+                "label": "Bezier/NURBS Segments",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_rendering_geometry_volumes",
+            "label": "Volumes",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "volume_step_size",
+                "label": "Volume step size",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "volume_biased",
+                "label": "Biased Volume Ray Marching",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "volume_step_rate",
+                "label": "Final Step Rate",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "ipr_volume_step_rate",
+                "label": "Step Rate",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "volume_max_steps",
+                "label": "Max Steps",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch_scene",
+    "label": "Scene",
+    "folder": "Tabs",
+    "tags": {},
+    "children": [
+      {
+        "name": "ch_scene_objects",
+        "label": "Objects",
+        "folder": "Collapsible",
+        "tags": {
+          "group_default": "1",
+          "group_type": "collapsible"
+        },
+        "children": [
+          {
+            "name": "objectroot",
+            "label": "OBJ scene root",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "vobject",
+            "label": "Objects",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "forceobject",
+            "label": "Force objects",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "excludeobject",
+            "label": "Exclude objects",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "apply_stylesheets",
+            "label": "Stylesheets",
+            "join": false,
+            "hide_label": false
+          }
+        ]
+      },
+      {
+        "name": "ch_scene_lights",
+        "label": "Lights",
+        "folder": "Collapsible",
+        "tags": {
+          "group_type": "collapsible"
+        },
+        "children": [
+          {
+            "name": "lights",
+            "label": "Lights",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "forcelights",
+            "label": "Force lights",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "excludelights",
+            "label": "Exclude lights",
+            "join": false,
+            "hide_label": false
+          }
+        ]
+      },
+      {
+        "name": "ch_scene_environment",
+        "label": "Environment",
+        "folder": "Collapsible",
+        "tags": {
+          "group_type": "collapsible"
+        },
+        "children": [
+          {
+            "name": "world_source",
+            "label": "World Source",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "world_material",
+            "label": "World Material",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "background",
+            "label": "Background color",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "world_volume_sampling",
+            "label": "Volume Sampling",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "world_sampling",
+            "label": "Sampling",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "world_map_resolution",
+            "label": "Map Resolution",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "world_max_bounces",
+            "label": "Max Bounces",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "world_cast_shadow",
+            "label": "Cast Shadow",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "world_use_caustics",
+            "label": "Shadow Caustics",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ch_scene_environment_ray_visibility",
+            "label": "Ray Visibility",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "world_visibility_camera",
+                "label": "Camera",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "world_visibility_diffuse",
+                "label": "Diffuse",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "world_visibility_glossy",
+                "label": "Glossy",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "world_visibility_transmission",
+                "label": "Transmission",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "world_visibility_volume",
+                "label": "Volume Scatter",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "background_lightgroup",
+            "label": "Light Group",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "background_shadow_catcher",
+            "label": "Shadow Catcher Reference",
+            "join": false,
+            "hide_label": false
+          }
+        ]
+      },
+      {
+        "name": "ch_scene_materials",
+        "label": "Materials",
+        "folder": "Collapsible",
+        "tags": {
+          "group_type": "collapsible"
+        },
+        "children": [
+          {
+            "name": "use_material_assignments",
+            "label": "Use object and geometry materials",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "materialpath",
+            "label": "Default Material",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "material_kind",
+            "label": "Default Shader",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "material_pass_index",
+            "label": "Default Material Pass Index",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ch_scene_materials_fallback_surface",
+            "label": "Fallback Surface",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "basecolor",
+                "label": "Material color",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "color_attribute",
+                "label": "Color attribute (optional)",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "roughness",
+                "label": "Roughness",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "metallic",
+                "label": "Metallic",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "emission_strength",
+                "label": "Surface emission strength",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_scene_materials_fallback_volume",
+            "label": "Fallback Volume",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "density",
+                "label": "Volume density scale",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "anisotropy",
+                "label": "Volume anisotropy",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "volume_emission_strength",
+                "label": "Volume emission strength",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "volume_emission_color",
+                "label": "Volume emission color",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "emission_field",
+                "label": "Emission field (blank uses density)",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "blackbody_intensity",
+                "label": "Blackbody intensity",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "temperature_kelvin_scale",
+                "label": "Kelvin per temperature unit",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch_image_output",
+    "label": "Image Output",
+    "folder": "Tabs",
+    "tags": {},
+    "children": [
+      {
+        "name": "ch_image_output_file",
+        "label": "File",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "output_separate_passes",
+            "label": "Passes to Separate Files",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_multipart",
+            "label": "Multipart EXR",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_pass_folders",
+            "label": "Pass Folders",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_precision",
+            "label": "Precision",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_compression",
+            "label": "EXR Compression",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_dwa_level",
+            "label": "DWA Compression Level",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_existing",
+            "label": "Existing Files",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "fail_on_missing_inputs",
+            "label": "Fail on Missing Render Inputs",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_color_override",
+            "label": "Override Color Space",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "output_color_space",
+            "label": "Color Space",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ch_resolution_separator",
+            "label": "",
+            "separator": true
+          },
+          {
+            "name": "pixel_aspect",
+            "label": "Pixel Aspect",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "sepparm3",
+            "label": "",
+            "separator": true
+          },
+          {
+            "name": "ch_image_output_file_render_region",
+            "label": "Render Region",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "render_region",
+                "label": "Render Region",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "render_region_bounds",
+                "label": "Left / Right / Bottom / Top",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "crop_to_region",
+                "label": "Crop Output to Region",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ch_image_output_film",
+        "label": "Film",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "film_exposure",
+            "label": "Exposure",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "transparent_background",
+            "label": "Transparent",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "ch_image_output_film_transparency",
+            "label": "Transparent",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible",
+              "sidefx::header_toggle": "transparent_background"
+            },
+            "children": [
+              {
+                "name": "transparent_glass",
+                "label": "Transparent Glass",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "transparent_roughness_threshold",
+                "label": "Roughness Threshold",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          },
+          {
+            "name": "ch_image_output_film_pixel_filter",
+            "label": "Pixel Filter",
+            "folder": "Collapsible",
+            "tags": {
+              "group_type": "collapsible"
+            },
+            "children": [
+              {
+                "name": "pixel_filter",
+                "label": "Pixel Filter",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "filter_width",
+                "label": "Filter Width (pixels)",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ch_image_output_passes",
+        "label": "Passes",
+        "folder": "Tabs",
+        "tags": {},
+        "children": [
+          {
+            "name": "pass_add",
+            "label": "Add Pass",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "pass_count",
+            "label": "Passes",
+            "folder": "MultiparmBlock",
+            "tags": {},
+            "children": [
+              {
+                "name": "pass_enable#",
+                "label": "Enabled",
+                "join": true,
+                "hide_label": true
+              },
+              {
+                "name": "pass_type#",
+                "label": "Type",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "pass_source#",
+                "label": "Source Name",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "pass_levels#",
+                "label": "Levels",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "pass_output#",
+                "label": "Output",
+                "folder": "Collapsible",
+                "tags": {},
+                "children": [
+                  {
+                    "name": "pass_name#",
+                    "label": "Layer Name",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "pass_separate#",
+                    "label": "Separate File",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "pass_path#",
+                    "label": "File",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "pass_precision#",
+                    "label": "Precision",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "pass_compression#",
+                    "label": "EXR Compression",
+                    "join": false,
+                    "hide_label": false
+                  },
+                  {
+                    "name": "pass_dwa_level#",
+                    "label": "DWA Compression Level",
+                    "join": false,
+                    "hide_label": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ch_pass_settings",
+            "label": "Pass Settings",
+            "folder": "Collapsible",
+            "tags": {},
+            "children": [
+              {
+                "name": "pass_alpha_threshold",
+                "label": "Alpha Threshold",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "mist_start",
+                "label": "Mist Start",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "mist_depth",
+                "label": "Mist Depth",
+                "join": false,
+                "hide_label": false
+              },
+              {
+                "name": "mist_falloff",
+                "label": "Mist Falloff",
+                "join": false,
+                "hide_label": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ch_performance",
+    "label": "Performance",
+    "folder": "Tabs",
+    "tags": {},
+    "children": [
+      {
+        "name": "persistent_data",
+        "label": "Persistent Data",
+        "join": false,
+        "hide_label": false
+      },
+      {
+        "name": "use_tiling",
+        "label": "Tiling (Final Render)",
+        "join": false,
+        "hide_label": false
+      },
+      {
+        "name": "ch_performance_tiling",
+        "label": "Tiling (Final Render)",
+        "folder": "Collapsible",
+        "tags": {
+          "group_type": "collapsible",
+          "sidefx::header_toggle": "use_tiling"
+        },
+        "children": [
+          {
+            "name": "tile_size",
+            "label": "Tile Size",
+            "join": false,
+            "hide_label": false
+          }
+        ]
+      },
+      {
+        "name": "use_texture_cache",
+        "label": "Texture Cache",
+        "join": false,
+        "hide_label": false
+      },
+      {
+        "name": "ch_performance_texture_cache",
+        "label": "Texture Cache",
+        "folder": "Collapsible",
+        "tags": {
+          "group_type": "collapsible",
+          "sidefx::header_toggle": "use_texture_cache"
+        },
+        "children": [
+          {
+            "name": "auto_texture_cache",
+            "label": "Auto Generate",
+            "join": false,
+            "hide_label": false
+          },
+          {
+            "name": "texture_cache_generate",
+            "label": "Generate",
+            "join": true,
+            "hide_label": false
+          },
+          {
+            "name": "texture_cache_clear",
+            "label": "Clear",
+            "join": false,
+            "hide_label": false
+          }
+        ]
+      },
+      {
+        "name": "sepparm",
+        "label": "",
+        "separator": true
+      },
+      {
+        "name": "render_threads",
+        "label": "Render Threads",
+        "join": false,
+        "hide_label": false
+      }
+    ]
+  },
+  {
+    "name": "ch_devices",
+    "label": "Devices",
+    "folder": "Tabs",
+    "tags": {},
+    "children": [
+      {
+        "name": "device_mode",
+        "label": "Render Device",
+        "join": false,
+        "hide_label": false
+      },
+      {
+        "name": "compute_backend",
+        "label": "GPU Backend",
+        "join": false,
+        "hide_label": false
+      },
+      {
+        "name": "device_refresh",
+        "label": "Refresh Devices",
+        "join": false,
+        "hide_label": false
+      }
+    ]
+  },
+  {
+    "name": "ch_scripts",
+    "label": "Scripts",
+    "folder": "Tabs",
+    "tags": {},
+    "children": [
+      { "name": "tprerender", "label": "Pre-Render", "join": true },
+      { "name": "prerender", "label": "Script", "join": true },
+      { "name": "lprerender", "label": "Language" },
+      { "name": "tpreframe", "label": "Pre-Frame", "join": true },
+      { "name": "preframe", "label": "Script", "join": true },
+      { "name": "lpreframe", "label": "Language" },
+      { "name": "tpostframe", "label": "Post-Frame", "join": true },
+      { "name": "postframe", "label": "Script", "join": true },
+      { "name": "lpostframe", "label": "Language" },
+      { "name": "tpostrender", "label": "Post-Render", "join": true },
+      { "name": "postrender", "label": "Script", "join": true },
+      { "name": "lpostrender", "label": "Language" }
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+= Cycles environment light properties =
+
+A Houdini Environment Light can illuminate the scene from an environment image. Rotate the light to change where the dominant directions fall on objects. Input Color Space controls how Cycles interprets the source pixels. The importance map controls where Cycles samples that environment during lighting calculations.
+
+@related
+    [Houdini light properties for Cycles|/cycles/lights]
+    [Cycles Render|Node:out/cycles_ipr]

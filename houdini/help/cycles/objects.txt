@@ -1,0 +1,33 @@
+= Cycles object properties =
+
+Configure the renderable components of a Geometry OBJ in its Cycles tab. The ROP selects objects for rendering. Each object's properties govern how Cycles converts its contents.
+
+== Subdivision ==
+
+Enable Subdivision on each mesh that requires it. Levels IPR and Levels Render control uniform subdivision independently. Turn off Enable in IPR to work with the original polygons while retaining subdivision for disk renders.
+
+Adaptive Subdivision chooses detail from projected pixel size or object-space edge length. The ROP sets the shared dicing rate, dicing camera, offscreen scale and limits. A triangle budget can reject a render when enabled. Check this limit if a dense asset fails during tessellation.
+
+== Instancing ==
+
+Render Packed Instances controls packed primitives in the SOP geometry. A string point attribute named `instance` references an OBJ or subnet by path. For a subnet, All Objects includes its members even when its display flag is off. Use the ROP object exclusion control to remove the original from the render while keeping copies.
+
+== Shading and visibility ==
+
+Use Ray Visibility to restrict intersections by ray type. For example, disabling Camera hides the object from a direct camera ray while Glossy can keep it visible in reflections. Shadow controls shadow-ray intersections.
+
+Give overlapping closed refractive objects distinct Dielectric Priority values and enable Nested Dielectrics on the ROP. The higher priority wins in an overlap. Leave a small overlap at a contacting surface. Use a Volume Absorption shader to give the contents color that varies with distance traveled.
+
+== Curves, points and volumes ==
+
+Curve Shape controls strand rendering. Segments per Span controls conversion of native Bézier and NURBS curves. Loose points can render as spheres, with point pscale supplying the radius. For volumes, Density in Object Space controls how optical depth responds to an object transform.
+
+== Motion ==
+
+Enable motion blur on the ROP. An object can inherit the geometry motion mode or request transform-only, velocity or deformation samples. The Houdini point velocity attribute is v, measured in SOP units per second.
+
+@related
+    [Cycles light properties|/cycles/lights]
+    [Cycles Render|Node:out/cycles_ipr]
+    [Cycles camera properties|/cycles/camera]
+    [Cycles Viewer|/cycles/viewer]

@@ -1,0 +1,14 @@
+= Cycles properties on Houdini lights =
+
+Add the Cycles light properties to a native Houdini light for control over sampling, light linking and ray visibility. For an authored emission shader and interactive Cycles light handles, create a Cycles Light. A spotlight on a native Houdini light uses its native cone controls.
+
+Cycles Light follows Houdini's native light transform scaling. Use Size and Size Y for area dimensions and Radius for point and spot emitters.
+
+In the Houdini Light Linker, choose Light-Centric, expand `obj` under Light Sources, and select the Cycles Light by its scene name. Ctrl-click a receiver or caster to toggle its link to the selected light.
+In Light Mask mode, edit receivers under Lit Objects. This writes each receiver's Light Mask, which intersects the Cycles Light's Illuminates selection. To have one Cycles Light illuminate only a fog object, set Illuminates on that light to `/obj/fog`.
+In Shadow Mask mode, edit blockers under Shadow Casters. The pane edits Shadow Casters on the same named Cycles Light. An object excluded as a caster can still receive the light.
+
+@related
+    [Environment lights|/cycles/environment]
+    [Cycles object properties|/cycles/objects]
+    [Cycles Render|Node:out/cycles_ipr]

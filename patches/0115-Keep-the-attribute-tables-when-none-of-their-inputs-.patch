@@ -1,0 +1,441 @@
+From 6a5e417887d51f2f8d9a5077a8b66f7803fbf0fb Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 12:03:18 +0000
+Subject: [PATCH 115/116] Keep the attribute tables when none of their inputs
+ changed
+
+Every geometry update rebuilt the attribute requests, layout comparison,
+object attribute requests, attribute map and kernel object offsets by
+walking every geometry and object, also on pose-only updates where none of
+their inputs changed (20-25 ms per object or light edit on 380k objects,
+and 35 ms on a full object table write). When no geometry other than
+lights was modified (sockets or attributes; for lights their shaders), no
+shader was updated in this scene update, the object update's change list
+is valid (no object added, removed, reordered or given another geometry,
+and every earlier object update reached a completed geometry update), the
+global attribute requests, OSL mode, geometry count and attribute table
+sizes are those of the last completed attribute update, no attribute or
+primitive buffer is to be reallocated and every changed object still
+requests the same attributes, only the changed objects' attribute values
+and kernel object offsets are written and copied.
+
+CYCLES_FULL_ATTRIBUTE_TABLES always runs the full update, as a reference.
+CYCLES_VERIFY_ATTRIBUTE_TABLES compares every device copy with the host and
+the kept tables, map and kernel objects with those of the full update, and
+reports a difference as an error.
+
+Rationale: Pose-only edits on large instanced scenes spent 20-45 ms rebuilding attribute requests, maps and offsets that could not have changed.
+Contract: Attribute tables, attribute map and kernel objects on every device equal those of the full update (checked by CYCLES_VERIFY_ATTRIBUTE_TABLES); any changed input listed above takes the full update.
+Tests: tests/houdini_attribute_tables_kept_smoke.py
+---
+ src/scene/geometry.h              |  10 ++
+ src/scene/geometry_attributes.cpp | 250 ++++++++++++++++++++++++++++++
+ src/scene/object.cpp              |  37 ++++-
+ src/scene/object.h                |  10 +-
+ 4 files changed, 305 insertions(+), 2 deletions(-)
+
+diff --git a/src/scene/geometry.h b/src/scene/geometry.h
+index b2c510fd04b535c802b3474e6c309cac64d1156f..bb08fbd27eb20741a68a682b8bc02b7a4b7eccd0 100644
+--- a/src/scene/geometry.h
++++ b/src/scene/geometry.h
+@@ -319,6 +319,16 @@ class GeometryManager {
+   vector<AttributeRequestSet> object_attribute_requests;
+   size_t attribute_layout_geometry_spans[int(AttrKernelDataType::NUM) + 3] = {};
+   size_t object_attribute_reserve[int(AttrKernelDataType::NUM)] = {};
++  /* Inputs of the last completed attribute update, to keep its tables, maps and requests when
++   * none of them changed (see device_update_attributes): the global attribute requests, the OSL
++   * mode, the geometry count, the object attribute names requested per geometry and the table
++   * sizes. */
++  AttributeRequestSet kept_global_attributes;
++  bool kept_use_osl = false;
++  size_t kept_num_geometry = 0;
++  vector<vector<ustring>> kept_object_names;
++  size_t kept_table_sizes[int(AttrKernelDataType::NUM)] = {};
++  bool update_attributes_kept(Device *device, DeviceScene *dscene, Scene *scene, Progress &progress);
+ 
+   bool displace(Device *device, Scene *scene, Mesh *mesh, Progress &progress);
+ 
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index ce6ab107cfa59dc26af4e24d9ba4ec16609c51ba..db489196cdec618ed8760a3767cdf38840f3ca9f 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -14,6 +14,7 @@
+ #include "scene/mesh.h"
+ #include "scene/object.h"
+ #include "scene/pointcloud.h"
++#include "scene/stats.h"
+ #include "scene/scene.h"
+ #include "scene/shader.h"
+ #include "scene/shader_nodes.h"
+@@ -775,6 +776,48 @@ static char *object_attribute_table_data(DeviceScene *dscene, const int table)
+   }
+ }
+ 
++static size_t object_attribute_table_size(const DeviceScene *dscene, const int table)
++{
++  switch (AttrKernelDataType(table)) {
++    case AttrKernelDataType::FLOAT:
++      return dscene->attributes_float.size();
++    case AttrKernelDataType::FLOAT2:
++      return dscene->attributes_float2.size();
++    case AttrKernelDataType::FLOAT4:
++      return dscene->attributes_float4.size();
++    case AttrKernelDataType::QUATERNION:
++      return dscene->attributes_quaternion.size();
++    case AttrKernelDataType::SPHERICAL_HARMONICS_REST:
++      return dscene->attributes_spherical_harmonics_rest.size();
++    default:
++      return dscene->attributes_float3.size();
++  }
++}
++
++static void copy_object_attribute_table(DeviceScene *dscene, const int table)
++{
++  switch (AttrKernelDataType(table)) {
++    case AttrKernelDataType::FLOAT:
++      dscene->attributes_float.copy_to_device();
++      break;
++    case AttrKernelDataType::FLOAT2:
++      dscene->attributes_float2.copy_to_device();
++      break;
++    case AttrKernelDataType::FLOAT4:
++      dscene->attributes_float4.copy_to_device();
++      break;
++    case AttrKernelDataType::QUATERNION:
++      dscene->attributes_quaternion.copy_to_device();
++      break;
++    case AttrKernelDataType::SPHERICAL_HARMONICS_REST:
++      dscene->attributes_spherical_harmonics_rest.copy_to_device();
++      break;
++    default:
++      dscene->attributes_float3.copy_to_device();
++      break;
++  }
++}
++
+ /* One stored object attribute: where its steps go in the packed tables and
+  * where their source values are. */
+ struct ObjectAttributeValues {
+@@ -1119,11 +1162,202 @@ static bool prepare_object_attribute_requests(
+   return true;
+ }
+ 
++/* Attribute tables, maps and requests of the last completed attribute update stay valid when none
++ * of their inputs changed: no geometry other than lights modified (sockets or attributes), no
++ * shader updated in this scene update, no object added, removed, reordered or given another
++ * geometry (the object update's change list is valid, which also requires that every earlier
++ * object update reached a completed geometry update), the same global attribute requests, OSL
++ * mode and geometry count, no attribute or primitive buffer to reallocate, and every changed
++ * object still requesting the same attributes. Then only the changed objects' attribute values
++ * and kernel object offsets are written. Returns false when the full update is needed.
++ * CYCLES_FULL_ATTRIBUTE_TABLES always takes the full update, as a reference. */
++bool GeometryManager::update_attributes_kept(Device *device,
++                                             DeviceScene *dscene,
++                                             Scene *scene,
++                                             Progress &progress)
++{
++  static const bool full_tables = getenv("CYCLES_FULL_ATTRIBUTE_TABLES") != nullptr;
++  ObjectManager *object_manager = scene->object_manager.get();
++  if (full_tables || !attribute_layout_valid || !object_manager->top_level_changed_valid ||
++      scene->shaders_updated_this_update || kept_num_geometry != scene->geometry.size() ||
++      object_attribute_requests.size() != scene->objects.size() ||
++      kept_use_osl != scene->shader_manager->use_osl() ||
++      kept_object_names.size() != scene->geometry.size())
++  {
++    return false;
++  }
++  if (dscene->attributes_map.need_realloc() || dscene->attributes_float.need_realloc() ||
++      dscene->attributes_float2.need_realloc() || dscene->attributes_float3.need_realloc() ||
++      dscene->attributes_float4.need_realloc() || dscene->attributes_uchar4.need_realloc() ||
++      dscene->attributes_normal.need_realloc() || dscene->attributes_quaternion.need_realloc() ||
++      dscene->attributes_spherical_harmonics_rest.need_realloc() ||
++      dscene->tri_verts.need_realloc() || dscene->curve_keys.need_realloc() ||
++      dscene->points.need_realloc())
++  {
++    return false;
++  }
++  for (size_t i = 0; i < scene->geometry.size(); i++) {
++    const Geometry *geom = scene->geometry[i];
++    /* A light edit modifies its light geometry, whose attribute requests depend only on its
++     * shaders. */
++    bool attributes_modified = false;
++    for (int type = 0; type < int(AttrKernelDataType::NUM); type++) {
++      attributes_modified |= geom->attributes.modified(AttrKernelDataType(type));
++    }
++    if (geom->index != i || attributes_modified ||
++        (geom->is_light() ? geom->used_shaders_is_modified() : geom->is_modified()))
++    {
++      return false;
++    }
++  }
++  AttributeRequestSet global_attributes;
++  scene->need_global_attributes(global_attributes);
++  if (global_attributes.modified(kept_global_attributes)) {
++    return false;
++  }
++  const vector<Object *> &changed = object_manager->top_level_changed_objects;
++  size_t table_sizes[int(AttrKernelDataType::NUM)];
++  for (int table = 0; table < int(AttrKernelDataType::NUM); table++) {
++    table_sizes[table] = kept_table_sizes[table];
++    if (object_attribute_table_size(dscene, table) != kept_table_sizes[table]) {
++      return false;
++    }
++  }
++  /* Every changed object still requests the same attributes; then write its values where they
++   * differ. Each object writes only its own table entries, so both run on all cores. */
++  std::atomic<bool> matched = true;
++  parallel_for(blocked_range<size_t>(0, changed.size(), 1024), [&](const blocked_range<size_t> &r) {
++    for (size_t i = r.begin(); i != r.end() && matched.load(std::memory_order_relaxed); i++) {
++      const Object *object = changed[i];
++      if (size_t(object->index) >= scene->objects.size() ||
++          scene->objects[object->index] != object ||
++          !match_object_attributes(scene,
++                                   *object,
++                                   kept_object_names,
++                                   object_attribute_requests[object->index],
++                                   table_sizes,
++                                   [](const ObjectAttributeValues &) {}))
++      {
++        matched = false;
++      }
++    }
++  });
++  if (!matched) {
++    return false;
++  }
++
++  char *tables[int(AttrKernelDataType::NUM)];
++  std::atomic<bool> table_modified[int(AttrKernelDataType::NUM)];
++  for (int table = 0; table < int(AttrKernelDataType::NUM); table++) {
++    tables[table] = object_attribute_table_data(dscene, table);
++    table_modified[table] = false;
++  }
++  parallel_for(blocked_range<size_t>(0, changed.size(), 1024), [&](const blocked_range<size_t> &r) {
++    for (size_t i = r.begin(); i != r.end(); i++) {
++      const Object *object = changed[i];
++      match_object_attributes(
++          scene,
++          *object,
++          kept_object_names,
++          object_attribute_requests[object->index],
++          table_sizes,
++          [&](const ObjectAttributeValues &values) {
++            char *dst = tables[values.table] + values.offset_bytes;
++            for (int step = 0; step <= values.steps; step++) {
++              const char *src = step == 0 ? static_cast<const char *>(values.param->data()) :
++                                            static_cast<const char *>(values.sampled->data()) +
++                                                (step - 1) * values.step_bytes;
++              char *step_dst = dst + step * values.step_bytes;
++              if (memcmp(step_dst, src, values.step_bytes) != 0) {
++                memcpy(step_dst, src, values.step_bytes);
++                table_modified[values.table] = true;
++              }
++            }
++          });
++    }
++  });
++  bool modified[int(AttrKernelDataType::NUM)];
++  for (int table = 0; table < int(AttrKernelDataType::NUM); table++) {
++    modified[table] = table_modified[table];
++  }
++  for (int table = 0; table < int(AttrKernelDataType::NUM); table++) {
++    if (modified[table]) {
++      copy_object_attribute_table(dscene, table);
++    }
++  }
++  if (progress.get_cancel()) {
++    return true;
++  }
++
++  /* Kernel object offsets: the transforms step rewrote the entries of the objects it wrote. */
++  if (object_manager->object_table_written == ObjectManager::OBJECT_TABLE_FULL) {
++    object_manager->device_update_geom_offsets(device, dscene, scene);
++  }
++  else if (object_manager->object_table_written == ObjectManager::OBJECT_TABLE_PARTIAL) {
++    object_manager->device_update_geom_offsets(device, dscene, scene, &changed);
++  }
++  if (scene->update_stats) {
++    /* Counts, not times. */
++    scene->update_stats->geometry.times.add_entry({"kept attribute tables updates", 1.0});
++  }
++  return true;
++}
++
+ void GeometryManager::device_update_attributes(Device *device,
+                                                DeviceScene *dscene,
+                                                Scene *scene,
+                                                Progress &progress)
+ {
++  {
++    /* CYCLES_VERIFY_ATTRIBUTE_TABLES: after keeping the tables, run the full update and compare
++     * the host tables, map and kernel objects with the kept ones, then every device copy with the
++     * host; any difference is a scene update error. */
++    static const bool verify_tables = getenv("CYCLES_VERIFY_ATTRIBUTE_TABLES") != nullptr;
++    if (update_attributes_kept(device, dscene, scene, progress)) {
++      if (!verify_tables || progress.get_cancel()) {
++        return;
++      }
++      const auto snapshot = [](device_memory &mem) {
++        const char *data = static_cast<const char *>(mem.host_pointer);
++        return vector<char>(data, data + (data ? mem.memory_size() : 0));
++      };
++      device_memory *mems[] = {&dscene->attributes_map,
++                               &dscene->attributes_float,
++                               &dscene->attributes_float2,
++                               &dscene->attributes_float3,
++                               &dscene->attributes_float4,
++                               &dscene->attributes_uchar4,
++                               &dscene->attributes_normal,
++                               &dscene->attributes_quaternion,
++                               &dscene->attributes_spherical_harmonics_rest,
++                               &dscene->objects};
++      vector<vector<char>> kept;
++      for (device_memory *mem : mems) {
++        kept.push_back(snapshot(*mem));
++      }
++      string difference;
++      for (device_memory *mem : mems) {
++        if (mem->host_pointer && mem->device_pointer &&
++            !device->verify_device_copy(*mem, difference))
++        {
++          progress.set_error("Attribute table verification failed: " + difference);
++          return;
++        }
++      }
++      attribute_layout_valid = false; /* Force the full update below. */
++      device_update_attributes(device, dscene, scene, progress);
++      for (size_t i = 0; i < kept.size() && !progress.get_error(); i++) {
++        if (kept[i] != snapshot(*mems[i])) {
++          progress.set_error(string("Attribute table verification failed: ") +
++                             mems[i]->global_name() + " differs from the full update");
++        }
++      }
++      if (scene->update_stats) {
++        scene->update_stats->geometry.times.add_entry({"attribute table verifications", 1.0});
++      }
++      return;
++    }
++  }
+   progress.set_status("Updating Mesh", "Computing attributes");
+ 
+   /* gather per mesh requested attributes. as meshes may have multiple
+@@ -1552,6 +1786,22 @@ void GeometryManager::device_update_attributes(Device *device,
+     }
+     object_attribute_requests = std::move(object_attributes);
+   }
++  /* Inputs of this completed update, for keeping its tables (see update_attributes_kept). */
++  kept_global_attributes = global_attributes;
++  kept_use_osl = scene->shader_manager->use_osl();
++  kept_num_geometry = scene->geometry.size();
++  kept_object_names.assign(scene->geometry.size(), {});
++  for (size_t i = 0; i < scene->geometry.size(); i++) {
++    const Geometry *geom = scene->geometry[i];
++    for (const AttributeRequest &req : geom_attributes[i].requests) {
++      if (!geom->attributes.find(req.name)) {
++        kept_object_names[i].push_back(req.name);
++      }
++    }
++  }
++  for (int table = 0; table < int(AttrKernelDataType::NUM); table++) {
++    kept_table_sizes[table] = object_attribute_table_size(dscene, table);
++  }
+   attribute_layout_valid = true;
+ }
+ 
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index f315c4e2f4fc230de257f1a6c20dc91b65c3e2c4..fd5eb7b20878494bc297c25369e964aa9895f349 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1376,6 +1376,7 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+ 
+   /* The objects whose base flags were rewritten here; the flags pass of this update may update only
+    * them (see device_update_flags). */
++  object_table_written = partial ? OBJECT_TABLE_PARTIAL : OBJECT_TABLE_FULL;
+   flags_partial_valid = partial && !flags_pending_before;
+   flags_partial_objects.clear();
+   if (flags_partial_valid) {
+@@ -1413,6 +1414,7 @@ void ObjectManager::device_update(Device *device,
+                                   Progress &progress)
+ {
+   top_level_changed_objects.clear();
++  object_table_written = OBJECT_TABLE_NOT_WRITTEN;
+   if (!need_update()) {
+     /* No object changed since the last complete object table write, and every object written
+      * since then reached a completed top level build. */
+@@ -1765,7 +1767,8 @@ static bool update_gsplat_std_point_attribute_offset(const DeviceScene &dscene,
+ 
+ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+                                                DeviceScene *dscene,
+-                                               Scene *scene)
++                                               Scene *scene,
++                                               const vector<Object *> *objects)
+ {
+   if (dscene->objects.size() == 0) {
+     return;
+@@ -1895,6 +1898,38 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+     return update;
+   };
+ 
++  if (objects) {
++    /* Only these objects: copy the entries that changed. */
++    vector<uint8_t> updated(objects->size());
++    parallel_for(blocked_range<size_t>(0, objects->size(), 1024),
++                 [&](const blocked_range<size_t> &r) {
++                   for (size_t i = r.begin(); i != r.end(); i++) {
++                     updated[i] = update_object((*objects)[i]) ? 1 : 0;
++                   }
++                 });
++    vector<size_t> indices;
++    for (size_t i = 0; i < objects->size(); i++) {
++      if (updated[i]) {
++        indices.push_back(size_t((*objects)[i]->index));
++      }
++    }
++    std::sort(indices.begin(), indices.end());
++    vector<DeviceMemoryRange> ranges;
++    for (const size_t index : indices) {
++      const size_t offset = index * sizeof(KernelObject);
++      if (!ranges.empty() && ranges.back().offset + ranges.back().size == offset) {
++        ranges.back().size += sizeof(KernelObject);
++      }
++      else if (ranges.empty() || ranges.back().offset + ranges.back().size < offset) {
++        ranges.push_back({offset, sizeof(KernelObject)});
++      }
++    }
++    if (!ranges.empty() && !dscene->objects.copy_to_device_ranges(ranges)) {
++      dscene->objects.copy_to_device();
++    }
++    return;
++  }
++
+   std::atomic<bool> update = false;
+   parallel_for(blocked_range<size_t>(0, scene->objects.size(), 1024),
+                [&](const blocked_range<size_t> &r) {
+diff --git a/src/scene/object.h b/src/scene/object.h
+index bafe7faa07cc0ca305bfc6c589f20179db4bd1df..bf3560f6fdd58827f09a0ba05d6f98f4c567740b 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -219,6 +219,10 @@ class ObjectManager {
+   bool flags_pending = false;
+   bool flags_pending_before = false;
+   bool flags_have_volume = true;
++  /* How the object table was written in the current scene update: not at all, partially (only
++   * the objects of top_level_changed_objects / the partial list) or completely. */
++  enum ObjectTableWrite { OBJECT_TABLE_NOT_WRITTEN, OBJECT_TABLE_PARTIAL, OBJECT_TABLE_FULL };
++  ObjectTableWrite object_table_written = OBJECT_TABLE_NOT_WRITTEN;
+   bool light_objects_valid = false;
+   vector<Object *> light_objects;
+   vector<Object *> top_level_changed_objects;
+@@ -243,7 +247,11 @@ class ObjectManager {
+                            Scene *scene,
+                            Progress &progress,
+                            bool bounds_valid = true);
+-  void device_update_geom_offsets(Device *device, DeviceScene *dscene, Scene *scene);
++  /* With objects given, update only those and copy only their entries. */
++  void device_update_geom_offsets(Device *device,
++                                  DeviceScene *dscene,
++                                  Scene *scene,
++                                  const vector<Object *> *objects = nullptr);
+ 
+   void device_free(Device *device, DeviceScene *dscene, bool force_free);
+ 

@@ -1,0 +1,49 @@
+From a008de96b6df9b180a81d25d6fc68d703e3c61d9 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:31 +0100
+Subject: [PATCH] output display ownership
+
+Locked-Patch: patches/0017-output-display-ownership.patch
+Locked-Patch-SHA256: 3adb0840d0886a606ab6b2fd6b8e79097d3f542f3297d904d6be3e0b79b90334
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_progressive_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: f061b5eecaeecd201b47f362f1b7bc3f69a4742f
+Previous-Patch: patches/0017-output-display-ownership.patch
+Previous-Patch-SHA256: 3adb0840d0886a606ab6b2fd6b8e79097d3f542f3297d904d6be3e0b79b90334
+Rationale: A host presenting float output can suppress the otherwise redundant display update through an explicit driver ownership query.
+Contract: output display ownership
+Tests: tests/houdini_progressive_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/path_trace.cpp b/src/integrator/path_trace.cpp
+index 782e9e78636d2ffb796dba6efab980da9e923457..fed7fe237bd55bbc55426b0c5b6af00d16a780d4 100644
+--- a/src/integrator/path_trace.cpp
++++ b/src/integrator/path_trace.cpp
+@@ -801,7 +801,7 @@ void PathTrace::update_display(const RenderWork &render_work)
+     output_driver_->update_render_tile(tile);
+   }
+ 
+-  if (display_) {
++  if (display_ && (!output_driver_ || output_driver_->need_display_update())) {
+     LOG_DEBUG << "Perform copy to GPUDisplay work.";
+ 
+     const PassType pass_type = film_->get_display_pass();
+diff --git a/src/session/output_driver.h b/src/session/output_driver.h
+index 335f659d4513656d028857bfde9c47e280311e8a..91d723a3e13ad4158107ce1d7d3976b9c610594c 100644
+--- a/src/session/output_driver.h
++++ b/src/session/output_driver.h
+@@ -61,6 +61,13 @@ class OutputDriver {
+     return false;
+   }
+ 
++  /* Hosts which display float output themselves may suppress the redundant
++   * DisplayDriver transfer. Existing clients retain their normal display path. */
++  virtual bool need_display_update() const
++  {
++    return true;
++  }
++
+   /* For baking, read render pass PASS_BAKE_PRIMITIVE/SEED/DIFFERENTIAL
+    * to determine which shading points to use for baking at each pixel. Return
+    * true if any data was read. */

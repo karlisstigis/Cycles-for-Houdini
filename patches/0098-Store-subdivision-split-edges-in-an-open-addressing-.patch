@@ -1,0 +1,132 @@
+From 11213c56c8df02f4799665784cdb9cbf5c71e696 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Mon, 16 Nov 2026 05:13:56 +0000
+Subject: [PATCH 98/98] Store subdivision split edges in an open addressing
+ table
+
+The ordered patch split looks up or creates edges keyed by their unordered
+vertex pair for every subpatch it makes. The node-based unordered_set made
+one allocation per edge and walked bucket lists, and with millions of faces
+these lookups dominated the remaining serial split.
+
+Keep the same identity (the unordered vertex pair) in an open addressing
+table of keys and edge pointers, kept at most half full, and store edges in
+fixed-size chunks so their addresses stay valid. Edges are created and found
+exactly as before; the set was never iterated, so its order did not matter.
+
+Rationale: Edge lookups and per-edge allocations in the ordered subdivision split were linear in the face count with a large constant and ran on one core.
+Contract: The same edges are created and found for the same vertex pairs, so subpatches, edge factors, vertex and triangle indices and the diced mesh are unchanged.
+Tests: tests/houdini_subdivision_smoke.py
+---
+ src/subd/split.cpp | 60 ++++++++++++++++++++++++++++++++++++++++++----
+ src/subd/split.h   | 10 +++++++-
+ 2 files changed, 65 insertions(+), 5 deletions(-)
+
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index 657a626f8e86a18744d5ba48aa5f447e5c40e94f..44f9eb992d9efad07567a70d4638524b0b6e447c 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -44,12 +44,64 @@ int DiagSplit::alloc_verts(int num)
+   return index;
+ }
+ 
++static uint64_t edge_key(const int v0, const int v1)
++{
++  const uint32_t a = uint32_t(min(v0, v1));
++  const uint32_t b = uint32_t(max(v0, v1));
++  return (uint64_t(a) << 32) | b;
++}
++
++static size_t edge_slot(const uint64_t key, const size_t mask)
++{
++  return size_t(hash_uint2(uint32_t(key >> 32), uint32_t(key))) & mask;
++}
++
++void DiagSplit::resize_edge_table(const size_t size)
++{
++  vector<std::pair<uint64_t, SubEdge *>> table(size, std::make_pair(uint64_t(0), nullptr));
++  const size_t mask = size - 1;
++  for (const std::pair<uint64_t, SubEdge *> &entry : edge_table) {
++    if (entry.second) {
++      size_t slot = edge_slot(entry.first, mask);
++      while (table[slot].second) {
++        slot = (slot + 1) & mask;
++      }
++      table[slot] = entry;
++    }
++  }
++  edge_table.swap(table);
++}
++
+ SubEdge *DiagSplit::alloc_edge(const int v0, const int v1, const int depth, bool &was_missing)
+ {
+-  const SubEdge edge(v0, v1, depth);
+-  const auto it = edges.find(edge);
+-  was_missing = (it == edges.end());
+-  return const_cast<SubEdge *>(was_missing ? &*(edges.emplace(edge).first) : &*it);
++  /* Keep the table at most half full. */
++  if ((num_edges + 1) * 2 > edge_table.size()) {
++    resize_edge_table(max(edge_table.size() * 2, size_t(1024)));
++  }
++
++  /* Same identity as SubEdge::Hash and SubEdge::Equal: the unordered vertex pair. */
++  const uint64_t key = edge_key(v0, v1);
++  const size_t mask = edge_table.size() - 1;
++  for (size_t slot = edge_slot(key, mask);; slot = (slot + 1) & mask) {
++    std::pair<uint64_t, SubEdge *> &entry = edge_table[slot];
++    if (entry.second == nullptr) {
++      const size_t chunk_size = 4096;
++      if (edge_chunks.empty() || edge_chunk_used == chunk_size) {
++        edge_chunks.emplace_back(new SubEdge[chunk_size]);
++        edge_chunk_used = 0;
++      }
++      SubEdge *edge = &edge_chunks.back()[edge_chunk_used++];
++      *edge = SubEdge(v0, v1, depth);
++      entry = std::make_pair(key, edge);
++      num_edges++;
++      was_missing = true;
++      return edge;
++    }
++    if (entry.first == key) {
++      was_missing = false;
++      return entry.second;
++    }
++  }
+ }
+ 
+ void DiagSplit::alloc_edge(SubPatch::Edge *sub_edge,
+diff --git a/src/subd/split.h b/src/subd/split.h
+index 3e27c345dbae2912ad9d5baacd3a189c2a3db4bf..3f30819bdaeb7ae01f62130daf0f4c023ea00e37 100644
+--- a/src/subd/split.h
++++ b/src/subd/split.h
+@@ -18,6 +18,8 @@
+ #include "util/types.h"
+ #include "util/vector.h"
+ 
++#include <memory>
++
+ CCL_NAMESPACE_BEGIN
+ 
+ class Mesh;
+@@ -29,7 +31,12 @@ class DiagSplit {
+   SubdParams params;
+   vector<SubPatch> subpatches;
+   vector<bool> owned_verts;
+-  unordered_set<SubEdge, SubEdge::Hash, SubEdge::Equal> edges;
++  /* Edges keyed by their unordered pair of vertex indices, in an open addressing table.
++   * Edges are stored in chunks, so their addresses stay valid. */
++  vector<std::pair<uint64_t, SubEdge *>> edge_table;
++  size_t num_edges = 0;
++  vector<std::unique_ptr<SubEdge[]>> edge_chunks;
++  size_t edge_chunk_used = 0;
+   int num_verts = 0;
+   int num_triangles = 0;
+ 
+@@ -52,6 +59,7 @@ class DiagSplit {
+   /* Allocate vertices, edges and subpatches. */
+   int alloc_verts(const int num);
+   SubEdge *alloc_edge(const int v0, const int v1, const int depth, bool &was_missing);
++  void resize_edge_table(const size_t size);
+   void alloc_edge(SubPatch::Edge *sub_edge,
+                   const int v0,
+                   const int v1,

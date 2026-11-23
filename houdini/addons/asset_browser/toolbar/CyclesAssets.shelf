@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The optional component defines its tool and appends it to Cycles Tools. -->
+<shelfDocument>
+  <toolshelfEdit name="cycles_houdini" fileLocation="$CYCLES_HOUDINI_HOST_ROOT/toolbar/Cycles.shelf">
+    <addMemberTool name="cycles_asset_browser" inPosition="16"/>
+  </toolshelfEdit>
+  <tool name="cycles_asset_browser" label="Asset Browser" icon="cycles_asset_browser">
+    <helpText>Open the Cycles Asset Browser: browse Blender asset libraries and import objects, collections and materials. Requires Blender and the Blender bridge.</helpText>
+    <script scriptType="python"><![CDATA[from cycles_houdini.assets import menus
+
+menus.open_browser("cycles_houdini_assets")]]></script>
+  </tool>
+</shelfDocument>

@@ -1,0 +1,1066 @@
+{
+  "build_recipe_references": {
+    "dpcpp": {
+      "revision": "f78a5e153839490a9e179969d247af2d58fb82be",
+      "sha256": "8cacca79f3c62f17e7dd744db25060911df912336afa7dd1b9c939e534c43fb5",
+      "url": "https://raw.githubusercontent.com/blender/blender/f78a5e153839490a9e179969d247af2d58fb82be/build_files/build_environment/cmake/dpcpp.cmake"
+    },
+    "versions": {
+      "revision": "f78a5e153839490a9e179969d247af2d58fb82be",
+      "sha256": "dc57206aea3914e6c743d7467284b2deaa21792d501f697d809405347da84c86",
+      "url": "https://raw.githubusercontent.com/blender/blender/f78a5e153839490a9e179969d247af2d58fb82be/build_files/build_environment/cmake/versions.cmake"
+    }
+  },
+  "components": {
+    "cuda": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1161,
+          "path": "packaging/notices/cuda/NOTICE.txt",
+          "sha256": "4cda5e2ede44be5925f3dfc263f24739f9ba4470522d24d26f56161d0169e66e",
+          "source": {
+            "path": "packaging/notices/cuda/NOTICE.txt"
+          },
+          "target": "NOTICE.txt"
+        }
+      ],
+      "license": "NVIDIA CUDA Toolkit End User License Agreement (https://docs.nvidia.com/cuda/eula/index.html)",
+      "provenance": {
+        "redistributed": false,
+        "source_lock_sha256": "bbf055aae072851ce7edb88a4ab8532e4913b948e8c739d65d6aeb011142f18c"
+      },
+      "version": "12.8"
+    },
+    "cycles": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11359,
+          "path": "packaging/notices/cycles/LICENSE",
+          "sha256": "8c6db340475136df3c1201d458fa5755698eace76e510471ecc9d857d6083dac",
+          "source": {
+            "path": "third_party/cycles/LICENSE"
+          },
+          "target": "LICENSE"
+        },
+        {
+          "bytes": 1958,
+          "path": "packaging/notices/cycles/AUTHORS",
+          "sha256": "a604f34abb9021668f91219c96b0f0cd9359f5aecb1faa838bee85537c4a7b80",
+          "source": {
+            "path": "third_party/cycles/AUTHORS"
+          },
+          "target": "AUTHORS"
+        },
+        {
+          "bytes": 11358,
+          "path": "packaging/notices/cycles/src/doc/license/Apache2-license.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": {
+            "path": "third_party/cycles/src/doc/license/Apache2-license.txt"
+          },
+          "target": "src/doc/license/Apache2-license.txt"
+        },
+        {
+          "bytes": 1465,
+          "path": "packaging/notices/cycles/src/doc/license/BSD-3-Clause-license.txt",
+          "sha256": "78176499683c1e601241d901486dfdebcd0d511826e67905dd54881f5dc1d7e3",
+          "source": {
+            "path": "third_party/cycles/src/doc/license/BSD-3-Clause-license.txt"
+          },
+          "target": "src/doc/license/BSD-3-Clause-license.txt"
+        },
+        {
+          "bytes": 332,
+          "path": "packaging/notices/cycles/src/doc/license/CMakeLists.txt",
+          "sha256": "378dc5dbcbc4768efe1cd08f524989fed97e895eb372cef943dbf39588a3914e",
+          "source": {
+            "path": "third_party/cycles/src/doc/license/CMakeLists.txt"
+          },
+          "target": "src/doc/license/CMakeLists.txt"
+        },
+        {
+          "bytes": 1036,
+          "path": "packaging/notices/cycles/src/doc/license/MIT-license.txt",
+          "sha256": "7a91b4754c06385f87b319313871b064d4d9e0dc1570ca94928b09fe74ed03ee",
+          "source": {
+            "path": "third_party/cycles/src/doc/license/MIT-license.txt"
+          },
+          "target": "src/doc/license/MIT-license.txt"
+        },
+        {
+          "bytes": 316,
+          "path": "packaging/notices/cycles/src/doc/license/readme.txt",
+          "sha256": "5c2f5f1974b56d433fab60f9bf29de4d43b0b4c9eda40cfdcd0e3918993db49f",
+          "source": {
+            "path": "third_party/cycles/src/doc/license/readme.txt"
+          },
+          "target": "src/doc/license/readme.txt"
+        },
+        {
+          "bytes": 379,
+          "path": "packaging/notices/cycles/src/doc/license/SPDX-license-identifiers.txt",
+          "sha256": "b5f81f33f3424add5ed61be93c19e9a4caecc5ca12e50b9b0be4ceacc2832d92",
+          "source": {
+            "path": "third_party/cycles/src/doc/license/SPDX-license-identifiers.txt"
+          },
+          "target": "src/doc/license/SPDX-license-identifiers.txt"
+        },
+        {
+          "bytes": 833,
+          "path": "packaging/notices/cycles/src/doc/license/Zlib-license.txt",
+          "sha256": "52a1da7db7828498bb11719974c41f875e310ea241c97c8e27af7cda21887c19",
+          "source": {
+            "path": "third_party/cycles/src/doc/license/Zlib-license.txt"
+          },
+          "target": "src/doc/license/Zlib-license.txt"
+        },
+        {
+          "bytes": 10038,
+          "path": "packaging/notices/cycles/third_party/cuew/LICENSE",
+          "sha256": "c52718780b46e8c7ea48b9ae0406061d4918761e385b6e024571a37c6d02dd95",
+          "source": {
+            "path": "third_party/cycles/third_party/cuew/LICENSE"
+          },
+          "target": "third_party/cuew/LICENSE"
+        },
+        {
+          "bytes": 10038,
+          "path": "packaging/notices/cycles/third_party/hipew/LICENSE",
+          "sha256": "c52718780b46e8c7ea48b9ae0406061d4918761e385b6e024571a37c6d02dd95",
+          "source": {
+            "path": "third_party/cycles/third_party/hipew/LICENSE"
+          },
+          "target": "third_party/hipew/LICENSE"
+        }
+      ],
+      "license": "Apache-2.0 AND bundled source notices",
+      "provenance": {
+        "source_lock_sha256": "d63ce44152158a0c7a06e9c34b2ae217810ad341fed1912e9d726d84180a8a1d"
+      },
+      "version": "77edc33168528e06b35540452bce5cce6068c3aa"
+    },
+    "dlss-headers": {
+      "coverage": "review_required",
+      "files": [
+        {
+          "bytes": 26727,
+          "path": "packaging/notices/dlss-headers/LICENSE.txt",
+          "sha256": "3027f23ca5a46dd9cb8183fbd522983a86f64d7daac5982912bf9f214671f294",
+          "source": {
+            "path": "third_party/dlss/LICENSE.txt"
+          },
+          "target": "LICENSE.txt"
+        }
+      ],
+      "license": "NVIDIA RTX SDKs License",
+      "provenance": {
+        "source_lock_sha256": "c04b31fd2a8f1f42b339c1711c01054b741863e9465dfb4a1a88573784801ae9"
+      },
+      "reason": "Header-only NGX loader compiled into the runtime. Review SDK attribution before public distribution.",
+      "version": "9981c6350dc58c0ce21f024fd65e31e851c31689"
+    },
+    "dpcpp": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 15141,
+          "path": "packaging/notices/dpcpp/LICENSE.TXT",
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+          "source": {
+            "revision": "880399f47228ac92f403e3b2b865cf1d6f0b1382",
+            "url": "https://raw.githubusercontent.com/intel/llvm/880399f47228ac92f403e3b2b865cf1d6f0b1382/LICENSE.TXT"
+          },
+          "target": "LICENSE.TXT"
+        },
+        {
+          "bytes": 15141,
+          "path": "packaging/notices/dpcpp/sycl/LICENSE.TXT",
+          "sha256": "410f3a23b4bbacbd246310d8c014a20af18cfc8c0d740ddf0f673ea20894da9c",
+          "source": {
+            "revision": "880399f47228ac92f403e3b2b865cf1d6f0b1382",
+            "url": "https://raw.githubusercontent.com/intel/llvm/880399f47228ac92f403e3b2b865cf1d6f0b1382/sycl/LICENSE.TXT"
+          },
+          "target": "sycl/LICENSE.TXT"
+        },
+        {
+          "bytes": 13184,
+          "path": "packaging/notices/dpcpp/unified-runtime/LICENSE.TXT",
+          "sha256": "2241695d3d8deda2fb15d6ed6f7fede38c027f9e1bde1e9490c229be4f13bc51",
+          "source": {
+            "revision": "880399f47228ac92f403e3b2b865cf1d6f0b1382",
+            "url": "https://raw.githubusercontent.com/intel/llvm/880399f47228ac92f403e3b2b865cf1d6f0b1382/unified-runtime/LICENSE.TXT"
+          },
+          "target": "unified-runtime/LICENSE.TXT"
+        }
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception AND third-party notices",
+      "provenance": {
+        "build_recipe_reference": {
+          "revision": "f78a5e153839490a9e179969d247af2d58fb82be",
+          "sha256": "8cacca79f3c62f17e7dd744db25060911df912336afa7dd1b9c939e534c43fb5",
+          "url": "https://raw.githubusercontent.com/blender/blender/f78a5e153839490a9e179969d247af2d58fb82be/build_files/build_environment/cmake/dpcpp.cmake"
+        },
+        "ref": "v7.1.0",
+        "repository": "https://github.com/intel/llvm",
+        "revision": "880399f47228ac92f403e3b2b865cf1d6f0b1382"
+      },
+      "requires": [
+        "dpcpp-spirv-headers",
+        "opencl-headers",
+        "opencl-icd-loader",
+        "vc-intrinsics",
+        "emhash",
+        "unified-memory-framework",
+        "parallel-hashmap",
+        "level-zero",
+        "zstd",
+        "hwloc"
+      ],
+      "version": "v7.1.0"
+    },
+    "dpcpp-spirv-headers": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 23503,
+          "path": "packaging/notices/dpcpp-spirv-headers/LICENSE",
+          "sha256": "ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613",
+          "source": {
+            "revision": "9268f3057354a2cb65991ba5f38b16d81e803692",
+            "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Headers/9268f3057354a2cb65991ba5f38b16d81e803692/LICENSE"
+          },
+          "target": "LICENSE"
+        },
+        {
+          "bytes": 17023,
+          "path": "packaging/notices/dpcpp-spirv-headers/LICENSES/CC-BY-4.0.txt",
+          "sha256": "d557539df68e771cc1eedcc91d13f70fca930e508d11eedcafa4b15db49e3744",
+          "source": {
+            "revision": "9268f3057354a2cb65991ba5f38b16d81e803692",
+            "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Headers/9268f3057354a2cb65991ba5f38b16d81e803692/LICENSES/CC-BY-4.0.txt"
+          },
+          "target": "LICENSES/CC-BY-4.0.txt"
+        },
+        {
+          "bytes": 1087,
+          "path": "packaging/notices/dpcpp-spirv-headers/LICENSES/MIT.txt",
+          "sha256": "6d7c9e9d7d12c8d3753bdb24417b84819ba4d6c2f025c37948113d86dc81eef9",
+          "source": {
+            "revision": "9268f3057354a2cb65991ba5f38b16d81e803692",
+            "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Headers/9268f3057354a2cb65991ba5f38b16d81e803692/LICENSES/MIT.txt"
+          },
+          "target": "LICENSES/MIT.txt"
+        }
+      ],
+      "license": "MIT-Khronos-old",
+      "provenance": {
+        "ref": "9268f3057354a2cb65991ba5f38b16d81e803692",
+        "repository": "https://github.com/KhronosGroup/SPIRV-Headers",
+        "revision": "9268f3057354a2cb65991ba5f38b16d81e803692",
+        "tree_sha256": "ffe9e2369b4676cf7eb23e33867fdf1b42da4ad2f952c4816bceac2d5b7c2670"
+      },
+      "version": "9268f3057354a2cb65991ba5f38b16d81e803692"
+    },
+    "eigen": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 264,
+          "path": "packaging/notices/eigen/COPYING.README",
+          "sha256": "db640ff2bd90c6abd6a4d3fbb351e0ee4d555417cf840492054d1cbb2ea85644",
+          "source": {
+            "revision": "8a1083e9bf41b91fdea6546681f806154efdc25a",
+            "url": "https://gitlab.com/libeigen/eigen/-/raw/8a1083e9bf41b91fdea6546681f806154efdc25a/COPYING.README"
+          },
+          "target": "COPYING.README"
+        },
+        {
+          "bytes": 16727,
+          "path": "packaging/notices/eigen/COPYING.MPL2",
+          "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172",
+          "source": {
+            "revision": "8a1083e9bf41b91fdea6546681f806154efdc25a",
+            "url": "https://gitlab.com/libeigen/eigen/-/raw/8a1083e9bf41b91fdea6546681f806154efdc25a/COPYING.MPL2"
+          },
+          "target": "COPYING.MPL2"
+        },
+        {
+          "bytes": 1517,
+          "path": "packaging/notices/eigen/COPYING.BSD",
+          "sha256": "51928dce36213c5333ba3172e847d735d4c6e9b7ff2722a326c49067155b82eb",
+          "source": {
+            "revision": "8a1083e9bf41b91fdea6546681f806154efdc25a",
+            "url": "https://gitlab.com/libeigen/eigen/-/raw/8a1083e9bf41b91fdea6546681f806154efdc25a/COPYING.BSD"
+          },
+          "target": "COPYING.BSD"
+        },
+        {
+          "bytes": 2193,
+          "path": "packaging/notices/eigen/COPYING.MINPACK",
+          "sha256": "c87b7f8ee88f6195e91743820c00354833583aef091b72e2d4a49c8e28e798a0",
+          "source": {
+            "revision": "8a1083e9bf41b91fdea6546681f806154efdc25a",
+            "url": "https://gitlab.com/libeigen/eigen/-/raw/8a1083e9bf41b91fdea6546681f806154efdc25a/COPYING.MINPACK"
+          },
+          "target": "COPYING.MINPACK"
+        },
+        {
+          "bytes": 11362,
+          "path": "packaging/notices/eigen/COPYING.APACHE",
+          "sha256": "03379001a7b12a2ec997a25554247d985270b353c10d5bafee9ac8d6519820b7",
+          "source": {
+            "revision": "8a1083e9bf41b91fdea6546681f806154efdc25a",
+            "url": "https://gitlab.com/libeigen/eigen/-/raw/8a1083e9bf41b91fdea6546681f806154efdc25a/COPYING.APACHE"
+          },
+          "target": "COPYING.APACHE"
+        }
+      ],
+      "license": "MPL-2.0 AND bundled permissive notices",
+      "provenance": {
+        "repository": "https://gitlab.com/libeigen/eigen",
+        "revision": "8a1083e9bf41b91fdea6546681f806154efdc25a"
+      },
+      "version": "8a1083e9bf41b91fdea6546681f806154efdc25a"
+    },
+    "embree": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11358,
+          "path": "packaging/notices/embree/LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": {
+            "revision": "f590db83ef6559387df7f6d8725c34fb7acf851d",
+            "url": "https://raw.githubusercontent.com/RenderKit/embree/f590db83ef6559387df7f6d8725c34fb7acf851d/LICENSE.txt"
+          },
+          "target": "LICENSE.txt"
+        },
+        {
+          "bytes": 1083,
+          "path": "packaging/notices/embree/tutorials/common/imgui/LICENSE.txt",
+          "sha256": "1b64b23b817e547982a86984685f5e9337695caa542753fb6f08d502d5208e38",
+          "source": {
+            "revision": "f590db83ef6559387df7f6d8725c34fb7acf851d",
+            "url": "https://raw.githubusercontent.com/RenderKit/embree/f590db83ef6559387df7f6d8725c34fb7acf851d/tutorials/common/imgui/LICENSE.txt"
+          },
+          "target": "tutorials/common/imgui/LICENSE.txt"
+        }
+      ],
+      "license": "Apache-2.0",
+      "provenance": {
+        "ref": "v4.4.1",
+        "repository": "https://github.com/RenderKit/embree",
+        "revision": "f590db83ef6559387df7f6d8725c34fb7acf851d",
+        "tree_sha256": "30afa885a1e46ccea3d6a60c22f4b5adf544398eaa9635de9edf1fa5097ad10e"
+      },
+      "version": "4.4.1"
+    },
+    "emhash": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1060,
+          "path": "packaging/notices/emhash/LICENSE",
+          "sha256": "e939a628c45752baa014eb71d504d1bea7d17621231192a9d1700c8f9c29f621",
+          "source": {
+            "revision": "5e131ba09a5290823fe71099d9c35eb5df5345b6",
+            "url": "https://raw.githubusercontent.com/ktprime/emhash/5e131ba09a5290823fe71099d9c35eb5df5345b6/LICENSE"
+          },
+          "target": "LICENSE"
+        },
+        {
+          "bytes": 1056,
+          "path": "packaging/notices/emhash/thirdparty/rapidhash/LICENSE",
+          "sha256": "66bd64605a9dd4830c15ecdbef51ad0af49e467958e543fcd712c330646e7bfd",
+          "source": {
+            "revision": "5e131ba09a5290823fe71099d9c35eb5df5345b6",
+            "url": "https://raw.githubusercontent.com/ktprime/emhash/5e131ba09a5290823fe71099d9c35eb5df5345b6/thirdparty/rapidhash/LICENSE"
+          },
+          "target": "thirdparty/rapidhash/LICENSE"
+        },
+        {
+          "bytes": 18092,
+          "path": "packaging/notices/emhash/thirdparty/rapidhash/bench/LICENSE",
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "source": {
+            "revision": "5e131ba09a5290823fe71099d9c35eb5df5345b6",
+            "url": "https://raw.githubusercontent.com/ktprime/emhash/5e131ba09a5290823fe71099d9c35eb5df5345b6/thirdparty/rapidhash/bench/LICENSE"
+          },
+          "target": "thirdparty/rapidhash/bench/LICENSE"
+        },
+        {
+          "bytes": 18092,
+          "path": "packaging/notices/emhash/thirdparty/rapidhash/collisions/LICENSE",
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "source": {
+            "revision": "5e131ba09a5290823fe71099d9c35eb5df5345b6",
+            "url": "https://raw.githubusercontent.com/ktprime/emhash/5e131ba09a5290823fe71099d9c35eb5df5345b6/thirdparty/rapidhash/collisions/LICENSE"
+          },
+          "target": "thirdparty/rapidhash/collisions/LICENSE"
+        },
+        {
+          "bytes": 1068,
+          "path": "packaging/notices/emhash/thirdparty/simd_hash_map/LICENSE",
+          "sha256": "42fe6020e69514d753b8656fe22f95e37f222812e264c6c863275b78eaf815ed",
+          "source": {
+            "revision": "5e131ba09a5290823fe71099d9c35eb5df5345b6",
+            "url": "https://raw.githubusercontent.com/ktprime/emhash/5e131ba09a5290823fe71099d9c35eb5df5345b6/thirdparty/simd_hash_map/LICENSE"
+          },
+          "target": "thirdparty/simd_hash_map/LICENSE"
+        }
+      ],
+      "license": "MIT",
+      "provenance": {
+        "ref": "5e131ba09a5290823fe71099d9c35eb5df5345b6",
+        "repository": "https://github.com/ktprime/emhash",
+        "revision": "5e131ba09a5290823fe71099d9c35eb5df5345b6",
+        "tree_sha256": "7eb6f6a671237865ab46257febcfd946077de206f2085f65dd33c9744f749aa3"
+      },
+      "version": "5e131ba09a5290823fe71099d9c35eb5df5345b6"
+    },
+    "epoxy": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 2465,
+          "path": "packaging/notices/epoxy/COPYING",
+          "sha256": "8d5144666f9c4df9bbd69b8900086d5979259152a1060421cdcc0fb9061a1c12",
+          "source": {
+            "revision": "c84bc9459357a40e46e2fec0408d04fbdde2c973",
+            "url": "https://raw.githubusercontent.com/anholt/libepoxy/c84bc9459357a40e46e2fec0408d04fbdde2c973/COPYING"
+          },
+          "target": "COPYING"
+        }
+      ],
+      "license": "MIT",
+      "provenance": {
+        "ref": "1.5.10",
+        "repository": "https://github.com/anholt/libepoxy",
+        "revision": "c84bc9459357a40e46e2fec0408d04fbdde2c973",
+        "tree_sha256": "6725a20dbe014ef55d4fc054b9b46f4cdb1f97c07e871ed22f43ed01d2cc0820"
+      },
+      "version": "1.5.10"
+    },
+    "fmt": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1431,
+          "path": "packaging/notices/fmt/LICENSE",
+          "sha256": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8",
+          "source": {
+            "revision": "407c905e45ad75fc29bf0f9bb7c5c2fd3475976f",
+            "url": "https://raw.githubusercontent.com/fmtlib/fmt/407c905e45ad75fc29bf0f9bb7c5c2fd3475976f/LICENSE"
+          },
+          "target": "LICENSE"
+        }
+      ],
+      "license": "MIT",
+      "provenance": {
+        "ref": "12.1.0",
+        "repository": "https://github.com/fmtlib/fmt",
+        "revision": "407c905e45ad75fc29bf0f9bb7c5c2fd3475976f",
+        "tree_sha256": "28405ed8ab97cbbfde93faaa2e880479aff5c09fafab97108ccaec09cf4f9c60"
+      },
+      "version": "12.1.0"
+    },
+    "houdini-sdk-openimagedenoise": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11358,
+          "path": "packaging/notices/houdini-sdk-openimagedenoise/LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": {
+            "revision": "49a0a43bdab45fbb6bec7b084d743387634da9c3",
+            "url": "https://raw.githubusercontent.com/RenderKit/oidn/49a0a43bdab45fbb6bec7b084d743387634da9c3/LICENSE.txt"
+          },
+          "target": "LICENSE.txt"
+        },
+        {
+          "bytes": 18306,
+          "path": "packaging/notices/houdini-sdk-openimagedenoise/doc/BINARY-LICENSE.txt",
+          "sha256": "affd8b1276d3c9d4af61669ba6b709bd3d289a51a73868b80fd4a0fe5af9d5b9",
+          "source": {
+            "revision": "49a0a43bdab45fbb6bec7b084d743387634da9c3",
+            "url": "https://raw.githubusercontent.com/RenderKit/oidn/49a0a43bdab45fbb6bec7b084d743387634da9c3/doc/BINARY-LICENSE.txt"
+          },
+          "target": "doc/BINARY-LICENSE.txt"
+        }
+      ],
+      "license": "Apache-2.0; external Houdini SDK runtime is not redistributed",
+      "provenance": {
+        "redistributed": false,
+        "ref": "v2.3.3",
+        "repository": "https://github.com/RenderKit/oidn",
+        "revision": "49a0a43bdab45fbb6bec7b084d743387634da9c3",
+        "scope": "Upstream header/source notices only; SideFX-provided DLLs remain in the licensed Houdini installation",
+        "sdk_provider": {
+          "houdini": "22.0.466",
+          "provider": "houdini-sdk",
+          "runtime_files": [
+            "OpenImageDenoise.dll",
+            "OpenImageDenoise_core.dll",
+            "OpenImageDenoise_device_cpu.dll",
+            "OpenImageDenoise_device_cuda.dll"
+          ],
+          "version": "2.3.3"
+        },
+        "tree_sha256": "1b77b70d9e49fe195619c9df9d1fbd6a58c39bc3629675745713fe9268bc30ba"
+      },
+      "version": "2.3.3"
+    },
+    "hwloc": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 2552,
+          "path": "packaging/notices/hwloc/COPYING",
+          "sha256": "d79a936a42f3c6cb7c8375a023d43f4435f4664d3a5a2ea6b4623cff83c7fc06",
+          "source": {
+            "revision": "d9444df44c71f40667d350b42dd3c69207fd4ae0",
+            "url": "https://raw.githubusercontent.com/open-mpi/hwloc/d9444df44c71f40667d350b42dd3c69207fd4ae0/COPYING"
+          },
+          "target": "COPYING"
+        },
+        {
+          "bytes": 1101,
+          "path": "packaging/notices/hwloc/contrib/android/AndroidApp/lstopo/src/main/java/com/hwloc/lstopo/ZoomView/licence.txt",
+          "sha256": "acf715383d06c1ca17126c3b4510e590a2db5f28802a8ea73d387950f5de11a7",
+          "source": {
+            "revision": "d9444df44c71f40667d350b42dd3c69207fd4ae0",
+            "url": "https://raw.githubusercontent.com/open-mpi/hwloc/d9444df44c71f40667d350b42dd3c69207fd4ae0/contrib/android/AndroidApp/lstopo/src/main/java/com/hwloc/lstopo/ZoomView/licence.txt"
+          },
+          "target": "contrib/android/AndroidApp/lstopo/src/main/java/com/hwloc/lstopo/ZoomView/licence.txt"
+        }
+      ],
+      "license": "BSD-3-Clause AND bundled notices",
+      "provenance": {
+        "ref": "hwloc-2.10.0",
+        "repository": "https://github.com/open-mpi/hwloc",
+        "revision": "d9444df44c71f40667d350b42dd3c69207fd4ae0",
+        "tree_sha256": "9f75e8b75ae7a6250cdf8fb547feda5d15d92c36e287e83267487e3192df1852"
+      },
+      "version": "2.10.0"
+    },
+    "integration": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11562,
+          "path": "packaging/notices/integration/LICENSE",
+          "sha256": "f2ffa5942b316849be283deaeb2912e2e5b5b17e91012bede8210210ff3e91e7",
+          "source": {
+            "path": "LICENSE"
+          },
+          "target": "LICENSE"
+        }
+      ],
+      "license": "Apache-2.0",
+      "provenance": {
+        "source_lock_sha256": "c04b31fd2a8f1f42b339c1711c01054b741863e9465dfb4a1a88573784801ae9"
+      },
+      "version": "current source"
+    },
+    "level-zero": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1079,
+          "path": "packaging/notices/level-zero/LICENSE",
+          "sha256": "f2e82047a47ca742088331ae2bc85b97949ed1e97dfa057cdafd03e8709fc0a2",
+          "source": {
+            "revision": "b77ced661af97104f5cda03d49596274392f6aa4",
+            "url": "https://raw.githubusercontent.com/oneapi-src/level-zero/b77ced661af97104f5cda03d49596274392f6aa4/LICENSE"
+          },
+          "target": "LICENSE"
+        },
+        {
+          "bytes": 11356,
+          "path": "packaging/notices/level-zero/LICENSES/Apache-2.0.txt",
+          "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+          "source": {
+            "revision": "b77ced661af97104f5cda03d49596274392f6aa4",
+            "url": "https://raw.githubusercontent.com/oneapi-src/level-zero/b77ced661af97104f5cda03d49596274392f6aa4/LICENSES/Apache-2.0.txt"
+          },
+          "target": "LICENSES/Apache-2.0.txt"
+        },
+        {
+          "bytes": 1079,
+          "path": "packaging/notices/level-zero/LICENSES/MIT.txt",
+          "sha256": "fed905c532b6df4fbf443ae05fe8c3d1ef7789b62ced8fe9a6ce4bd83aef8133",
+          "source": {
+            "revision": "b77ced661af97104f5cda03d49596274392f6aa4",
+            "url": "https://raw.githubusercontent.com/oneapi-src/level-zero/b77ced661af97104f5cda03d49596274392f6aa4/LICENSES/MIT.txt"
+          },
+          "target": "LICENSES/MIT.txt"
+        },
+        {
+          "bytes": 1074,
+          "path": "packaging/notices/level-zero/bindings/sysman/python/LICENSE",
+          "sha256": "e38b33fdee14c0c657e2e588d72ad4a04c9b031445ba0678c7f0f3ae05ab1327",
+          "source": {
+            "revision": "b77ced661af97104f5cda03d49596274392f6aa4",
+            "url": "https://raw.githubusercontent.com/oneapi-src/level-zero/b77ced661af97104f5cda03d49596274392f6aa4/bindings/sysman/python/LICENSE"
+          },
+          "target": "bindings/sysman/python/LICENSE"
+        },
+        {
+          "bytes": 1354,
+          "path": "packaging/notices/level-zero/third_party/spdlog_headers/LICENSE",
+          "sha256": "4ccecab18d1ff0b61174fe3d6c430541625d3ddb865b0d5887db296f883c76e7",
+          "source": {
+            "revision": "b77ced661af97104f5cda03d49596274392f6aa4",
+            "url": "https://raw.githubusercontent.com/oneapi-src/level-zero/b77ced661af97104f5cda03d49596274392f6aa4/third_party/spdlog_headers/LICENSE"
+          },
+          "target": "third_party/spdlog_headers/LICENSE"
+        },
+        {
+          "bytes": 11356,
+          "path": "packaging/notices/level-zero/third_party/xla/LICENSE",
+          "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+          "source": {
+            "revision": "b77ced661af97104f5cda03d49596274392f6aa4",
+            "url": "https://raw.githubusercontent.com/oneapi-src/level-zero/b77ced661af97104f5cda03d49596274392f6aa4/third_party/xla/LICENSE"
+          },
+          "target": "third_party/xla/LICENSE"
+        }
+      ],
+      "license": "MIT AND third-party notices",
+      "provenance": {
+        "ref": "v1.29.0",
+        "repository": "https://github.com/oneapi-src/level-zero",
+        "revision": "b77ced661af97104f5cda03d49596274392f6aa4",
+        "tree_sha256": "8c29f31f4ea03b84e5f978bb92743528cf4bcf8c0fcaf97ef5b59a15c51cd696"
+      },
+      "version": "v1.29.0"
+    },
+    "opencl-headers": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11358,
+          "path": "packaging/notices/opencl-headers/LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": {
+            "revision": "8a97ebc88daa3495d6f57ec10bb515224400186f",
+            "url": "https://raw.githubusercontent.com/KhronosGroup/OpenCL-Headers/8a97ebc88daa3495d6f57ec10bb515224400186f/LICENSE"
+          },
+          "target": "LICENSE"
+        }
+      ],
+      "license": "Apache-2.0",
+      "provenance": {
+        "ref": "v2025.07.22",
+        "repository": "https://github.com/KhronosGroup/OpenCL-Headers",
+        "revision": "8a97ebc88daa3495d6f57ec10bb515224400186f",
+        "tree_sha256": "4235d90cfb8fbb022c3d0afe566b6c3f4fee92ddc77570bd7e1280b83aec270a"
+      },
+      "version": "v2025.07.22"
+    },
+    "opencl-icd-loader": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11357,
+          "path": "packaging/notices/opencl-icd-loader/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "source": {
+            "revision": "ad770a1b64c6b8d5f2ed4e153f22e4f45939f27f",
+            "url": "https://raw.githubusercontent.com/KhronosGroup/OpenCL-ICD-Loader/ad770a1b64c6b8d5f2ed4e153f22e4f45939f27f/LICENSE"
+          },
+          "target": "LICENSE"
+        }
+      ],
+      "license": "Apache-2.0",
+      "provenance": {
+        "ref": "v2025.07.22",
+        "repository": "https://github.com/KhronosGroup/OpenCL-ICD-Loader",
+        "revision": "ad770a1b64c6b8d5f2ed4e153f22e4f45939f27f",
+        "tree_sha256": "3e4b91ed5899eb3a45ce6db1482f0579c2c515c66210d832d4e22608d67fa23f"
+      },
+      "version": "v2025.07.22"
+    },
+    "openpgl": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11358,
+          "path": "packaging/notices/openpgl/LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "source": {
+            "git_blob": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+            "path": "openpgl/share/doc/openpgl/LICENSE.txt",
+            "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+            "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5"
+          },
+          "target": "LICENSE.txt"
+        },
+        {
+          "bytes": 30314,
+          "path": "packaging/notices/openpgl/third-party-programs.txt",
+          "sha256": "5e9b0b1efcc7f5a069bdb4a6ef453a0e295e4d9c15cb108354b5bb5d9c5cc853",
+          "source": {
+            "git_blob": "b69c866769d9d9a807c21f1ce6e6499d618349ac",
+            "path": "openpgl/share/doc/openpgl/third-party-programs.txt",
+            "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+            "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5"
+          },
+          "target": "third-party-programs.txt"
+        },
+        {
+          "bytes": 4508,
+          "path": "packaging/notices/openpgl/third-party-programs-Embree.txt",
+          "sha256": "f9b95ec6ea9cdf52b785b5f568247ca16e167fa01f72cbb87104be50ebacdae8",
+          "source": {
+            "git_blob": "c583e43b1da5488d8b2d5553c10a419422634519",
+            "path": "openpgl/share/doc/openpgl/third-party-programs-Embree.txt",
+            "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+            "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5"
+          },
+          "target": "third-party-programs-Embree.txt"
+        },
+        {
+          "bytes": 96392,
+          "path": "packaging/notices/openpgl/third-party-programs-ISPC.txt",
+          "sha256": "4c41170fe8aedf778dd880f54c06b67f71b673e3f1dc933f134d53a6c679abed",
+          "source": {
+            "git_blob": "0925f43ae5c2932a74e4c85516a76728bbb22aca",
+            "path": "openpgl/share/doc/openpgl/third-party-programs-ISPC.txt",
+            "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+            "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5"
+          },
+          "target": "third-party-programs-ISPC.txt"
+        },
+        {
+          "bytes": 34139,
+          "path": "packaging/notices/openpgl/third-party-programs-OIDN.txt",
+          "sha256": "f4e485ab513e7187722f32fb30c39558cb32b53c42cb7dfffc51a4615917ffdd",
+          "source": {
+            "git_blob": "f3d76ae1fa3de5fed8e348bc2191c76b9ef5fb7a",
+            "path": "openpgl/share/doc/openpgl/third-party-programs-OIDN.txt",
+            "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+            "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5"
+          },
+          "target": "third-party-programs-OIDN.txt"
+        },
+        {
+          "bytes": 46979,
+          "path": "packaging/notices/openpgl/third-party-programs-oneTBB.txt",
+          "sha256": "b10997cc50652ba6ab365e3bc43e13057681cd4a56533b46171529bd249749f3",
+          "source": {
+            "git_blob": "b555450a92d91c5791702503e134e5b520b7d2b3",
+            "path": "openpgl/share/doc/openpgl/third-party-programs-oneTBB.txt",
+            "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+            "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5"
+          },
+          "target": "third-party-programs-oneTBB.txt"
+        }
+      ],
+      "license": "Apache-2.0 AND bundled third-party notices",
+      "provenance": {
+        "dependency_recipe": {
+          "git_blob": "4d009bd5143749523d9ab586c347f82e219f61ab",
+          "path": "deps.md",
+          "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+          "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5",
+          "sha256": "990f03f3277c5f44829d604fddeec6d3a30ab9a5f50f486250bd1ec8857c1625"
+        },
+        "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+        "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5",
+        "scope": "Original license and third-party program notices from the pinned precompiled OpenPGL distribution",
+        "version_header": {
+          "git_blob": "98e469e8d32dfed5b71ea8bdf13a93650b260957",
+          "path": "openpgl/include/openpgl/version.h",
+          "repository": "https://projects.blender.org/blender/lib-windows_x64.git",
+          "revision": "aa0c5db72fa9488bb685bdddbede780d19f483f5",
+          "sha256": "8bb5afaefdfccb3875f70a6b220f18d593da00b29c71ffd58d345fa3a3f8cae5"
+        }
+      },
+      "version": "0.7.1"
+    },
+    "optix-headers": {
+      "coverage": "review_required",
+      "files": [
+        {
+          "bytes": 26173,
+          "path": "packaging/notices/optix-headers/LICENSE.txt",
+          "sha256": "e9cfeae1ef1c9a3fe46d79ef5b49a654f25e201a8d9a25f62baa00dfe1272cc6",
+          "source": {
+            "path": "third_party/optix/LICENSE.txt"
+          },
+          "target": "LICENSE.txt"
+        },
+        {
+          "bytes": 321,
+          "path": "packaging/notices/optix-headers/license_info.txt",
+          "sha256": "7fb477ba7f99de67c9ec0fc8d2ec40c9c356bf471fbcd57ec3528a72651e0c69",
+          "source": {
+            "path": "third_party/optix/license_info.txt"
+          },
+          "target": "license_info.txt"
+        },
+        {
+          "bytes": 7854,
+          "path": "packaging/notices/optix-headers/HEADER-NOTICES.txt",
+          "sha256": "2000f2324b3b132e4388621ee97ececa5619327496cc7b7f5677f1a74544f918",
+          "source": {
+            "header_sha256": {
+              "include/internal/optix_device_impl.h": "d54723efaaf417b4006e32d99216a7975212a3712e34d92ad8f885057f14b692",
+              "include/internal/optix_device_impl_coop_vec.h": "422987524ba63f64ece2103a4f7be98e7123ef261da8482d7f55034fc4840056",
+              "include/internal/optix_device_impl_transformations.h": "774c82e29e1b1c6d28a1e231004fcfb175b501a51690d5d3dc940c43e0f52b22",
+              "include/internal/optix_micromap_impl.h": "bb03e0f2891dd9eb5565c0bfc2174bd1187370dcbaa959f83bd9470b28cc917f",
+              "include/optix.h": "f8efc8f94480a89a3de96b1ac69baea2c90c63cd3644512bcfbd8eed6f9a01eb",
+              "include/optix_denoiser_tiling.h": "661a6817d59941b21058429831089b4da677217a3742640dcda4e26d2cff4c7f",
+              "include/optix_device.h": "31c3bb79f24d28c35a81869388be294b061a21dc0242e423ad8e472e95ddec66",
+              "include/optix_function_table.h": "1eb5ae0fff060c94ddae03eaa2c08aa9e4b56403cfea28ee2f3327bfb7eb1959",
+              "include/optix_function_table_definition.h": "3db1a00d23e9cb88f7a4d6df1ed2be9c44145ee65854dce134ac08e4fca2e59e",
+              "include/optix_host.h": "5a9b8cb23674afd4c4bcab35a3af0189705b8cb3f11e88af634da2e136b5efd4",
+              "include/optix_micromap.h": "00505d59c45ecf538170b1d9e18186757d2507380cb4b00ceabefe2df421f20d",
+              "include/optix_stack_size.h": "52f00bf795a4f0ee173b237a76e17fa7a7e29c8ff52d6b250e92057e4b0dec3a",
+              "include/optix_stubs.h": "0190dceec7adf8fe84551d04afb6024e41d1cc8236325523437a06fd31c561bc",
+              "include/optix_types.h": "e1879fef22e3d70108fe8b41e520645a0f98265fa8c10dc3b88df5d3ec96b988"
+            },
+            "root": "third_party/optix"
+          },
+          "target": "HEADER-NOTICES.txt"
+        }
+      ],
+      "license": "NVIDIA DesignWorks agreement and per-header licenses",
+      "provenance": {
+        "source_lock_sha256": "c04b31fd2a8f1f42b339c1711c01054b741863e9465dfb4a1a88573784801ae9"
+      },
+      "reason": "Whoever distributes compiled packages reviews the NVIDIA OptiX SDK distribution terms (DesignWorks agreement) first.",
+      "version": "f1f6dd803f3159992d248178f6e09421c6eb8b6d"
+    },
+    "parallel-hashmap": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11360,
+          "path": "packaging/notices/parallel-hashmap/LICENSE",
+          "sha256": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe",
+          "source": {
+            "revision": "8a889d3699b3c09ade435641fb034427f3fd12b6",
+            "url": "https://raw.githubusercontent.com/greg7mdp/parallel-hashmap/8a889d3699b3c09ade435641fb034427f3fd12b6/LICENSE"
+          },
+          "target": "LICENSE"
+        }
+      ],
+      "license": "Apache-2.0 AND bundled notices",
+      "provenance": {
+        "ref": "8a889d3699b3c09ade435641fb034427f3fd12b6",
+        "repository": "https://github.com/greg7mdp/parallel-hashmap",
+        "revision": "8a889d3699b3c09ade435641fb034427f3fd12b6",
+        "tree_sha256": "f0453bc5e17f52fb341f2fe0f6029df996d7da88b25cb9727a14898bd5a96824"
+      },
+      "version": "8a889d3699b3c09ade435641fb034427f3fd12b6"
+    },
+    "pthreads": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 11357,
+          "path": "packaging/notices/pthreads/pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/LICENSE",
+          "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+          "source": {
+            "archive_sha256": "b81136effb7185c77601fe2e0e6ac19bd996912e4814cebdd3010b0fac9e259b",
+            "member": "pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/LICENSE",
+            "url": "https://downloads.sourceforge.net/project/pthreads4w/pthreads4w-code-v3.0.0.zip"
+          },
+          "target": "pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/LICENSE"
+        },
+        {
+          "bytes": 1168,
+          "path": "packaging/notices/pthreads/pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/NOTICE",
+          "sha256": "ab620b4fe865583cca883b258f728f7f2234802f7c1b8d74fdb6a4dd2642ae2c",
+          "source": {
+            "archive_sha256": "b81136effb7185c77601fe2e0e6ac19bd996912e4814cebdd3010b0fac9e259b",
+            "member": "pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/NOTICE",
+            "url": "https://downloads.sourceforge.net/project/pthreads4w/pthreads4w-code-v3.0.0.zip"
+          },
+          "target": "pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/NOTICE"
+        }
+      ],
+      "license": "Apache-2.0",
+      "provenance": {
+        "archive_sha256": "b81136effb7185c77601fe2e0e6ac19bd996912e4814cebdd3010b0fac9e259b",
+        "distribution": "https://downloads.sourceforge.net/project/pthreads4w/pthreads4w-code-v3.0.0.zip"
+      },
+      "version": "3.0.0"
+    },
+    "pugixml": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1079,
+          "path": "packaging/notices/pugixml/LICENSE.md",
+          "sha256": "9ddc2f8e3003601aff5a4d37f3caf3b6b60a729ebbc466bafd965cdf0883b12c",
+          "source": {
+            "revision": "3c59df555b93a7650ae0056da34bacde93f4ef8f",
+            "url": "https://raw.githubusercontent.com/zeux/pugixml/3c59df555b93a7650ae0056da34bacde93f4ef8f/LICENSE.md"
+          },
+          "target": "LICENSE.md"
+        }
+      ],
+      "license": "MIT",
+      "provenance": {
+        "ref": "v1.10",
+        "repository": "https://github.com/zeux/pugixml",
+        "revision": "3c59df555b93a7650ae0056da34bacde93f4ef8f",
+        "tree_sha256": "51655228209303ea9f3cf86b833928d57b10a43f3c3558edd699c5c442996bba"
+      },
+      "version": "1.10"
+    },
+    "pybind11": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1684,
+          "path": "packaging/notices/pybind11/LICENSE.txt",
+          "sha256": "83965b843b98f670d3a85bd041ed4b372c8ec50d7b4a5995a83ac697ba675dcb",
+          "source": {
+            "path": "packaging/notices/pybind11/LICENSE.txt"
+          },
+          "target": "LICENSE.txt"
+        }
+      ],
+      "license": "BSD-3-Clause",
+      "provenance": {
+        "header_receipt_sha256": "1ba610a7516d84f5df627d8ed11ed6ff71d8522bf58c411ce03254596fe3a268",
+        "source": "https://github.com/pybind/pybind11/tree/v2.13.6/include/pybind11"
+      },
+      "version": "2.13.6"
+    },
+    "unified-memory-framework": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 13187,
+          "path": "packaging/notices/unified-memory-framework/LICENSE.TXT",
+          "sha256": "8e10a337d86f516fb49730c26995cf0215ebb39340b82c65e0246441a82da64b",
+          "source": {
+            "revision": "6c97f3de424fa5d852f2e1c0d8f0dfbbc9b419b6",
+            "url": "https://raw.githubusercontent.com/oneapi-src/unified-memory-framework/6c97f3de424fa5d852f2e1c0d8f0dfbbc9b419b6/LICENSE.TXT"
+          },
+          "target": "LICENSE.TXT"
+        }
+      ],
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "provenance": {
+        "ref": "v1.1.0",
+        "repository": "https://github.com/oneapi-src/unified-memory-framework",
+        "revision": "6c97f3de424fa5d852f2e1c0d8f0dfbbc9b419b6",
+        "tree_sha256": "8bd0de1ed1226e66c66a44d39e4b37f0f8bdbb9cf3a3f1c6acc93ff66f79cd3c"
+      },
+      "version": "v1.1.0"
+    },
+    "vc-intrinsics": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1074,
+          "path": "packaging/notices/vc-intrinsics/LICENSE.md",
+          "sha256": "8c95643f47a244153bef1c2d3a2801dde2b566f0294aae956c8a5226f7acd789",
+          "source": {
+            "revision": "60cea7590bd022d95f5cf336ee765033bd114d69",
+            "url": "https://raw.githubusercontent.com/intel/vc-intrinsics/60cea7590bd022d95f5cf336ee765033bd114d69/LICENSE.md"
+          },
+          "target": "LICENSE.md"
+        }
+      ],
+      "license": "MIT",
+      "provenance": {
+        "ref": "60cea7590bd022d95f5cf336ee765033bd114d69",
+        "repository": "https://github.com/intel/vc-intrinsics",
+        "revision": "60cea7590bd022d95f5cf336ee765033bd114d69",
+        "tree_sha256": "357d5017d301205e2f8bd2e2080d1d3257ff47413f49e9db7c0dc21ae7506abd"
+      },
+      "version": "60cea7590bd022d95f5cf336ee765033bd114d69"
+    },
+    "zlib": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 1002,
+          "path": "packaging/notices/zlib/LICENSE",
+          "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+          "source": {
+            "revision": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+            "url": "https://raw.githubusercontent.com/madler/zlib/51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf/LICENSE"
+          },
+          "target": "LICENSE"
+        },
+        {
+          "bytes": 1359,
+          "path": "packaging/notices/zlib/contrib/dotzlib/LICENSE_1_0.txt",
+          "sha256": "36266a8fd073568394cb81cdb2b124f7fdae2c64c1a7ed09db34b4d22efa2951",
+          "source": {
+            "revision": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+            "url": "https://raw.githubusercontent.com/madler/zlib/51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf/contrib/dotzlib/LICENSE_1_0.txt"
+          },
+          "target": "contrib/dotzlib/LICENSE_1_0.txt"
+        }
+      ],
+      "license": "Zlib",
+      "provenance": {
+        "ref": "v1.3.1",
+        "repository": "https://github.com/madler/zlib",
+        "revision": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+        "tree_sha256": "06f534872f08f91543878e381d8b7a78bffcb4c83d6891e6e47cf5c58dc9ebf7"
+      },
+      "version": "1.3.1"
+    },
+    "zstd": {
+      "coverage": "complete",
+      "files": [
+        {
+          "bytes": 18091,
+          "path": "packaging/notices/zstd/COPYING",
+          "sha256": "f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505",
+          "source": {
+            "revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+            "url": "https://raw.githubusercontent.com/facebook/zstd/f8745da6ff1ad1e7bab384bd1f9d742439278e99/COPYING"
+          },
+          "target": "COPYING"
+        },
+        {
+          "bytes": 1549,
+          "path": "packaging/notices/zstd/LICENSE",
+          "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+          "source": {
+            "revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+            "url": "https://raw.githubusercontent.com/facebook/zstd/f8745da6ff1ad1e7bab384bd1f9d742439278e99/LICENSE"
+          },
+          "target": "LICENSE"
+        },
+        {
+          "bytes": 0,
+          "path": "packaging/notices/zstd/build/LICENSE",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "source": {
+            "revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+            "url": "https://raw.githubusercontent.com/facebook/zstd/f8745da6ff1ad1e7bab384bd1f9d742439278e99/build/LICENSE"
+          },
+          "target": "build/LICENSE"
+        }
+      ],
+      "license": "BSD-3-Clause OR GPL-2.0-only",
+      "provenance": {
+        "ref": "v1.5.7",
+        "repository": "https://github.com/facebook/zstd",
+        "revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+        "tree_sha256": "0396ea6c4832ac19a1cddec43362be88c513f9ed9dcde938c3dcf64250d8075d"
+      },
+      "version": "1.5.7"
+    }
+  },
+  "dependency_recipe": {
+    "path": "third_party/cycles/lib/windows_x64/deps.md",
+    "sha256": "038f4f6fdf46948c731c7b39746929021d6cd2e1eaf78afd6016756d563f4a0f"
+  },
+  "errors": [],
+  "schema_version": 1
+}

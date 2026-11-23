@@ -1,0 +1,12 @@
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -817,8 +817,7 @@
+       /* Triangle. */
+       Object *object = flatten.scene->objects[emitter.object_id];
+       Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+-      Shader *shader = static_cast<Shader *>(
+-          mesh->get_used_shaders()[mesh->get_shader()[emitter.prim_id]]);
++      Shader *shader = object->effective_shader(mesh->get_shader()[emitter.prim_id]);
+ 
+       kemitter.triangle.id = emitter.prim_id + mesh->prim_offset;
+       kemitter.visibility_flag = light_object_visibility_flags(object);

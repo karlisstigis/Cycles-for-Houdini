@@ -1,0 +1,324 @@
+From 85f6dfac07422422ea0def388afb139c1e710628 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:39 +0100
+Subject: [PATCH] retain exact cached light tree interiors
+
+Locked-Patch: patches/0058-retain-exact-cached-light-tree-interiors.patch
+Locked-Patch-SHA256: 50dc38bdaa01932c60ff60e686979236c6113f7636c11f71ee55cc9a261098e4
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 93b0aa8354692043d88328df8f6b63e5dda24533
+Previous-Patch: patches/0058-retain-exact-cached-light-tree-interiors.patch
+Previous-Patch-SHA256: 50dc38bdaa01932c60ff60e686979236c6113f7636c11f71ee55cc9a261098e4
+Rationale: Unchanged cached tree interiors can be retained exactly while instance roots change; compare ownership/ranges to avoid retaining stale world bounds.
+Contract: retain exact cached light tree interiors
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index 47cabf7cc0b759102a7b8e7ad35cfdc1c0e972ad..3b4fa904c22e7e11d1e8889dc7d5c287af2b35a7 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -10,6 +10,7 @@
+ #include "scene/light.h"
+ #include "scene/light_tree.h"
+ #include "scene/light_tree_cache.h"
++#include "scene/light_tree_reuse.h"
+ #include "scene/mesh.h"
+ #include "scene/object.h"
+ #include "scene/scene.h"
+@@ -498,6 +499,7 @@ void Light::copy_to_kernel(KernelLight *klight,
+ LightManager::LightManager()
+ {
+   mesh_light_tree_cache = make_unique<LightTreeMeshCache>();
++  flattened_mesh_ranges = make_unique<LightTreeFlattenCache>();
+   update_flags = UPDATE_ALL;
+   need_update_background = true;
+   last_background_enabled = false;
+@@ -778,6 +780,10 @@ struct LightTreeFlatten {
+   size_t instance_swaps = 0;
+   size_t parallel_cached_nodes = 0;
+   size_t parallel_cached_ranges = 0;
++  size_t retained_cached_nodes = 0, retained_cached_ranges = 0;
++  bool compare_triangle_lookup = false, record_ranges = false, retain_ranges = false;
++  const LightTreeFlattenCache *previous_ranges = nullptr;
++  LightTreeFlattenCache current_ranges;
+   bool compare_nodes = false;
+   bool compare_emitters = false;
+   mutable std::atomic<bool> nodes_changed{true};
+@@ -965,6 +971,34 @@ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+   const auto &cache = anchor.get_cached();
+   const int first_node = next_node_index;
+   next_node_index += cache.num_nodes;
++  const bool interior = cache.num_nodes >= 4096 &&
++                        !(cache.nodes->root.node_type() & LIGHT_TREE_LEAF);
++  if (flatten.record_ranges && interior) {
++    const Object *object = flatten.scene->objects[anchor.object_id];
++    const Mesh *mesh = static_cast<const Mesh *>(object->get_geometry());
++    const LightTreeFlattenRange context{cache.nodes->identity, first_node, cache.num_nodes,
++                                       cache.emitter_start, anchor.object_id, mesh->prim_offset,
++                                       light_object_visibility_flags(object),
++                                       flatten.object_lookup_offset[anchor.object_id]};
++    flatten.current_ranges.ranges.emplace(first_node, context);
++    const auto found = flatten.previous_ranges->ranges.find(first_node);
++    if (flatten.retain_ranges && context.identity && flatten.compare_nodes &&
++        flatten.compare_emitters && flatten.compare_triangle_lookup &&
++        found != flatten.previous_ranges->ranges.end() && found->second == context) {
++      /* Only the current instance root depends on world bounds, the selected
++       * reference instance and the outer bit trail. All interior nodes,
++       * triangle emitters and their lookup rows have this exact context. */
++      LightTreeNode root(anchor.measure, anchor.bit_trail);
++      root.object_id = anchor.object_id;
++      root.type = anchor.type;
++      light_tree_node_copy_to_device(flatten, knodes[first_node], root,
++                                     first_node + cache.nodes->root.first,
++                                     first_node + cache.nodes->root.second, instance);
++      flatten.retained_cached_nodes += cache.num_nodes - 1;
++      ++flatten.retained_cached_ranges;
++      return first_node;
++    }
++  }
+   const auto flatten_range = [&](const blocked_range<int> &range) {
+     std::array<LightTreeCachedNode, light_tree_cache_block_size> decoded;
+     for (int block = range.begin(); block < range.end(); ++block) {
+@@ -1229,6 +1263,7 @@ void LightManager::device_update_tree(Device *device,
+ 
+   if (!kintegrator->use_light_tree) {
+     mesh_light_tree_cache->clear();
++    flattened_mesh_ranges->ranges.clear();
+     return;
+   }
+ 
+@@ -1241,6 +1276,10 @@ void LightManager::device_update_tree(Device *device,
+   double construction_seconds = 0, flatten_seconds = 0, upload_seconds = 0, work_end = 0;
+   size_t profile_nodes = 0, profile_emitters = 0, profile_instance_swaps = 0;
+   size_t profile_parallel_cached_nodes = 0, profile_parallel_cached_ranges = 0;
++  size_t profile_retained_cached_nodes = 0, profile_retained_cached_ranges = 0;
++  const size_t profile_previous_ranges = flattened_mesh_ranges->ranges.size();
++  size_t profile_recorded_ranges = 0;
++  bool profile_triangle_lookup_compared = false;
+   bool profile_nodes_compared = false, profile_emitters_compared = false;
+   bool profile_nodes_upload_requested = false, profile_emitters_upload_requested = false;
+   /* Declared before the tree: this runs after tree retirement, whose many
+@@ -1255,7 +1294,8 @@ void LightManager::device_update_tree(Device *device,
+                    "\"instance_swaps\":%zu,\"parallel_cached_nodes\":%zu,"
+                    "\"parallel_cached_ranges\":%zu,\"nodes_compared\":%s,\"emitters_compared\":%s,"
+                    "\"nodes_upload_requested\":%s,\"emitters_upload_requested\":%s,"
+-                   "\"buffers_valid\":%s}\n",
++                   "\"buffers_valid\":%s,\"retained_cached_nodes\":%zu,\"retained_cached_ranges\":%zu,"
++                   "\"previous_ranges\":%zu,\"recorded_ranges\":%zu,\"triangle_lookup_compared\":%s}\n",
+                    work_end > 0 && !progress.get_cancel() ? "true" : "false",
+                    profile_nodes, profile_emitters, construction_seconds, flatten_seconds,
+                    upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started,
+@@ -1265,12 +1305,16 @@ void LightManager::device_update_tree(Device *device,
+                    profile_emitters_compared ? "true" : "false",
+                    profile_nodes_upload_requested ? "true" : "false",
+                    profile_emitters_upload_requested ? "true" : "false",
+-                   tree_buffers_valid ? "true" : "false");
++                   tree_buffers_valid ? "true" : "false",
++                   profile_retained_cached_nodes, profile_retained_cached_ranges,
++                   profile_previous_ranges, profile_recorded_ranges,
++                   profile_triangle_lookup_compared ? "true" : "false");
+     }
+   });
+ 
+   /* TODO: For now, we'll start with a smaller number of max lights in a node.
+    * More benchmarking is needed to determine what number works best. */
++  if (profiling) std::fprintf(stderr, "CH_LIGHT_TREE_BEGIN {}\n");
+   LightTree light_tree(scene, dscene, progress, 8, mesh_light_tree_cache.get());
+   LightTreeNode *root = light_tree.build(scene, dscene);
+   const double constructed = profiling ? time_dt() : 0;
+@@ -1284,12 +1328,18 @@ void LightManager::device_update_tree(Device *device,
+ 
+   /* Create arguments for recursive tree flatten. */
+   LightTreeFlatten flatten;
++  flatten.previous_ranges = flattened_mesh_ranges.get();
++  const char *disable_ranges = std::getenv("CYCLES_HOUDINI_DISABLE_RETAINED_LIGHT_TREE_RANGES");
++  flatten.retain_ranges = !(disable_ranges && std::strcmp(disable_ranges, "1") == 0);
+   flatten.scene = scene;
+   flatten.emitters = light_tree.get_emitters();
+   flatten.object_lookup_offset = dscene->object_lookup_offset.data();
+   /* We want to create separate arrays corresponding to triangles and lights,
+    * which will be used to index back into the light tree for PDF calculations. */
+   flatten.light_array = dscene->light_to_tree.alloc(scene->objects.size());
++  flatten.compare_triangle_lookup = previous_buffers_valid &&
++      dscene->triangle_to_tree.size() == size_t(light_tree.num_triangles) &&
++      !dscene->triangle_to_tree.need_realloc() && dscene->triangle_to_tree.device_pointer != 0;
+   flatten.triangle_array = dscene->triangle_to_tree.alloc(light_tree.num_triangles);
+ 
+   /* Allocate emitters */
+@@ -1313,6 +1363,7 @@ void LightManager::device_update_tree(Device *device,
+            << " nodes.";
+ 
+   if (!use_light_linking) {
++    flatten.record_ranges = true;
+     /* Regular light tree without linking. */
+     flatten.compare_nodes = previous_buffers_valid &&
+                             dscene->light_tree_nodes.size() == light_tree.num_nodes &&
+@@ -1372,6 +1423,10 @@ void LightManager::device_update_tree(Device *device,
+   profile_instance_swaps = flatten.instance_swaps;
+   profile_parallel_cached_nodes = flatten.parallel_cached_nodes;
+   profile_parallel_cached_ranges = flatten.parallel_cached_ranges;
++  profile_retained_cached_nodes = flatten.retained_cached_nodes;
++  profile_retained_cached_ranges = flatten.retained_cached_ranges;
++  profile_recorded_ranges = flatten.current_ranges.ranges.size();
++  profile_triangle_lookup_compared = flatten.compare_triangle_lookup;
+   if (progress.get_cancel()) {
+     return;
+   }
+@@ -1394,8 +1449,10 @@ void LightManager::device_update_tree(Device *device,
+   dscene->triangle_to_tree.copy_to_device();
+   tree_buffers_valid = !progress.get_cancel() && !device->have_error();
+   if (tree_buffers_valid) {
++    flattened_mesh_ranges->ranges = std::move(flatten.current_ranges.ranges);
+     dscene->light_tree_nodes.clear_modified();
+     dscene->light_tree_emitters.clear_modified();
++    dscene->triangle_to_tree.clear_modified();
+   }
+   if (profiling) {
+     work_end = time_dt();
+@@ -1765,10 +1822,11 @@ void LightManager::device_free(Device * /*unused*/,
+     tree_buffers_valid = false;
+     dscene->light_tree_nodes.free();
+     dscene->light_tree_emitters.free();
++    dscene->triangle_to_tree.free();
++    flattened_mesh_ranges->ranges.clear();
+   }
+   dscene->light_to_tree.free();
+   dscene->object_lookup_offset.free();
+-  dscene->triangle_to_tree.free();
+ 
+   dscene->light_distribution.free();
+   dscene->lights.free();
+@@ -1781,12 +1839,14 @@ void LightManager::device_free(Device * /*unused*/,
+   if (profile_flag && std::strcmp(profile_flag, "1") == 0) {
+     std::fprintf(stderr,
+                  "CH_LIGHT_TREE_STORAGE {\"retained\":%s,\"nodes\":%zu,\"emitters\":%zu,"
+-                 "\"nodes_device\":%s,\"emitters_device\":%s}\n",
++                 "\"nodes_device\":%s,\"emitters_device\":%s,\"triangles\":%zu,\"triangles_device\":%s}\n",
+                  retain_tree_storage ? "true" : "false",
+                  dscene->light_tree_nodes.size(),
+                  dscene->light_tree_emitters.size(),
+                  dscene->light_tree_nodes.device_pointer ? "true" : "false",
+-                 dscene->light_tree_emitters.device_pointer ? "true" : "false");
++                 dscene->light_tree_emitters.device_pointer ? "true" : "false",
++                 dscene->triangle_to_tree.size(),
++                 dscene->triangle_to_tree.device_pointer ? "true" : "false");
+   }
+ }
+ 
+diff --git a/src/scene/light.h b/src/scene/light.h
+index 6731d9f823bf043157da5932785b8351209541d0..42433a7593eaea961fcded068d0b7af9cc23e7a1 100644
+--- a/src/scene/light.h
++++ b/src/scene/light.h
+@@ -24,6 +24,7 @@ class Object;
+ class Progress;
+ class Scene;
+ class Shader;
++struct LightTreeFlattenCache;
+ 
+ class Light : public Geometry {
+  public:
+@@ -263,6 +264,7 @@ class LightManager {
+   uint32_t update_flags;
+ 
+   unique_ptr<LightTreeMeshCache> mesh_light_tree_cache;
++  unique_ptr<LightTreeFlattenCache> flattened_mesh_ranges;
+   bool tree_buffers_valid = false;
+ };
+ 
+diff --git a/src/scene/light_tree_cache.cpp b/src/scene/light_tree_cache.cpp
+index 72fcedf0dd5188f80f1f9c3817f6d3533bfa1d09..70b70f5a853c058fc79389d07643e9fb01dfdae7 100644
+--- a/src/scene/light_tree_cache.cpp
++++ b/src/scene/light_tree_cache.cpp
+@@ -243,7 +243,6 @@ struct LightTreeMeshCache::Entry {
+   LightTreeCachedNodes nodes;
+   vector<CachedTriangle> triangles;
+   LightTreeCacheBlocks packed_triangles;
+-  CachedNode root{};
+   uint64_t stamp = 0;
+   uint64_t borrowed_build = 0;
+   size_t bytes() const
+@@ -256,6 +255,7 @@ struct LightTreeMeshCache::Entry {
+ };
+ 
+ struct LightTreeMeshCache::Impl {
++  uint64_t next_identity = 0;
+   std::unordered_multimap<Mesh *, Entry> entries;
+   size_t bytes = 0, hits = 0, misses = 0, evictions = 0;
+   size_t admission_skips = 0, view_nodes = 0;
+@@ -408,7 +408,7 @@ void LightTreeMeshCache::restore(const Entry &entry,
+     }
+   }
+   const double view_at = impl_->profiling ? time_dt() : 0;
+-  const auto &node = entry.root;
++  const auto &node = entry.nodes.root;
+   root->measure = node.measure();
+   root->bit_trail = node.bit_trail;
+   root->object_id = object_id;
+@@ -554,7 +554,7 @@ void LightTreeMeshCache::store(Scene *scene,
+         if (!i.make_room(entry.bytes() + cache_scratch)) valid = false;
+       }
+     }
+-    if (node == root) entry.root = value;
++    if (node == root) entry.nodes.root = value;
+     return kernel_index;
+   };
+   const int root_index = snapshot(snapshot, root);
+@@ -565,6 +565,8 @@ void LightTreeMeshCache::store(Scene *scene,
+     throw std::runtime_error("Incomplete internal mesh-light cache hierarchy");
+   }
+   if (!i.make_room(entry.bytes() + cache_scratch)) return;
++  entry.nodes.identity = ++i.next_identity;
++  if (!entry.nodes.identity) throw std::runtime_error("Mesh-light cache identity exhausted");
+   entry.stamp = ++i.stamp;
+   const size_t bytes = entry.bytes();
+   i.entries.emplace(mesh, std::move(entry));
+diff --git a/src/scene/light_tree_cache.h b/src/scene/light_tree_cache.h
+index c6c6c685fe94f928f1b5a62320b18ead905c4b10..f4df4a1c0de2592aef111344f7275bc6e3ae50c0 100644
+--- a/src/scene/light_tree_cache.h
++++ b/src/scene/light_tree_cache.h
+@@ -43,6 +43,8 @@ struct LightTreeCacheBlocks {
+ };
+ 
+ struct LightTreeCachedNodes {
++  uint64_t identity = 0;
++  LightTreeCachedNode root{};
+   vector<LightTreeCachedNode> raw;
+   LightTreeCacheBlocks packed;
+   int size() const { return raw.empty() ? packed.count : int(raw.size()); }
+diff --git a/src/scene/light_tree_reuse.h b/src/scene/light_tree_reuse.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e4418e03cdb12d6cff714dbf35e7c9150a62d577
+--- /dev/null
++++ b/src/scene/light_tree_reuse.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++#include "util/types.h"
++#include <unordered_map>
++
++CCL_NAMESPACE_BEGIN
++
++/* Exact output context of immutable cached interior rows. The live root is
++ * always regenerated. No source pointer or cache entry ownership is retained. */
++struct LightTreeFlattenRange {
++  uint64_t identity = 0;
++  int first_node = 0, num_nodes = 0, first_emitter = 0, object_id = 0;
++  size_t primitive_offset = 0;
++  uint visibility = 0, triangle_offset = 0;
++  bool operator==(const LightTreeFlattenRange &other) const
++  {
++    return identity == other.identity && first_node == other.first_node &&
++           num_nodes == other.num_nodes && first_emitter == other.first_emitter &&
++           object_id == other.object_id && primitive_offset == other.primitive_offset &&
++           visibility == other.visibility && triangle_offset == other.triangle_offset;
++  }
++};
++
++struct LightTreeFlattenCache {
++  std::unordered_map<int, LightTreeFlattenRange> ranges;
++};
++
++CCL_NAMESPACE_END

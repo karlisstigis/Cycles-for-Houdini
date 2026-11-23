@@ -1,0 +1,140 @@
+From 5b74612c6d5d5f92a89d79e8550feeafa968825f Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:43 +0100
+Subject: [PATCH] Reset DLSS temporal state through a per-session epoch
+ consumed by the render thread at the next successful evaluation after a hard
+ scene edit.
+
+Locked-Patch: patches/0079-dlss-history-epoch.patch
+Locked-Patch-SHA256: 1c39bc5ebabdee713bbd964062c0ae90ae8fc8c0da88de4a695da130b7ac815d
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_dlss_worker_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: ffa465fd8c3bf3dd9e4ce4e82dc0648e32974d5a
+Previous-Patch: patches/0079-dlss-history-epoch.patch
+Previous-Patch-SHA256: 1c39bc5ebabdee713bbd964062c0ae90ae8fc8c0da88de4a695da130b7ac815d
+Rationale: Temporal denoiser history needs a host-published epoch consumed on the render thread after a successful evaluation, avoiding stale history after hard edits.
+Contract: Reset DLSS temporal state through a per-session epoch consumed by the render thread at the next successful evaluation after a hard scene edit.
+Tests: tests/houdini_dlss_worker_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/device/denoise.h b/src/device/denoise.h
+index ccc39106cab3a3fef650629681aafd4b5dc8b124..44553366b6d0d6b091bad00f0acde6c93bd512ff 100644
+--- a/src/device/denoise.h
++++ b/src/device/denoise.h
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include "graph/node.h"
++#include <cstdint>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -89,6 +90,9 @@ class DenoiseParams : public Node {
+   DenoiserQuality quality = DENOISER_QUALITY_HIGH;
+   float upscale_factor = 1.0f;
+ 
++  /* Host-published generation, consumed by temporal denoisers on the render thread. */
++  uint64_t history_epoch = 1;
++
+   static const NodeEnum *get_type_enum();
+   static const NodeEnum *get_prefilter_enum();
+   static const NodeEnum *get_quality_enum();
+diff --git a/src/integrator/denoiser_dlss.cpp b/src/integrator/denoiser_dlss.cpp
+index 0559c76c4b33265695704f68625c8d0c7c94ef96..46ba308e39319d504a52bcea691fe68f2bd50c85 100644
+--- a/src/integrator/denoiser_dlss.cpp
++++ b/src/integrator/denoiser_dlss.cpp
+@@ -209,7 +209,8 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
+   }
+   const bool recreate_denoiser = last_width_ != context.denoised_buffer_params.width ||
+                                  last_height_ != context.denoised_buffer_params.height ||
+-                                 last_upscale_factor_ != context.denoise_params.upscale_factor;
++                                 last_upscale_factor_ != context.denoise_params.upscale_factor ||
++                                 last_quality_ != context.denoise_params.quality;
+   if (handle_ != nullptr && !recreate_denoiser) {
+     return true;
+   }
+@@ -322,6 +323,8 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
+   last_width_ = context.denoised_buffer_params.width;
+   last_height_ = context.denoised_buffer_params.height;
+   last_upscale_factor_ = context.denoise_params.upscale_factor;
++  last_quality_ = context.denoise_params.quality;
++  last_history_epoch_ = 0;
+ 
+   return !cuda_device->have_error();
+ }
+@@ -452,7 +455,8 @@ bool DLSSDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass
+   CUDADevice *const cuda_device = static_cast<CUDADevice *>(denoiser_device_);
+   const CUDAContextScope scope(cuda_device);
+ 
+-  params->Set(NVSDK_NGX_Parameter_Reset, 0);
++  const uint64_t history_epoch = context.denoise_params.history_epoch;
++  params->Set(NVSDK_NGX_Parameter_Reset, last_history_epoch_ != history_epoch ? 1 : 0);
+ 
+   params->Set(NVSDK_NGX_Parameter_Jitter_Offset_X, context.pixel_jitter.x);
+   params->Set(NVSDK_NGX_Parameter_Jitter_Offset_Y, context.pixel_jitter.y);
+@@ -478,7 +482,11 @@ bool DLSSDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass
+ 
+   NVSDK_NGX_CUDA_DestroyParameters(params);
+ 
+-  return NVSDK_NGX_SUCCEED(result) && cuCtxSynchronize() == CUDA_SUCCESS;
++  const bool success = NVSDK_NGX_SUCCEED(result) && cuCtxSynchronize() == CUDA_SUCCESS;
++  if (success) {
++    last_history_epoch_ = history_epoch;
++  }
++  return success;
+ }
+ 
+ CCL_NAMESPACE_END
+diff --git a/src/integrator/denoiser_dlss.h b/src/integrator/denoiser_dlss.h
+index 64094e0679c40acbaac7c60c9d80bcfd97eb3047..864dd8f40a8b308fc63fb7e4126bccab1b8838ec 100644
+--- a/src/integrator/denoiser_dlss.h
++++ b/src/integrator/denoiser_dlss.h
+@@ -59,6 +59,8 @@ class DLSSDenoiser : public DenoiserGPU {
+   int last_width_ = 0;
+   int last_height_ = 0;
+   float last_upscale_factor_ = 0.0f;
++  DenoiserQuality last_quality_ = DENOISER_QUALITY_NUM;
++  uint64_t last_history_epoch_ = 0;
+ };
+ 
+ CCL_NAMESPACE_END
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index 8d161d973739dde7858a56412da813d6ab3c98c4..71fe3c414da0c6366c0adb1736589b09f5b9bb75 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -433,7 +433,8 @@ RenderWork Session::run_update_for_next_iteration()
+ 
+   /* Update denoiser settings. */
+   {
+-    const DenoiseParams denoise_params = scene->integrator->get_denoise_params();
++    DenoiseParams denoise_params = scene->integrator->get_denoise_params();
++    denoise_params.history_epoch = denoiser_history_epoch_.load(std::memory_order_acquire);
+     path_trace_->set_denoiser_params(denoise_params);
+   }
+ 
+diff --git a/src/session/session.h b/src/session/session.h
+index 2cf3c6a305926ca7c9dc290b933ecd40ba4a6cdd..1d8740d89a0e5dfbf332fcc5177f4f3ad2b617f2 100644
+--- a/src/session/session.h
++++ b/src/session/session.h
+@@ -138,6 +138,12 @@ class Session {
+ 
+   void start();
+ 
++  /* Publish at the serialized scene boundary; no GPU work runs on the caller. */
++  void reset_denoising_history()
++  {
++    denoiser_history_epoch_.fetch_add(1, std::memory_order_release);
++  }
++
+   /* When quick cancel is requested path tracing is cancels as soon as possible, without waiting
+    * for the buffer to be uniformly sampled. */
+   void cancel(bool quick = false);
+@@ -195,6 +201,7 @@ class Session {
+   void process_full_buffer_from_disk(string_view filename);
+ 
+  protected:
++  std::atomic<uint64_t> denoiser_history_epoch_{1};
+   /* Guarded by session_thread_mutex_. A session has one serialized host controller. */
+   std::function<void()> pending_scene_sync_;
+   std::atomic<bool> scene_sync_requested_{false};

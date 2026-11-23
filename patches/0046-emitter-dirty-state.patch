@@ -1,0 +1,168 @@
+From 60877d05f930f645abc12753d6ccddd58f1307dc Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:36 +0100
+Subject: [PATCH] emitter dirty state
+
+Locked-Patch: patches/0046-emitter-dirty-state.patch
+Locked-Patch-SHA256: f85ca8ecfbd2a3f2960a4d7fd03511a4f59d331fffd2eec73e6f74a7e1d6a44a
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: ddfdda574f97216ab07346c0e7c879b42fea9866
+Previous-Patch: patches/0046-emitter-dirty-state.patch
+Previous-Patch-SHA256: f85ca8ecfbd2a3f2960a4d7fd03511a4f59d331fffd2eec73e6f74a7e1d6a44a
+Rationale: Emitter attribute records must be recopied when shared packed buffers move, even if CPU attribute values did not change.
+Contract: emitter dirty state
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index 9ca617801628016114a20431e8ce6d789a2b82c0..d0013610ae8b072ede2292a54d2b55afeb7b09d9 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -339,7 +339,8 @@ class AttributeTableBuilder {
+            Attribute *mattr,
+            AttributePrimitive prim,
+            TypeDesc &type,
+-           AttributeDescriptor &desc)
++           AttributeDescriptor &desc,
++           const bool force_copy)
+   {
+     if (mattr == nullptr) {
+       /* attribute not found */
+@@ -350,7 +351,7 @@ class AttributeTableBuilder {
+ 
+     /* For hair and pointcloud, pack combined position + radius as float4. */
+     if (mattr->std == ATTR_STD_POSITION && (geom->is_hair() || geom->is_pointcloud())) {
+-      add_position_radius(geom, mattr, type, desc);
++      add_position_radius(geom, mattr, type, desc, force_copy);
+       return;
+     }
+     if (mattr->std == ATTR_STD_RADIUS && (geom->is_hair() || geom->is_pointcloud())) {
+@@ -375,6 +376,7 @@ class AttributeTableBuilder {
+     /* Store attribute data in arrays, including possible motion steps. */
+     const size_t per_step = Attribute::element_size(geom, mattr->element, prim);
+     const int num_motion = mattr->motion.size();
++    const bool modified = mattr->modified || force_copy;
+ 
+     const AttributeElement &element = desc.element;
+     int &offset = desc.offset;
+@@ -385,35 +387,35 @@ class AttributeTableBuilder {
+       offset = handle.kernel_id();
+     }
+     else if (mattr->element & ATTR_ELEMENT_IS_BYTE) {
+-      offset = attr_uchar4.add(mattr->data<uchar4>(), per_step, mattr->modified);
++      offset = attr_uchar4.add(mattr->data<uchar4>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+-        attr_uchar4.add(mattr->data<uchar4>(step), per_step, mattr->modified);
++        attr_uchar4.add(mattr->data<uchar4>(step), per_step, modified);
+       }
+     }
+     else if (mattr->element & ATTR_ELEMENT_IS_NORMAL) {
+-      offset = attr_normal.add(mattr->data<packed_normal>(), per_step, mattr->modified);
++      offset = attr_normal.add(mattr->data<packed_normal>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+-        attr_normal.add(mattr->data<packed_normal>(step), per_step, mattr->modified);
++        attr_normal.add(mattr->data<packed_normal>(step), per_step, modified);
+       }
+     }
+     else if (mattr->type == TypeFloat) {
+-      offset = attr_float.add(mattr->data<float>(), per_step, mattr->modified);
++      offset = attr_float.add(mattr->data<float>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+-        attr_float.add(mattr->data<float>(step), per_step, mattr->modified);
++        attr_float.add(mattr->data<float>(step), per_step, modified);
+       }
+     }
+     else if (mattr->type == TypeFloat2) {
+-      offset = attr_float2.add(mattr->data<float2>(), per_step, mattr->modified);
++      offset = attr_float2.add(mattr->data<float2>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+-        attr_float2.add(mattr->data<float2>(step), per_step, mattr->modified);
++        attr_float2.add(mattr->data<float2>(step), per_step, modified);
+       }
+     }
+     else if (mattr->type == TypeMatrix) {
+       offset = attr_float4.add(
+-          (const float4 *)mattr->data<Transform>(), per_step * 3, mattr->modified);
++          (const float4 *)mattr->data<Transform>(), per_step * 3, modified);
+       for (int step = 1; step <= num_motion; step++) {
+         attr_float4.add(
+-            (const float4 *)mattr->data<Transform>(step), per_step * 3, mattr->modified);
++            (const float4 *)mattr->data<Transform>(step), per_step * 3, modified);
+       }
+     }
+     else if (mattr->type == TypeQuaternion) {
+@@ -431,17 +433,17 @@ class AttributeTableBuilder {
+       }
+     }
+     else if (mattr->type == TypeFloat4 || mattr->type == TypeRGBA) {
+-      offset = attr_float4.add(mattr->data<float4>(), per_step, mattr->modified);
++      offset = attr_float4.add(mattr->data<float4>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+-        attr_float4.add(mattr->data<float4>(step), per_step, mattr->modified);
++        attr_float4.add(mattr->data<float4>(step), per_step, modified);
+       }
+     }
+     else {
+       AttributeTableEntry<packed_float3> &table = (mattr->std == ATTR_STD_POSITION) ? tri_verts :
+                                                                                       attr_float3;
+-      offset = table.add(mattr->data<packed_float3>(), per_step, mattr->modified);
++      offset = table.add(mattr->data<packed_float3>(), per_step, modified);
+       for (int step = 1; step <= num_motion; step++) {
+-        table.add(mattr->data<packed_float3>(step), per_step, mattr->modified);
++        table.add(mattr->data<packed_float3>(step), per_step, modified);
+       }
+     }
+ 
+@@ -518,7 +520,8 @@ class AttributeTableBuilder {
+   void add_position_radius(Geometry *geom,
+                            Attribute *attr_P,
+                            TypeDesc &type,
+-                           AttributeDescriptor &desc)
++                           AttributeDescriptor &desc,
++                           const bool force_copy)
+   {
+     Attribute *attr_R = geom->attributes.find(ATTR_STD_RADIUS);
+     const size_t base_size = attr_P->size;
+@@ -539,7 +542,7 @@ class AttributeTableBuilder {
+     type = TypeFloat4;
+ 
+     int &offset = desc.offset;
+-    const bool modified = attr_P->modified || attr_R->modified;
++    const bool modified = attr_P->modified || attr_R->modified || force_copy;
+     AttributeTableEntry<float4> &table = geom->is_hair() ? curve_keys : points;
+     offset = table.add(combined.data(), total_size, modified);
+ 
+@@ -766,12 +769,13 @@ void GeometryManager::device_update_attributes(Device *device,
+           continue;
+         }
+         added[attr] = &req;
+-
+-        /* Force a copy only when this attribute's actual backing buffer moved. */
+-        attr->modified |= attribute_needs_realloc(geom, attr);
+       }
+ 
+-      builder.add(geom, attr, ATTR_PRIM_GEOMETRY, req.type, req.desc);
++      /* A packed device buffer can move even when this mesh's CPU values did
++       * not change. Keep that copy requirement separate from source dirty
++       * flags, which drive displacement, BVHs and retained emitter trees. */
++      const bool force_copy = attr && attribute_needs_realloc(geom, attr);
++      builder.add(geom, attr, ATTR_PRIM_GEOMETRY, req.type, req.desc, force_copy);
+ 
+       if (progress.get_cancel()) {
+         return;
+@@ -798,11 +802,10 @@ void GeometryManager::device_update_attributes(Device *device,
+           continue;
+         }
+         added[attr] = &req;
+-
+-        attr->modified |= attribute_needs_realloc(object->geometry, attr);
+       }
+ 
+-      builder.add(object->geometry, attr, ATTR_PRIM_GEOMETRY, req.type, req.desc);
++      const bool force_copy = attr && attribute_needs_realloc(object->geometry, attr);
++      builder.add(object->geometry, attr, ATTR_PRIM_GEOMETRY, req.type, req.desc, force_copy);
+ 
+       if (progress.get_cancel()) {
+         return;

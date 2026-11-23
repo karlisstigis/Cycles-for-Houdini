@@ -1,0 +1,153 @@
+From 664c765c6f35c7ef04e69c6c0f8dcc262a31ff99 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:37 +0100
+Subject: [PATCH] constant attribute sampling
+
+Locked-Patch: patches/0048-constant-attribute-sampling.patch
+Locked-Patch-SHA256: ea7531d51d214d6b7381f7d31d34b62caf7ae262c695f2910e5144e267348186
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_sampled_attribute_displacement_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 932755a8451e872ba32d58c82e905d8d728eb41c
+Previous-Patch: patches/0048-constant-attribute-sampling.patch
+Previous-Patch-SHA256: ea7531d51d214d6b7381f7d31d34b62caf7ae262c695f2910e5144e267348186
+Rationale: Weighted interpolation can alter the last bits of exactly constant attributes, breaking raw float identity even though all input components agree.
+Contract: constant attribute sampling
+Tests: tests/houdini_sampled_attribute_displacement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/geom/attribute.h b/src/kernel/geom/attribute.h
+index 93d79a6fd346ac898b338840494454337192ffb4..e1a43260ed8327523382b4cd1185f87e06035147 100644
+--- a/src/kernel/geom/attribute.h
++++ b/src/kernel/geom/attribute.h
+@@ -12,6 +12,41 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++/* Preserve exactly uniform field components through interpolation. Weighted sums
++ * can change their last bits even when all source values agree; float hashes
++ * (such as White Noise) then turn a constant per-copy field into visible noise.
++ * Keep the ordinary interpolation for varying components, without quantizing
++ * user values or changing interpolation of unrelated geometry quantities. */
++ccl_device_inline float attribute_select_constant(
++    const float a, const float b, const float c, const float uniform, const float varying)
++{
++  return a == b && a == c ? uniform : varying;
++}
++
++ccl_device_inline float2 attribute_select_constant(
++    const float2 a, const float2 b, const float2 c, const float2 uniform, const float2 varying)
++{
++  return make_float2(attribute_select_constant(a.x, b.x, c.x, uniform.x, varying.x),
++                     attribute_select_constant(a.y, b.y, c.y, uniform.y, varying.y));
++}
++
++ccl_device_inline float3 attribute_select_constant(
++    const float3 a, const float3 b, const float3 c, const float3 uniform, const float3 varying)
++{
++  return make_float3(attribute_select_constant(a.x, b.x, c.x, uniform.x, varying.x),
++                     attribute_select_constant(a.y, b.y, c.y, uniform.y, varying.y),
++                     attribute_select_constant(a.z, b.z, c.z, uniform.z, varying.z));
++}
++
++ccl_device_inline float4 attribute_select_constant(
++    const float4 a, const float4 b, const float4 c, const float4 uniform, const float4 varying)
++{
++  return make_float4(attribute_select_constant(a.x, b.x, c.x, uniform.x, varying.x),
++                     attribute_select_constant(a.y, b.y, c.y, uniform.y, varying.y),
++                     attribute_select_constant(a.z, b.z, c.z, uniform.z, varying.z),
++                     attribute_select_constant(a.w, b.w, c.w, uniform.w, varying.w));
++}
++
+ /* Attributes
+  *
+  * We support an arbitrary number of attributes on various mesh elements.
+@@ -282,7 +317,7 @@ ccl_device T attribute_data_fetch_motion(KernelGlobals kg,
+       const int second = next == centre ? 0 : next < centre ? next + 1 : next;
+       const T a = attribute_data_fetch<T>(kg, desc.element, desc.offset + index + first * stride);
+       const T b = attribute_data_fetch<T>(kg, desc.element, desc.offset + index + second * stride);
+-      return (1.0f - factor) * a + factor * b;
++      return attribute_select_constant(a, b, b, a, (1.0f - factor) * a + factor * b);
+     }
+   }
+   return attribute_data_fetch<T>(kg, desc.element, desc.offset + index);
+diff --git a/src/kernel/geom/curve.h b/src/kernel/geom/curve.h
+index 3e94c58ad8436f0863ae71685abc2f16a9fe8e41..c3731073a301f3393dead9acc0afafb1fc4a0542 100644
+--- a/src/kernel/geom/curve.h
++++ b/src/kernel/geom/curve.h
+@@ -63,10 +63,11 @@ ccl_device T curve_attribute(KernelGlobals kg,
+                            kernel_data_fetch(objects, sd->object).numverts : 0;
+     const BaseT f0 = attribute_data_fetch_motion<BaseT>(kg, sd, desc, k0, stride);
+     const BaseT f1 = attribute_data_fetch_motion<BaseT>(kg, sd, desc, k1, stride);
++    const BaseT value = attribute_select_constant(f0, f1, f1, f0, mix(f0, f1, sd->u));
+ 
+     if constexpr (is_dual_v<T>) {
+       T result;
+-      result.val = mix(f0, f1, sd->u);
++      result.val = value;
+ #  ifdef __RAY_DIFFERENTIALS__
+       result.dx = curve_attribute_dfdx(sd->du, f0, f1);
+       result.dy = curve_attribute_dfdy(sd->du, f0, f1);
+@@ -74,7 +75,7 @@ ccl_device T curve_attribute(KernelGlobals kg,
+       return result;
+     }
+     else {
+-      return mix(f0, f1, sd->u);
++      return value;
+     }
+   }
+ 
+diff --git a/src/kernel/geom/triangle.h b/src/kernel/geom/triangle.h
+index a3be9252f2257f7a267afaa04d59f47a799788ae..25f857f2994a9fdd1389b9ec833205ccf47cd681 100644
+--- a/src/kernel/geom/triangle.h
++++ b/src/kernel/geom/triangle.h
+@@ -274,7 +274,8 @@ ccl_device_inline T triangle_attribute_dfdx(const ccl_private differential &du,
+                                             const ccl_private T &f1,
+                                             const ccl_private T &f2)
+ {
+-  return du.dx * f1 + dv.dx * f2 - (du.dx + dv.dx) * f0;
++  return attribute_select_constant(
++      f0, f1, f2, make_zero<T>(), du.dx * f1 + dv.dx * f2 - (du.dx + dv.dx) * f0);
+ }
+ 
+ /* Partial derivative of f w.r.t. in x, namely ∂f/∂y, similarly computed as ∂f/∂x above. */
+@@ -285,7 +286,8 @@ ccl_device_inline T triangle_attribute_dfdy(const ccl_private differential &du,
+                                             const ccl_private T &f1,
+                                             const ccl_private T &f2)
+ {
+-  return du.dy * f1 + dv.dy * f2 - (du.dy + dv.dy) * f0;
++  return attribute_select_constant(
++      f0, f1, f2, make_zero<T>(), du.dy * f1 + dv.dy * f2 - (du.dy + dv.dy) * f0);
+ }
+ 
+ /* Read attributes on various triangle elements. T is the return type, which can be a plain type
+@@ -331,7 +333,8 @@ ccl_device T triangle_attribute(KernelGlobals kg,
+       attribute_data_fetch_3<BaseT>(kg, desc.element, desc.offset + first * stride, i0, i1, i2, f);
+       attribute_data_fetch_3<BaseT>(kg, desc.element, desc.offset + second * stride, i0, i1, i2, other);
+       for (int i = 0; i < 3; i++) {
+-        f[i] = (1.0f - factor) * f[i] + factor * other[i];
++        f[i] = attribute_select_constant(
++            f[i], other[i], other[i], f[i], (1.0f - factor) * f[i] + factor * other[i]);
+       }
+     }
+     else {
+@@ -340,7 +343,8 @@ ccl_device T triangle_attribute(KernelGlobals kg,
+ 
+     if constexpr (is_dual_v<T>) {
+       T result;
+-      result.val = triangle_interpolate(sd->u, sd->v, f[0], f[1], f[2]);
++      result.val = attribute_select_constant(
++          f[0], f[1], f[2], f[0], triangle_interpolate(sd->u, sd->v, f[0], f[1], f[2]));
+ #ifdef __RAY_DIFFERENTIALS__
+       result.dx = triangle_attribute_dfdx(sd->du, sd->dv, f[0], f[1], f[2]);
+       result.dy = triangle_attribute_dfdy(sd->du, sd->dv, f[0], f[1], f[2]);
+@@ -348,7 +352,8 @@ ccl_device T triangle_attribute(KernelGlobals kg,
+       return result;
+     }
+     else {
+-      return triangle_interpolate(sd->u, sd->v, f[0], f[1], f[2]);
++      return attribute_select_constant(
++          f[0], f[1], f[2], f[0], triangle_interpolate(sd->u, sd->v, f[0], f[1], f[2]));
+     }
+   }
+ 

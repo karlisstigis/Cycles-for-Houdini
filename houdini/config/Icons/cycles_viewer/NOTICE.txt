@@ -1,0 +1,1 @@
+Cycles for Houdini viewer icons. Original drawings made for this project, 2026, released by the project's author. Dedicated to the public domain under CC0 1.0 Universal; see LICENSE. SVG geometry is used as supplied; toolbar colors follow the active Houdini theme.

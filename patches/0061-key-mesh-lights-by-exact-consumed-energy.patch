@@ -1,0 +1,221 @@
+From dc4d69ff09c2963739789e269eacfbd558b1a8e9 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:39 +0100
+Subject: [PATCH] key mesh lights by exact consumed energy
+
+Locked-Patch: patches/0061-key-mesh-lights-by-exact-consumed-energy.patch
+Locked-Patch-SHA256: 494fd486c9a5f189720bc48c8d3459b05468427cba80a411d30ebe6553336f02
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 9ed35f82bcb40e98dce7d7d131c7b4216c9b507a
+Previous-Patch: patches/0061-key-mesh-lights-by-exact-consumed-energy.patch
+Previous-Patch-SHA256: 494fd486c9a5f189720bc48c8d3459b05468427cba80a411d30ebe6553336f02
+Rationale: Mesh-light cache keys should hash the exact scalar emission energy consumed by tree construction, avoiding chromaticity-only invalidation without missing energy edits.
+Contract: key mesh lights by exact consumed energy
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/light_tree.cpp b/src/scene/light_tree.cpp
+index 125c8d45af6d6d44f60d75f63253679c355b164f..64aaebd5dd609b287029e90af320d8b77d6ca268 100644
+--- a/src/scene/light_tree.cpp
++++ b/src/scene/light_tree.cpp
+@@ -4,11 +4,13 @@
+ 
+ #include "scene/light_tree.h"
+ #include "scene/light_tree_cache.h"
++#include "scene/light_tree_emission.h"
+ #include "scene/mesh.h"
+ #include "scene/object.h"
+ 
+ #include "util/math_fast.h"
+ #include "util/progress.h"
++#include "util/time.h"
+ #include <unordered_set>
+ #include <algorithm>
+ #include <cstdlib>
+@@ -128,7 +130,7 @@ LightTreeEmitter::LightTreeEmitter(Scene *scene,
+     const float area = triangle_area(vertices[0], vertices[1], vertices[2]);
+     /* Use absolute value of emission_estimate so lights with negative strength are properly
+      * supported in the light tree. */
+-    measure.energy = area * average(fabs(shader->emission_estimate));
++    measure.energy = area * light_tree_emission_energy(shader->emission_estimate);
+ 
+     /* NOTE: the original implementation used the bounding box centroid, but triangle centroid
+      * seems to work fine. */
+@@ -376,6 +378,27 @@ LightTreeEmitterView LightTree::emitter(const int index, LightTreeTriangleReader
+ 
+ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+ {
++  const char *profile_flag = std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
++  const bool profiling = profile_flag && std::strcmp(profile_flag, "1") == 0;
++  const double began = profiling ? time_dt() : 0;
++  double planned = 0, extracted = 0, local_built = 0, stored = 0, measured = 0;
++  bool completed = false;
++  const scoped_callback_timer phases([&](double elapsed) {
++    if (profiling) {
++      std::fprintf(stderr,
++                   "CH_LIGHT_TREE_BUILD_PHASES {\"complete\":%s,\"planning_seconds\":%.9f,"
++                   "\"extraction_seconds\":%.9f,\"local_build_seconds\":%.9f,"
++                   "\"snapshot_seconds\":%.9f,\"measure_seconds\":%.9f,"
++                   "\"outer_seconds\":%.9f,\"total_seconds\":%.9f}\n",
++                   completed && !progress_.get_cancel() ? "true" : "false",
++                   planned > 0 ? planned - began : 0,
++                   extracted > 0 ? extracted - planned : 0,
++                   local_built > 0 ? local_built - extracted : 0,
++                   stored > 0 ? stored - local_built : 0,
++                   measured > 0 ? measured - stored : 0,
++                   completed ? time_dt() - measured : 0, elapsed);
++    }
++  });
+   if (mesh_cache_) {
+     mesh_cache_->begin_build(num_triangles);
+   }
+@@ -383,6 +406,8 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+     if (mesh_cache_) {
+       mesh_cache_->prune([](Mesh *) { return false; });
+     }
++    planned = extracted = local_built = stored = measured = profiling ? time_dt() : 0;
++    completed = true;
+     return nullptr;
+   }
+ 
+@@ -430,11 +455,11 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   /* Cache entries are pinned by find() for this complete build. Dense storage
+    * contains only cold triangles and the small outer forest. Logical triangle
+    * indices retain the original discovery order across mixed hit/miss builds. */
+-  const char *profile = std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
+-  if (profile && std::strcmp(profile, "1") == 0) {
++  if (profiling) {
+     std::fprintf(stderr, "CH_LIGHT_TREE_SOURCE_PLAN {\"dense_emitters\":%zu,\"borrowed_triangles\":%zu}\n",
+                  dense_capacity, borrowed_triangles);
+   }
++  planned = profiling ? time_dt() : 0;
+   if (dense_capacity > size_t(std::numeric_limits<int>::max())) {
+     throw std::runtime_error("Dense mesh-light emitter storage exceeds the engine limit");
+   }
+@@ -466,6 +491,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   if (mesh_cache_) {
+     mesh_cache_->prune([&](Mesh *mesh) { return live_meshes.find(mesh) != live_meshes.end(); });
+   }
++  extracted = profiling ? time_dt() : 0;
+ 
+   /* Build a subtree for each unique mesh light. */
+   parallel_for_each(unique_mesh, [this](auto &map_it) {
+@@ -478,6 +504,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+     node->type |= LIGHT_TREE_INSTANCE;
+   });
+   task_pool.wait_work();
++  local_built = profiling ? time_dt() : 0;
+ 
+   if (progress_.get_cancel()) {
+     return nullptr;
+@@ -498,6 +525,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   }
+ 
+   /* Update measure. */
++  stored = profiling ? time_dt() : 0;
+   parallel_for_each(mesh_lights_, [&](LightTreeEmitter &emitter) {
+     Object *object = scene->objects[emitter.object_id];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+@@ -528,6 +556,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   for (LightTreeEmitter &emitter : mesh_lights_) {
+     emitter.root->measure = emitter.measure;
+   }
++  measured = profiling ? time_dt() : 0;
+ 
+   /* Could be different from `num_triangles` if only some triangles of an object are emissive. */
+   const int num_emissive_triangles = triangle_emitters_;
+@@ -571,6 +600,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+ 
+   std::move(distant_lights_.begin(), distant_lights_.end(), std::back_inserter(emitters_));
+ 
++  completed = true;
+   return root_.get();
+ }
+ 
+diff --git a/src/scene/light_tree_cache.cpp b/src/scene/light_tree_cache.cpp
+index 45ab45c1f6fb39a506f99c035e8e12b5cff674a6..e8158735dee4e42e461a57fd4faa90330cb8567a 100644
+--- a/src/scene/light_tree_cache.cpp
++++ b/src/scene/light_tree_cache.cpp
+@@ -1,6 +1,7 @@
+ /* SPDX-License-Identifier: Apache-2.0 */
+ #include "scene/light_tree_cache.h"
+ #include "scene/light_tree.h"
++#include "scene/light_tree_emission.h"
+ #include "scene/mesh.h"
+ #include "scene/object.h"
+ #include "scene/shader.h"
+@@ -185,14 +186,7 @@ size_t configured_budget()
+   return value;
+ }
+ 
+-struct ShaderKey {
+-  int sampling;
+-  float x, y, z;
+-  bool operator==(const ShaderKey &b) const
+-  {
+-    return sampling == b.sampling && x == b.x && y == b.y && z == b.z;
+-  }
+-};
++using ShaderKey = LightTreeEmissionKey;
+ 
+ struct MeshKey {
+   uint64_t revision, membership;
+@@ -220,8 +214,8 @@ MeshKey mesh_key(Scene *scene, Mesh *mesh, int object_id)
+   key.shaders.reserve(object->effective_shader_palette().size());
+   for (Node *node : object->effective_shader_palette()) {
+     const Shader *shader = static_cast<const Shader *>(node);
+-    key.shaders.push_back({int(shader->emission_sampling), shader->emission_estimate.x,
+-                           shader->emission_estimate.y, shader->emission_estimate.z});
++    key.shaders.push_back(light_tree_emission_key(int(shader->emission_sampling),
++                                                 shader->emission_estimate));
+   }
+   return key;
+ }
+diff --git a/src/scene/light_tree_emission.h b/src/scene/light_tree_emission.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..c4abcf0c62ba64423e17265d6d2c854bd8c3a379
+--- /dev/null
++++ b/src/scene/light_tree_emission.h
+@@ -0,0 +1,40 @@
++/* SPDX-License-Identifier: Apache-2.0 */
++#pragma once
++#include "util/math.h"
++#include <cstdint>
++#include <cstring>
++
++CCL_NAMESPACE_BEGIN
++
++/* Mesh-local construction consumes this scalar, not emission chromaticity.
++ * Keep the key and triangle measure on the exact same calculation. */
++inline float light_tree_emission_energy(const float3 &estimate)
++{
++  /* Cycles builds with fast FP. A rounded scalar must cross this boundary
++   * before the area multiply, rather than allowing it into the RGB sum. */
++  const volatile float energy = average(fabs(estimate));
++  return energy;
++}
++
++struct LightTreeEmissionKey {
++  int sampling;
++  uint32_t energy_bits;
++  LightTreeEmissionKey(const int sampling, const float energy) : sampling(sampling)
++  {
++    std::memcpy(&energy_bits, &energy, sizeof(energy_bits));
++  }
++  bool operator==(const LightTreeEmissionKey &other) const
++  {
++    /* Integer comparison retains exactness even with compiler finite-math
++     * assumptions. Non-finite values cannot certify reusable source data. */
++    return sampling == other.sampling && (energy_bits & 0x7f800000u) != 0x7f800000u &&
++           energy_bits == other.energy_bits;
++  }
++};
++
++inline LightTreeEmissionKey light_tree_emission_key(const int sampling, const float3 &estimate)
++{
++  return {sampling, light_tree_emission_energy(estimate)};
++}
++
++CCL_NAMESPACE_END

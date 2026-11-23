@@ -1,0 +1,231 @@
+From f419ee3d017aeab010969ed1fcdb9febab9407d9 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:33 +0100
+Subject: [PATCH] sampled mesh attributes
+
+Locked-Patch: patches/0028-sampled-mesh-attributes.patch
+Locked-Patch-SHA256: e234f4b6819ece287875886dc8191c7dbfa7febf0a84cc67e73ec2822a36cba8
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_sampled_attribute_displacement_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 4fd41984d25829272a01e175748789e14e2d5fa7
+Previous-Patch: patches/0028-sampled-mesh-attributes.patch
+Previous-Patch-SHA256: e234f4b6819ece287875886dc8191c7dbfa7febf0a84cc67e73ec2822a36cba8
+Rationale: Sampled mesh fields extend attribute storage/interpolation over the shutter and require matching host sample layout.
+Contract: sampled mesh attributes
+Tests: tests/houdini_sampled_attribute_displacement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/geom/triangle.h b/src/kernel/geom/triangle.h
+index fd0cc963274efe238e63efbbbe360f27fc066774..a3be9252f2257f7a267afaa04d59f47a799788ae 100644
+--- a/src/kernel/geom/triangle.h
++++ b/src/kernel/geom/triangle.h
+@@ -315,7 +315,28 @@ ccl_device T triangle_attribute(KernelGlobals kg,
+     }
+ 
+     BaseT f[3];
+-    attribute_data_fetch_3<BaseT>(kg, desc.element, desc.offset, i0, i1, i2, f);
++    const int steps = kernel_data_fetch(objects, sd->object).num_geom_steps;
++    if ((desc.element & ATTR_ELEMENT_IS_MOTION) && steps > 1 && sd->time >= 0.0f) {
++      const float time = saturatef(sd->time) * (steps - 1);
++      const int step = min(int(time), steps - 2);
++      const float factor = time - step;
++      const int centre = (steps - 1) / 2;
++      const int first = step == centre ? 0 : step < centre ? step + 1 : step;
++      const int next = step + 1;
++      const int second = next == centre ? 0 : next < centre ? next + 1 : next;
++      const auto object = kernel_data_fetch(objects, sd->object);
++      const int stride = (desc.element & ATTR_ELEMENT_VERTEX) ? object.numverts :
++                                                               object.numprims * 3;
++      BaseT other[3];
++      attribute_data_fetch_3<BaseT>(kg, desc.element, desc.offset + first * stride, i0, i1, i2, f);
++      attribute_data_fetch_3<BaseT>(kg, desc.element, desc.offset + second * stride, i0, i1, i2, other);
++      for (int i = 0; i < 3; i++) {
++        f[i] = (1.0f - factor) * f[i] + factor * other[i];
++      }
++    }
++    else {
++      attribute_data_fetch_3<BaseT>(kg, desc.element, desc.offset, i0, i1, i2, f);
++    }
+ 
+     if constexpr (is_dual_v<T>) {
+       T result;
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index 142216c578da64cb34bfa42131679742697fe04c..fc664a81fe251e5953f10f2fd03f2d3615bcd0ab 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -361,6 +361,14 @@ class AttributeTableBuilder {
+ 
+     /* Store element and type. */
+     desc.element = mattr->element;
++    /* Positions and normals have dedicated motion readers. Other sampled mesh
++     * attributes are read through triangle_attribute at the shader's ray time. */
++    if (geom->is_mesh() && mattr->has_motion() &&
++        (mattr->element & (ATTR_ELEMENT_VERTEX | ATTR_ELEMENT_CORNER)) &&
++        mattr->std != ATTR_STD_POSITION && mattr->std != ATTR_STD_VERTEX_NORMAL &&
++        mattr->std != ATTR_STD_CORNER_NORMAL) {
++      desc.element = AttributeElement(desc.element | ATTR_ELEMENT_IS_MOTION);
++    }
+     type = mattr->type;
+ 
+     /* Store attribute data in arrays, including possible motion steps. */
+diff --git a/src/subd/interpolation.cpp b/src/subd/interpolation.cpp
+index 5aacc71863b34d24df0c2fe77c3cda13096cb664..d3deb98aae176239398608ea193c7c32afdd78c6 100644
+--- a/src/subd/interpolation.cpp
++++ b/src/subd/interpolation.cpp
+@@ -456,7 +456,8 @@ void SubdAttributeInterpolation::setup_attribute_corner_linear(const Attribute &
+ template<typename T>
+ void SubdAttributeInterpolation::setup_attribute_corner_smooth(Attribute &mesh_attr,
+                                                                const int channel,
+-                                                               const vector<char> &merged_values)
++                                                               const vector<char> &merged_values,
++                                                               const int attribute_step)
+ {
+   SubdAttribute attr;
+ 
+@@ -497,7 +498,7 @@ void SubdAttributeInterpolation::setup_attribute_corner_smooth(Attribute &mesh_a
+ 
+   /* Evaluate patches at limit. */
+   const typename T::AccumType *subd_data = refined_data;
+-  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data_for_write());
++  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data_for_write(attribute_step));
+ 
+   assert(mesh_data != nullptr);
+ 
+@@ -624,15 +625,19 @@ void SubdAttributeInterpolation::setup_attribute_type(const Attribute &subd_attr
+     case ATTR_ELEMENT_CORNER_NORMAL: {
+ #ifdef WITH_OPENSUBDIV
+       if (osd_mesh.use_smooth_fvar(subd_attr)) {
++        bool interpolated = false;
+         for (const auto &merged_fvar : osd_mesh.merged_fvars) {
+           if (&merged_fvar.attr == &subd_attr) {
+             if constexpr (std::is_same_v<typename T::Type, float2> ||
+                           std::is_same_v<typename T::Type, packed_float3>) {
+-              setup_attribute_corner_smooth<T>(mesh_attr, merged_fvar.channel, merged_fvar.values);
+-              return;
++              setup_attribute_corner_smooth<T>(mesh_attr, merged_fvar.channel, merged_fvar.values, merged_fvar.step);
++              interpolated = true;
+             }
+           }
+         }
++        if (interpolated) {
++          return;
++        }
+       }
+ #endif
+       setup_attribute_corner_linear<T>(subd_attr, mesh_attr);
+diff --git a/src/subd/interpolation.h b/src/subd/interpolation.h
+index a37dbe141c79bd757c236c3eb48ba31a396a2d7c..6b18a6d49bcf6f7795c1a1d4270d57fdadb51ebb 100644
+--- a/src/subd/interpolation.h
++++ b/src/subd/interpolation.h
+@@ -69,7 +69,8 @@ class SubdAttributeInterpolation {
+   template<typename T>
+   void setup_attribute_corner_smooth(Attribute &mesh_attr,
+                                      const int channel,
+-                                     const vector<char> &merged_values);
++                                     const vector<char> &merged_values,
++                                     const int attribute_step);
+ #endif
+ 
+   template<typename T> void setup_attribute_face(const Attribute &subd_attr, Attribute &mesh_attr);
+diff --git a/src/subd/osd.cpp b/src/subd/osd.cpp
+index d5a7543130361e355366b6c1112723cb5ad87a23..0404e1a2658cb2236540ae1d43a31bb555556ae3 100644
+--- a/src/subd/osd.cpp
++++ b/src/subd/osd.cpp
+@@ -137,7 +137,7 @@ static void merge_smooth_fvar(const Mesh &mesh,
+   const int num_base_faces = mesh.get_num_subd_faces();
+   const int *subd_face_corners = mesh.get_subd_face_corners().data();
+ 
+-  const T *values = reinterpret_cast<const T *>(subd_attr.data());
++  const T *values = reinterpret_cast<const T *>(subd_attr.data(merged_fvar.step));
+ 
+   merged_fvar.values.resize(num_base_verts * sizeof(T));
+ 
+@@ -198,42 +198,45 @@ bool TopologyRefinerFactory<OsdMesh>::assignFaceVaryingTopology(TopologyRefiner
+       continue;
+     }
+ 
+-    // Created merged FVar, for use in subdivide_attribute_corner_smooth.
+-    OsdMesh::MergedFVar merged_fvar{subd_attr};
++    // Each stored shutter state owns its fvar channel: seams can change without
++    // changing polygon correspondence or silently reusing centre-only values.
++    for (int step = 0; step < subd_attr.num_motion_steps(); step++) {
++      OsdMesh::MergedFVar merged_fvar{subd_attr, step};
+ 
+-    vector<int> merged_next;
+-    vector<int> merged_face_corners;
++      vector<int> merged_next;
++      vector<int> merged_face_corners;
+ 
+-    if (subd_attr.element == ATTR_ELEMENT_CORNER_BYTE) {
+-      merge_smooth_fvar<uchar4>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
+-    }
+-    else if (Attribute::same_storage(subd_attr.type, TypeFloat)) {
+-      merge_smooth_fvar<float>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
+-    }
+-    else if (Attribute::same_storage(subd_attr.type, TypeFloat2)) {
+-      merge_smooth_fvar<float2>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
+-    }
+-    else if (Attribute::same_storage(subd_attr.type, TypeVector)) {
+-      merge_smooth_fvar<packed_float3>(
+-          mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
+-    }
+-    else if (Attribute::same_storage(subd_attr.type, TypeFloat4)) {
+-      merge_smooth_fvar<float4>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
+-    }
++      if (subd_attr.element == ATTR_ELEMENT_CORNER_BYTE) {
++        merge_smooth_fvar<uchar4>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
++      }
++      else if (Attribute::same_storage(subd_attr.type, TypeFloat)) {
++        merge_smooth_fvar<float>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
++      }
++      else if (Attribute::same_storage(subd_attr.type, TypeFloat2)) {
++        merge_smooth_fvar<float2>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
++      }
++      else if (Attribute::same_storage(subd_attr.type, TypeVector)) {
++        merge_smooth_fvar<packed_float3>(
++            mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
++      }
++      else if (Attribute::same_storage(subd_attr.type, TypeFloat4)) {
++        merge_smooth_fvar<float4>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
++      }
+ 
+-    // Create FVar channel and topology for OpenUSD.
+-    merged_fvar.channel = createBaseFVarChannel(refiner, merged_next.size());
++      // Create FVar channel and topology for OpenUSD.
++      merged_fvar.channel = createBaseFVarChannel(refiner, merged_next.size());
+ 
+-    const int num_base_faces = mesh.get_num_subd_faces();
+-    for (int f = 0, i = 0; f < num_base_faces; f++) {
+-      Far::IndexArray dst_face_uvs = getBaseFaceFVarValues(refiner, f, merged_fvar.channel);
+-      const int num_corners = dst_face_uvs.size();
+-      for (int corner = 0; corner < num_corners; corner++) {
+-        dst_face_uvs[corner] = merged_face_corners[i++];
++      const int num_base_faces = mesh.get_num_subd_faces();
++      for (int f = 0, i = 0; f < num_base_faces; f++) {
++        Far::IndexArray dst_face_uvs = getBaseFaceFVarValues(refiner, f, merged_fvar.channel);
++        const int num_corners = dst_face_uvs.size();
++        for (int corner = 0; corner < num_corners; corner++) {
++          dst_face_uvs[corner] = merged_face_corners[i++];
++        }
+       }
+-    }
+ 
+-    merged_fvars.push_back(std::move(merged_fvar));
++      merged_fvars.push_back(std::move(merged_fvar));
++    }
+   }
+ 
+   return true;
+diff --git a/src/subd/osd.h b/src/subd/osd.h
+index 68b385a32f671505ab84a50a0fb992fb4c05983c..a9eae04976b13ca10dae8f414dfd221b54873665 100644
+--- a/src/subd/osd.h
++++ b/src/subd/osd.h
+@@ -64,6 +64,7 @@ class OsdMesh {
+    * merged attribute values are stored here, in a generic buffer used for different data types. */
+   struct MergedFVar {
+     const Attribute &attr;
++    int step = 0;
+     int channel = -1;
+     vector<char> values;
+   };

@@ -1,0 +1,10 @@
+{
+  "about": "Who made this build. A copy you build and share must not look like the official Cycles for Houdini: put your own build_name and publisher here before you share an installer. An empty build_id is filled in on first use with an id of your own; keep it afterwards, so that your new installers update your earlier ones. With dlss set to on (the default) an empty dlss_project_id is filled in on first use with a DLSS project id of your own; off builds without DLSS. Changes to this file do not count as local source changes. See docs/dev/community-builds.md. The official release route (scripts/build-release.ps1) does not read this file.",
+  "schema_version": 1,
+  "build_id": "",
+  "build_name": "Community build",
+  "publisher": "Unnamed community builder",
+  "publisher_url": "",
+  "dlss": "on",
+  "dlss_project_id": ""
+}

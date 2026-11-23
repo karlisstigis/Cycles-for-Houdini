@@ -1,0 +1,22 @@
+GPU programs made with NVIDIA's CUDA compiler
+
+The GPU programs in this package (host/resources/lib/kernel_sm_*.cubin.zst,
+kernel_compute_*.ptx.zst and kernel_optix*.ptx.zst) were compiled from this
+project's own sources (the Cycles engine with this project's patches) with
+NVIDIA's CUDA compiler (nvcc) and the CUDA headers of the NVIDIA CUDA Toolkit
+12.8. Device code from the CUDA headers and from NVIDIA's device math library
+(libdevice) can be compiled into them.
+
+No other file of the CUDA Toolkit is in this package: no CUDA runtime library,
+no compiler, no header. The GPU programs are loaded through the NVIDIA display
+driver that is installed on the computer.
+
+The CUDA Toolkit is used under the NVIDIA CUDA Toolkit End User License
+Agreement: https://docs.nvidia.com/cuda/eula/index.html
+(read on 22 November 2026; the page names version 13.4, "Last updated:
+January 26, 2026"). Its text is not included here: the agreement does not say
+that its text may be passed on. Section 2.1 of the agreement: the SDK "is
+licensed for you to develop applications only for use in systems with NVIDIA
+GPUs".
+
+NVIDIA and CUDA are trademarks of NVIDIA Corporation.

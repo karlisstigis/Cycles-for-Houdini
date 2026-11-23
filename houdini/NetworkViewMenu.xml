@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Host package (blend-import.md: Host menus): a "Cycles" menu in the network editor's menu bar,
+     beside the SideFX Labs menu (same insertBefore help_menu placement). Houdini 22
+     never evaluates a <context> on a menu-bar entry, so the menu itself is in every
+     network editor; each item's context checks that the Blender bridge component is
+     enabled and that the network shown suits it (/mat-like VOP networks, /obj, SOP
+     networks). Item contexts are one-line Python expressions (no `return`), evaluated
+     each time the menu opens, with the network editor as kwargs['editor'].
+     "Update All Blender Files" (blend_file_node) goes first in the Blender files group. -->
+<mainMenu>
+  <menuBar>
+    <subMenu id="cycles_network_view_menu">
+      <label>Cycles</label>
+      <modifyItem>
+        <insertBefore>help_menu</insertBefore>
+      </modifyItem>
+      <scriptItem id="cycles_network_collect_selected">
+        <label>Collect Textures for Selected</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).network_can_collect_selected(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.collect_selected(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_network_collect_all">
+        <label>Collect Textures for All</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).in_collect_network(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.collect_all(kwargs)]]></scriptCode>
+      </scriptItem>
+      <separatorItem/>
+      <scriptItem id="cycles_network_update_all_blender">
+        <label>Update All Blender Files</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.blender.blend_file_node", fromlist=["blend_file_node"]).can_update_all(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.blender import blend_file_node
+blend_file_node.update_all(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_network_relink">
+        <label>Relink Blender Assets...</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).in_asset_network(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.relink_assets(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_network_move_into_project">
+        <label>Move Imported Assets into Project</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).in_asset_network(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.move_into_project(kwargs)]]></scriptCode>
+      </scriptItem>
+      <separatorItem/>
+      <scriptItem id="cycles_network_append_linked">
+        <label>Make Selected Editable</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).network_has_linked(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.append_selected(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_network_reload_selected">
+        <label>Reload Selected from Library</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).network_has_linked(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.reload_selected(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_network_reload_all">
+        <label>Reload All Linked Assets</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).network_any_linked(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.reload_all(kwargs)]]></scriptCode>
+      </scriptItem>
+    </subMenu>
+  </menuBar>
+</mainMenu>

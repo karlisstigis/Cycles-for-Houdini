@@ -1,0 +1,170 @@
+From da531bfc65b81b8d3f3ce58d26771cb3e8b5e9e2 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:30 +0100
+Subject: [PATCH] persistent scene sync
+
+Locked-Patch: patches/0014-persistent-scene-sync.patch
+Locked-Patch-SHA256: 040f8e4e431c1c76316ce179d8a46defdf8c14276bbf81fa792e552033df6562
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_unchanged_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: d45574f0836b3fd958cf962eb701e66f4aabfae4
+Previous-Patch: patches/0014-persistent-scene-sync.patch
+Previous-Patch-SHA256: 040f8e4e431c1c76316ce179d8a46defdf8c14276bbf81fa792e552033df6562
+Rationale: Serialized render-thread scene transactions retain a live session across host edits and deliberately run after cancellation; this is a new scheduling API.
+Contract: persistent scene sync
+Tests: tests/houdini_unchanged_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index 26b4501d8896676508e95df71e19af3c24b284bc..1f4f56229938154326bdc307136980e78b109368 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -3,6 +3,8 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include <cstring>
++#include <future>
++#include <stdexcept>
+ 
+ #include "device/cpu/device.h"
+ #include "device/device.h"
+@@ -160,11 +162,65 @@ bool Session::ready_to_reset()
+   return path_trace_->ready_to_reset();
+ }
+ 
++void Session::synchronize_scene(std::function<void()> transaction)
++{
++  if (!transaction) {
++    throw std::invalid_argument("Scene synchronization requires a transaction");
++  }
++  auto completion = std::make_shared<std::promise<void>>();
++  std::future<void> finished = completion->get_future();
++  {
++    const thread_scoped_lock lock(session_thread_mutex_);
++    if (pending_scene_sync_ || session_thread_state_ == SESSION_THREAD_END) {
++      throw std::logic_error("Scene synchronization controller is busy or closing");
++    }
++    scene_sync_requested_.store(true);
++    pending_scene_sync_ = [this, transaction = std::move(transaction), completion]() {
++      scene_sync_failed_ = false;
++      try {
++        transaction();
++        completion->set_value();
++      }
++      catch (...) {
++        scene_sync_failed_ = true;
++        progress.set_error("Scene synchronization transaction failed");
++        progress.set_cancel("Scene synchronization transaction failed");
++        completion->set_exception(std::current_exception());
++      }
++    };
++  }
++  {
++    const thread_scoped_lock pause_lock(pause_mutex_);
++    new_work_added_ = true;
++  }
++  pause_cond_.notify_all();
++  start();
++  finished.get();
++}
++
++void Session::run_pending_scene_sync()
++{
++  std::function<void()> transaction;
++  {
++    const thread_scoped_lock lock(session_thread_mutex_);
++    transaction = std::move(pending_scene_sync_);
++    pending_scene_sync_ = nullptr;
++    scene_sync_requested_.store(false);
++  }
++  if (transaction) {
++    transaction();
++  }
++}
++
+ void Session::run_main_render_loop()
+ {
+   path_trace_->zero_display();
+ 
+   while (true) {
++    run_pending_scene_sync();
++    if (scene_sync_failed_) {
++      break;
++    }
+     RenderWork render_work = run_update_for_next_iteration();
+ 
+     const bool did_cancel = progress.get_cancel();
+@@ -254,13 +310,22 @@ void Session::thread_run()
+       }
+     }
+ 
++    /* Run transactions even after explicit cancellation, before thread_render checks
++     * the progress flag. A transaction can reset it to restart this persistent session. */
++    run_pending_scene_sync();
++
+     /* Execute a render. */
+     thread_render();
+ 
+     /* Go back from rendering to waiting. */
+     {
+       const thread_scoped_lock session_thread_lock(session_thread_mutex_);
+-      if (session_thread_state_ == SESSION_THREAD_RENDER) {
++      if (pending_scene_sync_) {
++        /* A request can arrive while a background render is returning. Do not strand
++         * its caller in WAIT after start() has already observed RENDER. */
++        session_thread_state_ = SESSION_THREAD_RENDER;
++      }
++      else if (session_thread_state_ == SESSION_THREAD_RENDER) {
+         session_thread_state_ = SESSION_THREAD_WAIT;
+       }
+     }
+@@ -459,7 +524,7 @@ bool Session::run_wait_for_work(const RenderWork &render_work)
+   while (!progress.get_cancel()) {
+     const scoped_timer pause_timer;
+ 
+-    if (!pause_ && (render_work || new_work_added_ || delayed_reset_.do_reset)) {
++    if (scene_sync_requested_.load() || (!pause_ && (render_work || new_work_added_ || delayed_reset_.do_reset))) {
+       break;
+     }
+ 
+diff --git a/src/session/session.h b/src/session/session.h
+index f86f1264620110c7cf4d71c166c48557abb46a53..76b5f5d9aa3b54c49662722429654a5717f12cdb 100644
+--- a/src/session/session.h
++++ b/src/session/session.h
+@@ -4,6 +4,8 @@
+ 
+ #pragma once
+ 
++#include <atomic>
++
+ #include <functional>
+ 
+ #include "device/device.h"
+@@ -140,6 +142,13 @@ class Session {
+   bool ready_to_reset();
+   void reset(const SessionParams &session_params, const BufferParams &buffer_params);
+ 
++  /* Execute an owned scene transaction between render iterations, with no render work or
++   * image callbacks in flight. The caller waits; interactive integrations should call this
++   * from their control worker, never their UI thread. Does not cancel the session loop.
++   * Transactions must not call cancel(), wait(), or synchronize_scene() recursively.
++   * A throwing transaction stops rendering; the integration must recover or retire its scene. */
++  void synchronize_scene(std::function<void()> transaction);
++
+   void set_pause(bool pause);
+   void set_navigating(bool navigating);
+ 
+@@ -168,6 +177,12 @@ class Session {
+   void process_full_buffer_from_disk(string_view filename);
+ 
+  protected:
++  /* Guarded by session_thread_mutex_. A session has one serialized host controller. */
++  std::function<void()> pending_scene_sync_;
++  std::atomic<bool> scene_sync_requested_{false};
++  bool scene_sync_failed_ = false; /* Accessed only by the render thread. */
++  void run_pending_scene_sync();
++
+   struct DelayedReset {
+     thread_mutex mutex;
+     bool do_reset;

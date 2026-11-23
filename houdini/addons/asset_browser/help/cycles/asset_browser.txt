@@ -1,0 +1,22 @@
+= Cycles Asset Browser =
+
+Browse Blender asset libraries as they are on disk and bring their objects, collections and materials into Houdini. The browser is an optional Setup component ("Asset browser", under the Blender .blend asset bridge) and needs a separate Blender installation.
+
+Open it with Asset Browser on the Cycles Tools shelf or in the Cycles main menu, or from New Pane Tab Type > Cycles Asset Browser.
+
+== Libraries ==
+
+Add a library folder in the library menu, or import the asset libraries configured in your Blender preferences. The browser reads .blend files through Blender in the background and keeps thumbnails and metadata in its own cache. Library folders are never written to.
+
+Catalogs from blender_assets.cats.txt appear on the left, with "All" and "Unassigned". Search matches names and tags. T and N show or hide the side panels.
+
+== Importing ==
+
+* Objects and collections are imported as a geometry object with a Cycles Blender Reference SOP. References import render meshes only.
+* Materials are translated into /mat. A material either translates completely or the browser shows why it cannot. Textures are copied to $HIP/tex/blender_assets/<library> or to the shared cache, as set in the panel.
+* Assign to Selected Objects imports a material and assigns it.
+* Each import is one undo step.
+
+Drag and drop into Houdini panes is an experimental setting and is off by default.
+
+Open Blend File opens the source file in Blender.

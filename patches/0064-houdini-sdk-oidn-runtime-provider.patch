@@ -1,0 +1,41 @@
+From f821381204240cdd14cb563eb8aebcf948892fa7 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:40 +0100
+Subject: [PATCH] houdini sdk oidn runtime provider
+
+Locked-Patch: patches/0064-houdini-sdk-oidn-runtime-provider.patch
+Locked-Patch-SHA256: 4c6dedb4ca96d6ca2ecfaad9bcfdd2296cb3ea7b93ac4b40475a8b199c3b7dcd
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/sdk_dependency_policy_test.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: db9390e7c3575c16c854638d2600e26ceca7a84d
+Previous-Patch: patches/0064-houdini-sdk-oidn-runtime-provider.patch
+Previous-Patch-SHA256: 4c6dedb4ca96d6ca2ecfaad9bcfdd2296cb3ea7b93ac4b40475a8b199c3b7dcd
+Rationale: OIDN comes from the exact Houdini SDK runtime provider rather than Blender's dependency package; its ABI and DLL list are integration policy.
+Contract: houdini sdk oidn runtime provider
+Tests: tests/sdk_dependency_policy_test.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/cmake/external_libs.cmake b/src/cmake/external_libs.cmake
+index 684cbf5e83d851f9bcc1710c680ce3e216b910ac..93904f2fe365747e98b6232e3940918e93ed1def 100644
+--- a/src/cmake/external_libs.cmake
++++ b/src/cmake/external_libs.cmake
+@@ -585,10 +585,14 @@ if(WITH_CYCLES_OPENIMAGEDENOISE)
+   set(WITH_OPENIMAGEDENOISE ON)
+   find_package(OpenImageDenoise REQUIRED)
+ 
+-  if(WIN32)
+-    add_bundled_libraries(openimagedenoise/bin)
+-  else()
+-    add_bundled_libraries(openimagedenoise/lib)
++  # The native Houdini integration uses its licensed host SDK's matching
++  # headers/import library/runtime. Never install competing vendor DLLs.
++  if(NOT CH_OIDN_PROVIDER STREQUAL "houdini-sdk")
++    if(WIN32)
++      add_bundled_libraries(openimagedenoise/bin)
++    else()
++      add_bundled_libraries(openimagedenoise/lib)
++    endif()
+   endif()
+ endif()
+ ###########################################################################

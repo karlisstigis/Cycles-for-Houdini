@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Cycles main menu, beside SideFX Labs (Labs 22.0 uses the same
+     modifyItem/insertBefore help_menu placement; insertAfter labs_menu does not
+     work because Labs' menu file loads later). Renderer actions stay on the
+     Cycles Tools shelf; this menu only opens windows. The optional Asset browser
+     add-on adds its own item to this menu from addons/asset_browser.
+     The Blender importer also adds File > Import > Blender (.blend). Houdini
+     evaluates main-menu contexts once at startup; the one-line expression hides
+     both importer items when the Blender bridge component is disabled. The
+     Import submenu id (import_files) and the h.import_gltf anchor come from
+     Houdini 22.0's $HFS/houdini/MainMenuCommon.xml and match
+     cycles_houdini.blender.blend_import_dialog.FILE_IMPORT_MENU_ID / FILE_IMPORT_INSERT_AFTER. -->
+<mainMenu>
+  <menuBar>
+    <subMenu id="cycles_main_menu">
+      <label>Cycles</label>
+      <modifyItem>
+        <insertBefore>help_menu</insertBefore>
+      </modifyItem>
+      <scriptItem id="cycles_main_render_view">
+        <label>Render View</label>
+        <scriptCode><![CDATA[from cycles_houdini.viewer import menu_actions
+menu_actions.open_render_view()]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_main_import_blend">
+        <label>Import Blender (.blend)...</label>
+        <context>
+          <expression>__import__("cycles_houdini.core.blender_bridge", fromlist=["enabled"]).enabled()</expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.blender import blend_import_dialog
+blend_import_dialog.open_dialog()]]></scriptCode>
+      </scriptItem>
+    </subMenu>
+  </menuBar>
+  <menu>
+    <addScriptItem id="cycles_import_blend">
+      <parent>import_files</parent>
+      <insertAfter>h.import_gltf</insertAfter>
+      <label>Blender (.blend)...</label>
+      <context>
+        <expression>__import__("cycles_houdini.core.blender_bridge", fromlist=["enabled"]).enabled()</expression>
+      </context>
+      <scriptCode><![CDATA[from cycles_houdini.blender import blend_import_dialog
+blend_import_dialog.open_dialog()]]></scriptCode>
+    </addScriptItem>
+  </menu>
+</mainMenu>

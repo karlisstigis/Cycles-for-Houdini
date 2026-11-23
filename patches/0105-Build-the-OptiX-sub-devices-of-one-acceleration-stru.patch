@@ -1,0 +1,213 @@
+From a849d8c2047b224de90974b2ab68e5c5c794d75f Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Tue, 17 Nov 2026 08:32:57 +0000
+Subject: [PATCH] Build the OptiX sub-devices of one acceleration structure in
+ parallel
+
+MultiDevice::build_bvh built every acceleration structure on one
+sub-device after the other: for a large curve geometry or the scene
+level structure of a heavily instanced scene the second GPU only started
+when the first had finished.
+
+For the MULTI_OPTIX layout the sub-devices of a top level structure and
+of a geometry with at least 65,536 primitives now build at the same time on
+an isolated parallel loop. Smaller geometries already build in parallel
+with each other and keep the sequential loop: a parallel loop per small
+geometry cost more than it saved with 20,000 objects. Each uses only its own device, memory and build
+lock; the shared curve build input is still computed once, by whichever
+sub-device locks it first, under its own mutex. The sequential loop swapped
+every geometry's BVH pointer to the sub-device BVH so that a top level build
+found its device's bottom level structures through it. The parallel path
+leaves the geometry pointers alone and sets the sub-device index on the
+sub-device BVH instead; the OptiX top level build uses it to pick the bottom
+level structure of its own device from the geometry's multi-device BVH.
+Other layouts keep the sequential loop with the pointer swap unchanged. The
+environment variable CYCLES_OPTIX_SERIAL_SUBDEVICE_BVH builds one
+sub-device after the other as before, as a reference.
+
+Rationale: Sub-devices of one multi-device build are independent, so building them one after the other only added the second device's time to every large or scene level build.
+Contract: Every sub-device builds from the same inputs with the same calls as before and a top level build references the same bottom level structures; other layouts and the reference switch keep the sequential loop with the geometry pointer swap.
+Tests: tests/houdini_curve_subdivisions_smoke.py
+---
+ src/bvh/bvh.h                    |  4 ++
+ src/device/multi/device.cpp      | 87 ++++++++++++++++++++++++++++++++
+ src/device/optix/device_impl.cpp | 22 +++++++-
+ 3 files changed, 112 insertions(+), 1 deletion(-)
+
+diff --git a/src/bvh/bvh.h b/src/bvh/bvh.h
+index 60b1d704ab53e3872a753c6f318f364aacc94049..43583074d106c05abba1d401ac3bf31485f60010 100644
+--- a/src/bvh/bvh.h
++++ b/src/bvh/bvh.h
+@@ -89,6 +89,10 @@ class BVH {
+   /* Non-owning; set only while MultiDevice::build_bvh builds this sub-device BVH. Devices that
+    * do not share build data ignore it. */
+   BVHSharedBuild *shared_build = nullptr;
++  /* Index of this sub-device BVH in its BVHMulti while MultiDevice::build_bvh builds the
++   * sub-devices in parallel, -1 otherwise. A top level build then finds the bottom level
++   * structures of its own device through the geometry's BVHMulti instead of a swapped pointer. */
++  int multi_sub_index = -1;
+ 
+   static unique_ptr<BVH> create(const BVHParams &params,
+                                 const vector<Geometry *> &geometry,
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index 5a2af273d498095ceb278ca0efea4db775373b24..a67c840d1c5e923b05a98aa8f1f2d8f11e0630bb 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -15,9 +15,13 @@
+ #include "bvh/multi.h"
+ 
+ #include "scene/geometry.h"
++#include "scene/hair.h"
++#include "scene/mesh.h"
++#include "scene/pointcloud.h"
+ 
+ #include "util/list.h"
+ #include "util/map.h"
++#include "util/tbb.h"
+ #include "util/types_image.h"
+ 
+ CCL_NAMESPACE_BEGIN
+@@ -234,6 +238,24 @@ class MultiDevice : public Device {
+     }
+   }
+ 
++  /* Primitives a bottom level build of these geometries covers. */
++  static size_t bvh_primitive_count(const BVH *bvh)
++  {
++    size_t count = 0;
++    for (const Geometry *geom : bvh->geometry) {
++      if (geom->is_mesh() || geom->is_volume()) {
++        count += static_cast<const Mesh *>(geom)->num_triangles();
++      }
++      else if (geom->is_hair()) {
++        count += static_cast<const Hair *>(geom)->num_segments();
++      }
++      else if (geom->is_pointcloud()) {
++        count += static_cast<const PointCloud *>(geom)->num_points();
++      }
++    }
++    return count;
++  }
++
+   void build_bvh(BVH *bvh, Progress &progress, bool refit) override
+   {
+     /* Try to build and share a single acceleration structure, if possible */
+@@ -254,6 +276,31 @@ class MultiDevice : public Device {
+     BVHMulti *const bvh_multi = static_cast<BVHMulti *>(bvh);
+     bvh_multi->sub_bvhs.resize(devices.size());
+ 
++    /* OptiX sub-devices of a top level structure or of a large geometry build at the same time:
++     * each uses only its own device, memory and build lock, the shared build input is computed
++     * once under its own mutex, and a top level build finds its device's bottom level structures
++     * through multi_sub_index, so geometry BVH pointers are not swapped. Small geometries keep
++     * one sub-device after the other: they already build in parallel with each other, and a
++     * parallel loop per geometry costs more than their builds (the threshold decides threading
++     * only, never results). CYCLES_OPTIX_SERIAL_SUBDEVICE_BVH builds one sub-device after the
++     * other everywhere as before, as a reference. Other layouts keep the sequential loop below. */
++    static const bool serial_sub_devices = getenv("CYCLES_OPTIX_SERIAL_SUBDEVICE_BVH") != nullptr;
++    constexpr size_t parallel_sub_device_min_primitives = 65536;
++    if (bvh->params.bvh_layout == BVH_LAYOUT_MULTI_OPTIX && !serial_sub_devices &&
++        devices.size() > 1 &&
++        (bvh->params.top_level || bvh_primitive_count(bvh) >= parallel_sub_device_min_primitives))
++    {
++      build_optix_sub_bvhs_parallel(bvh_multi, progress, refit);
++      return;
++    }
++
++    build_sub_bvhs_serial(bvh, bvh_multi, progress, refit);
++  }
++
++  /* One sub-device after the other, with the geometry BVH pointers swapped to each sub-device
++   * BVH while it builds. */
++  void build_sub_bvhs_serial(BVH *bvh, BVHMulti *bvh_multi, Progress &progress, bool refit)
++  {
+     /* Temporarily move ownership of BVH on geometry to this vector, to swap
+      * it for each sub device. Need to find a better way to handle this. */
+     vector<unique_ptr<BVH>> geom_bvhs;
+@@ -340,6 +387,46 @@ class MultiDevice : public Device {
+     }
+   }
+ 
++  void build_optix_sub_bvhs_parallel(BVHMulti *bvh_multi, Progress &progress, bool refit)
++  {
++    vector<SubDevice *> subs;
++    subs.reserve(devices.size());
++    for (SubDevice &sub : devices) {
++      subs.push_back(&sub);
++    }
++    for (size_t i = 0; i < subs.size(); i++) {
++      if (!bvh_multi->sub_bvhs[i]) {
++        BVHParams params = bvh_multi->params;
++        params.bvh_layout = BVH_LAYOUT_OPTIX;
++        bvh_multi->sub_bvhs[i] = BVH::create(
++            params, bvh_multi->geometry, bvh_multi->objects, subs[i]->device.get());
++      }
++    }
++
++    /* Host data computed by the first sub-device and reused by the others for this build. */
++    BVHSharedBuild shared_build;
++
++    /* Isolated, so a thread waiting here does not pick up another geometry's build task. */
++    isolate_task([&]() {
++      parallel_for(blocked_range<size_t>(0, subs.size(), 1), [&](const blocked_range<size_t> &r) {
++        for (size_t i = r.begin(); i != r.end(); i++) {
++          /* Reset both pointers on every exit path, so neither outlives this call. */
++          struct SubBuildScope {
++            BVH *sub_bvh;
++            ~SubBuildScope()
++            {
++              sub_bvh->shared_build = nullptr;
++              sub_bvh->multi_sub_index = -1;
++            }
++          } scope{bvh_multi->sub_bvhs[i].get()};
++          scope.sub_bvh->shared_build = &shared_build;
++          scope.sub_bvh->multi_sub_index = int(i);
++          subs[i]->device->build_bvh(scope.sub_bvh, progress, refit);
++        }
++      });
++    });
++  }
++
+   OSLGlobals *get_cpu_osl_memory() override
+   {
+     /* Always return the OSL memory of the CPU device (this works since the constructor above
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 3a90d395714cad2b4e3b13dd7b8c07e2c3ef773b..19b6a1c8ada022c0b012556cb3fde3edde663f46 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -9,6 +9,7 @@
+ #  include "device/optix/queue.h"
+ 
+ #  include "bvh/bvh.h"
++#  include "bvh/multi.h"
+ #  include "bvh/optix.h"
+ 
+ #  include "scene/hair.h"
+@@ -2025,7 +2026,26 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+         continue;
+       }
+ 
+-      BVHOptiX *const blas = static_cast<BVHOptiX *>(ob->get_geometry()->bvh.get());
++      BVH *child = ob->get_geometry()->bvh.get();
++      if (child && child->params.bvh_layout == BVH_LAYOUT_MULTI_OPTIX) {
++        /* Sub-devices build in parallel: the geometry keeps its multi-device BVH, so pick the
++         * bottom level structure of this device (see MultiDevice::build_bvh). */
++        assert(bvh->multi_sub_index >= 0);
++        BVHMulti *const multi_child = static_cast<BVHMulti *>(child);
++        if (bvh->multi_sub_index < 0 ||
++            size_t(bvh->multi_sub_index) >= multi_child->sub_bvhs.size())
++        {
++          bvh_optix->motion_transform_data->free();
++          progress.set_error(
++              "OptiX top level build has no sub-device index for a multi-device geometry");
++          return;
++        }
++        child = multi_child->sub_bvhs[bvh->multi_sub_index].get();
++      }
++      if (child == nullptr) {
++        continue;
++      }
++      BVHOptiX *const blas = static_cast<BVHOptiX *>(child);
+       const OptixTraversableHandle handle = blas->traversable_handle;
+       if (handle == 0) {
+         continue;

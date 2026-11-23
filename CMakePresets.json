@@ -1,0 +1,56 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {"major": 3, "minor": 24, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "houdini-windows",
+      "hidden": true,
+      "generator": "Ninja",
+      "environment": {
+        "HOUDINI_ROOT": "C:/Program Files/Side Effects Software/Houdini 22.0.466",
+        "CUDA_PATH": "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/_work/dev/install/houdini22",
+        "CH_ENGINE_ROOT": "${sourceDir}/third_party/cycles",
+        "CH_NATIVE_ASAN_CONTRACTS": "OFF",
+        "CH_BDPT_PROTOTYPE": "OFF",
+        "CH_DLSS": "TRUE",
+        "CH_IMAGE_IRIS": "TRUE",
+        "CH_SOLARIS": "FALSE",
+        "DLSS_SDK_ROOT": "${sourceDir}/third_party/dlss",
+        "HOUDINI_ROOT": "$env{HOUDINI_ROOT}",
+        "Houdini_DIR": "$env{HOUDINI_ROOT}/toolkit/cmake",
+        "CUDA_TOOLKIT_ROOT_DIR": "$env{CUDA_PATH}",
+        "OPTIX_ROOT_DIR": "${sourceDir}/third_party/optix",
+        "WITH_STRICT_BUILD_OPTIONS": "ON",
+        "WITH_CYCLES_DEVICE_CUDA": "ON",
+        "WITH_CYCLES_DEVICE_OPTIX": "ON",
+        "WITH_CYCLES_DEVICE_HIP": "OFF",
+        "WITH_CYCLES_DEVICE_HIPRT": "OFF",
+        "WITH_CYCLES_DEVICE_ONEAPI": "OFF",
+        "WITH_CYCLES_DEVICE_METAL": "OFF",
+        "WITH_CYCLES_OPENIMAGEDENOISE": "ON",
+        "WITH_CYCLES_OPENVDB": "ON",
+        "WITH_CYCLES_NANOVDB": "ON",
+        "WITH_CYCLES_OPENSUBDIV": "ON",
+        "WITH_CYCLES_CUDA_BINARIES": "ON",
+        "CYCLES_CUDA_BINARIES_ARCH": "sm_86;sm_89;compute_75",
+        "WITH_CYCLES_OSL": "OFF",
+        "WITH_CYCLES_ALEMBIC": "OFF",
+        "WITH_CYCLES_PATH_GUIDING": "ON",
+        "openpgl_DIR": "${sourceDir}/third_party/cycles/lib/windows_x64/openpgl/lib/cmake/openpgl-0.7.1",
+        "WITH_CYCLES_STANDALONE_GUI": "OFF"
+      }
+    },
+    {"name":"normal", "displayName":"Production OBJ/SOP", "inherits":"houdini-windows", "binaryDir":"${sourceDir}/_work/dev/windows-h22.0.466-release"},
+    {"name":"normal-no-iris", "displayName":"Explicit opt-out of Image Iris", "inherits":"normal", "binaryDir":"${sourceDir}/_work/dev/windows-h22.0.466-no-iris", "cacheVariables":{"CH_IMAGE_IRIS":"OFF"}},
+    {"name":"solaris", "displayName":"Experimental Solaris/Hydra", "inherits":"normal", "binaryDir":"${sourceDir}/_work/dev/windows-h22.0.466-solaris", "cacheVariables":{"CH_SOLARIS":"ON"}}
+  ],
+  "buildPresets": [
+    {"name":"normal","configurePreset":"normal","targets":["cycles","ch_harness","_cycles_houdini","ch_worker"]},
+    {"name":"normal-no-iris","configurePreset":"normal-no-iris","targets":["cycles","ch_harness","_cycles_houdini","ch_worker"]},
+    {"name":"solaris","configurePreset":"solaris","targets":["cycles","ch_harness","_cycles_houdini","ch_worker","hdCycles"]}
+  ]
+}

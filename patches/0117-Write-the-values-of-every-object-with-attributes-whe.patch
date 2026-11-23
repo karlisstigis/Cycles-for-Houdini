@@ -1,0 +1,100 @@
+From a6be1bbd0ec05ddec0cdf2658955b9f5a1be9653 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 14:31:35 +0000
+Subject: [PATCH] Write the values of every object with attributes when keeping
+ attribute tables
+
+The kept attribute tables path (0115) wrote the attribute values of the
+changed objects only. Object attribute values are not node sockets: the
+integration changes them, and their sampled motion steps, without
+modifying the object, so such an object is not in the change list and its
+new values were not written (seen as wrong colours with sampled instance
+attributes edited off-frame on both GPUs). Every object that has or had
+object attributes is now matched against its previous requests, which
+also catches attribute names added or removed without a modification, and
+its values are written where they differ, as the full update does.
+
+The object statistics also count "top level change list withheld" when the
+0110 hand-shake withholds the change list because an earlier object update
+did not reach a completed geometry update, so tests can tell that case from
+an unexplained full path.
+
+Rationale: Correctness of 0115: attribute-only edits of instances were left at their previous values on the device.
+Contract: Attribute tables equal those of the full update after attribute-only edits (checked by CYCLES_VERIFY_ATTRIBUTE_TABLES); the kept path now walks the objects with attributes.
+Tests: tests/houdini_sampled_instance_attribute_smoke.py
+---
+ src/scene/geometry_attributes.cpp | 24 ++++++++++++++++++------
+ src/scene/object.cpp              |  8 ++++++++
+ 2 files changed, 26 insertions(+), 6 deletions(-)
+
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index db489196cdec618ed8760a3767cdf38840f3ca9f..6068f9516d8595f00813fedd861e55a855d6434b 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -1223,12 +1223,24 @@ bool GeometryManager::update_attributes_kept(Device *device,
+       return false;
+     }
+   }
+-  /* Every changed object still requests the same attributes; then write its values where they
+-   * differ. Each object writes only its own table entries, so both run on all cores. */
++  /* Object attribute values are not node sockets: the integration can change them, or the sampled
++   * steps of them, without the object being modified, so the change list does not cover them.
++   * Every object that has or had object attributes still requests the same attributes; then its
++   * values are written where they differ, as the full update does. Each object writes only its own
++   * table entries, so both run on all cores. */
++  vector<const Object *> attributed;
++  for (size_t i = 0; i < scene->objects.size(); i++) {
++    const Object *object = scene->objects[i];
++    if (!object->attributes.empty() || !object->attribute_motion.empty() ||
++        object_attribute_requests[i].size() != 0)
++    {
++      attributed.push_back(object);
++    }
++  }
+   std::atomic<bool> matched = true;
+-  parallel_for(blocked_range<size_t>(0, changed.size(), 1024), [&](const blocked_range<size_t> &r) {
++  parallel_for(blocked_range<size_t>(0, attributed.size(), 1024), [&](const blocked_range<size_t> &r) {
+     for (size_t i = r.begin(); i != r.end() && matched.load(std::memory_order_relaxed); i++) {
+-      const Object *object = changed[i];
++      const Object *object = attributed[i];
+       if (size_t(object->index) >= scene->objects.size() ||
+           scene->objects[object->index] != object ||
+           !match_object_attributes(scene,
+@@ -1252,9 +1264,9 @@ bool GeometryManager::update_attributes_kept(Device *device,
+     tables[table] = object_attribute_table_data(dscene, table);
+     table_modified[table] = false;
+   }
+-  parallel_for(blocked_range<size_t>(0, changed.size(), 1024), [&](const blocked_range<size_t> &r) {
++  parallel_for(blocked_range<size_t>(0, attributed.size(), 1024), [&](const blocked_range<size_t> &r) {
+     for (size_t i = r.begin(); i != r.end(); i++) {
+-      const Object *object = changed[i];
++      const Object *object = attributed[i];
+       match_object_attributes(
+           scene,
+           *object,
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index fd5eb7b20878494bc297c25369e964aa9895f349..400109adc07cd79da9cb28662a0daa651da4ac6d 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1156,6 +1156,11 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+         partial_objects.push_back(ob);
+       }
+     }
++    if (candidate && top_level_pending_before && scene->update_stats) {
++      /* Count, not time: the change list was withheld because an earlier object update did not
++       * reach a completed geometry update (see top_level_pending). */
++      scene->update_stats->object.times.add_entry({"top level change list withheld", 1.0});
++    }
+     if (candidate && !top_level_pending_before) {
+       top_level_changed_valid = true;
+       top_level_changed_objects = partial_objects;
+@@ -1419,6 +1424,9 @@ void ObjectManager::device_update(Device *device,
+     /* No object changed since the last complete object table write, and every object written
+      * since then reached a completed top level build. */
+     top_level_changed_valid = object_table_complete && !top_level_pending;
++    if (object_table_complete && top_level_pending && scene->update_stats) {
++      scene->update_stats->object.times.add_entry({"top level change list withheld", 1.0});
++    }
+     return;
+   }
+   top_level_changed_valid = false;

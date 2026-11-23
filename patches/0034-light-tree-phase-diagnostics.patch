@@ -1,0 +1,168 @@
+From 8a5f653576b01dea7b837be3f40abb4384bc650c Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:34 +0100
+Subject: [PATCH] light tree phase diagnostics
+
+Locked-Patch: patches/0034-light-tree-phase-diagnostics.patch
+Locked-Patch-SHA256: f6809accd519c4643b02e6c2cc5e143ce6773b42d6b55717c88e82468c06a5e1
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 3ffc4754af28eee88fb4d36eeb06769d419f3d27
+Previous-Patch: patches/0034-light-tree-phase-diagnostics.patch
+Previous-Patch-SHA256: f6809accd519c4643b02e6c2cc5e143ce6773b42d6b55717c88e82468c06a5e1
+Rationale: Light-tree phase counters provide host performance evidence rather than changing the estimator; the current labels are integration diagnostics.
+Contract: light tree phase diagnostics
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index 34db0ca2f62ed58f5856762ad6796a8820fa833d..f911e44a499584de3d6bfa272b2f0208512e90e9 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -24,6 +24,11 @@
+ #include "util/log.h"
+ #include "util/path.h"
+ #include "util/progress.h"
++#include "util/time.h"
++
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -1070,10 +1075,34 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   /* Update light tree. */
+   progress.set_status("Updating Lights", "Computing tree");
+ 
++  const char *profile_flag = std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
++  const bool profiling = profile_flag && std::strcmp(profile_flag, "1") == 0;
++  const double started = profiling ? time_dt() : 0;
++  double construction_seconds = 0, flatten_seconds = 0, upload_seconds = 0, work_end = 0;
++  size_t profile_nodes = 0, profile_emitters = 0;
++  /* Declared before the tree: this runs after tree retirement, whose many
++   * transient node allocations were previously hidden in the overall timer. */
++  const scoped_callback_timer phase_timer([&](double /*unused*/) {
++    if (profiling) {
++      const double finished = time_dt();
++      std::fprintf(stderr,
++                   "CH_LIGHT_TREE_PHASES {\"complete\":%s,\"nodes\":%zu,\"emitters\":%zu,"
++                   "\"construction_seconds\":%.9f,\"flatten_seconds\":%.9f,"
++                   "\"upload_seconds\":%.9f,\"retirement_seconds\":%.9f,\"total_seconds\":%.9f}\n",
++                   work_end > 0 && !progress.get_cancel() ? "true" : "false",
++                   profile_nodes, profile_emitters, construction_seconds, flatten_seconds,
++                   upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started);
++    }
++  });
++
+   /* TODO: For now, we'll start with a smaller number of max lights in a node.
+    * More benchmarking is needed to determine what number works best. */
+   LightTree light_tree(scene, dscene, progress, 8, mesh_light_tree_cache.get());
+   LightTreeNode *root = light_tree.build(scene, dscene);
++  const double constructed = profiling ? time_dt() : 0;
++  construction_seconds = constructed - started;
++  profile_nodes = light_tree.num_nodes;
++  profile_emitters = light_tree.num_emitters();
+   mesh_light_tree_cache->report(!progress.get_cancel());
+   if (progress.get_cancel()) {
+     return;
+@@ -1152,11 +1181,17 @@ void LightManager::device_update_tree(Device * /*unused*/,
+   }
+ 
+   /* Copy arrays to device. */
++  const double upload_at = profiling ? time_dt() : 0;
++  flatten_seconds = upload_at - constructed;
+   dscene->light_tree_nodes.copy_to_device();
+   dscene->light_tree_emitters.copy_to_device();
+   dscene->light_to_tree.copy_to_device();
+   dscene->object_lookup_offset.copy_to_device();
+   dscene->triangle_to_tree.copy_to_device();
++  if (profiling) {
++    work_end = time_dt();
++    upload_seconds = work_end - upload_at;
++  }
+ }
+ 
+ static void background_cdf(int start,
+diff --git a/src/scene/light_tree_cache.cpp b/src/scene/light_tree_cache.cpp
+index e1774a4d8e6a932216900962afa776b08b35ce14..45a70c147f64d56a40afa83635ab0b641d32f688 100644
+--- a/src/scene/light_tree_cache.cpp
++++ b/src/scene/light_tree_cache.cpp
+@@ -5,6 +5,7 @@
+ #include "scene/object.h"
+ #include "scene/shader.h"
+ #include "util/progress.h"
++#include "util/time.h"
+ 
+ #include <algorithm>
+ #include <cstdio>
+@@ -120,6 +121,7 @@ struct LightTreeMeshCache::Entry {
+ struct LightTreeMeshCache::Impl {
+   std::unordered_map<Mesh *, Entry> entries;
+   size_t bytes = 0, hits = 0, misses = 0, evictions = 0;
++  double emitter_seconds = 0, clone_seconds = 0, store_seconds = 0;
+   uint64_t stamp = 0, build = 0;
+   bool enabled = !environment_flag("CYCLES_HOUDINI_DISABLE_LIGHT_TREE_CACHE");
+   bool profiling = environment_flag("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
+@@ -146,6 +148,7 @@ void LightTreeMeshCache::begin_build()
+ {
+   ++impl_->build;
+   impl_->hits = impl_->misses = impl_->evictions = 0;
++  impl_->emitter_seconds = impl_->clone_seconds = impl_->store_seconds = 0;
+ }
+ 
+ const LightTreeMeshCache::Entry *LightTreeMeshCache::find(Scene *scene, Mesh *mesh, int object_id)
+@@ -174,6 +177,7 @@ void LightTreeMeshCache::restore(const Entry &entry,
+                                  vector<LightTreeEmitter> &emitters,
+                                  Progress &progress) const
+ {
++  const double started = impl_->profiling ? time_dt() : 0;
+   const int start = emitters.size();
+   for (size_t n = 0; n < entry.triangles.size(); ++n) {
+     if ((n & 255) == 0 && progress.get_cancel()) {
+@@ -190,6 +194,7 @@ void LightTreeMeshCache::restore(const Entry &entry,
+     emitter.measure.bcone.theta_e = triangle.theta_e;
+     emitter.centroid = zero_float3();
+   }
++  const double clone_at = impl_->profiling ? time_dt() : 0;
+   const auto restore_node = [&](const auto &self, int index, LightTreeNode *target) -> void {
+     if (progress.get_cancel()) {
+       return;
+@@ -215,6 +220,10 @@ void LightTreeMeshCache::restore(const Entry &entry,
+     target->type = node.type;
+   };
+   restore_node(restore_node, 0, root);
++  if (impl_->profiling) {
++    impl_->emitter_seconds += clone_at - started;
++    impl_->clone_seconds += time_dt() - clone_at;
++  }
+ }
+ 
+ void LightTreeMeshCache::store(Scene *scene,
+@@ -230,6 +239,11 @@ void LightTreeMeshCache::store(Scene *scene,
+   if (!i.enabled || progress.get_cancel()) {
+     return;
+   }
++  const scoped_callback_timer store_timer([&](double elapsed) {
++    if (i.profiling) {
++      i.store_seconds += elapsed;
++    }
++  });
+   const size_t primitives = size_t(end - start);
+   if (primitives > cache_budget / sizeof(CachedTriangle)) {
+     return;
+@@ -350,10 +364,11 @@ void LightTreeMeshCache::report(bool complete) const
+     std::fprintf(stderr,
+                  "CH_LIGHT_TREE_CACHE {\"build\":%llu,\"enabled\":%s,\"complete\":%s,"
+                  "\"hits\":%zu,\"misses\":%zu,\"evictions\":%zu,\"entries\":%zu,"
+-                 "\"bytes\":%zu,\"budget_bytes\":%zu}\n",
++                 "\"bytes\":%zu,\"budget_bytes\":%zu,\"emitter_seconds\":%.9f,"
++                 "\"clone_seconds\":%.9f,\"store_seconds\":%.9f}\n",
+                  static_cast<unsigned long long>(i.build), i.enabled ? "true" : "false",
+                  complete ? "true" : "false", i.hits, i.misses, i.evictions, i.entries.size(),
+-                 i.bytes, cache_budget);
++                 i.bytes, cache_budget, i.emitter_seconds, i.clone_seconds, i.store_seconds);
+   }
+ }
+ 

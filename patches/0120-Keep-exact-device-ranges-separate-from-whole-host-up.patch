@@ -1,0 +1,175 @@
+From fa17cec676abe51d7d4cb2c43b906b0247502aa9 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Fri, 20 Nov 2026 02:06:46 +0100
+Subject: [PATCH] Keep exact device ranges separate from whole-host uploads
+
+Rationale: Generic small-range callers can leave host bytes outside their requested ranges stale. The scattered-upload optimization silently copied those bytes and made light-tree ranges appear cheaper than the observed whole transfer.
+Contract: Exact ranges remain exact. Object tables, flags and OptiX instance mirrors opt into the existing cost model. Bounds and ownership are checked before either dispatch, and light-tree profiles describe the prior bounded range policy.
+Tests: tests/core_device_range_smoke.py, tests/multi_device_range_fault_test.py
+---
+ src/device/memory.cpp            | 20 ++++++++++----------
+ src/device/memory.h              | 15 ++++++++++++---
+ src/device/memory_range.h        |  5 +++++
+ src/device/optix/device_impl.cpp |  4 ++--
+ src/scene/object.cpp             |  8 ++++----
+ 5 files changed, 33 insertions(+), 19 deletions(-)
+
+diff --git a/src/device/memory.cpp b/src/device/memory.cpp
+index e52c33dfa0fccf243f6dd8b7a8ae562906054655..fdd6aeaa187cb60abf4101925d35195f05bab803 100644
+--- a/src/device/memory.cpp
++++ b/src/device/memory.cpp
+@@ -153,28 +153,28 @@ void device_memory::device_copy_to()
+   }
+ }
+ 
+-bool device_memory::device_copy_to_ranges(const vector<DeviceMemoryRange> &ranges)
++bool device_memory::device_copy_to_ranges(const vector<DeviceMemoryRange> &ranges,
++                                          const DeviceMemoryRangePolicy policy)
+ {
+-  device_memory_validate_ranges(memory_size(), ranges);
++  const size_t bytes = memory_size();
++  device_memory_validate_ranges(bytes, ranges);
+   if (ranges.empty()) {
+     return true;
+   }
+   if (need_realloc_ || !host_pointer || !device_pointer ||
+-      device_size < memory_size() || !device->mem_copy_to_range_supported(*this))
++      device_size < bytes || !device->mem_copy_to_range_supported(*this))
+   {
+     return false;
+   }
+   /* Every range is one synchronous copy of about 9-12 us on current GPUs (3080 Ti, 4090), the
+    * time of copying about 128 KiB in one piece at their ~12 GB/s host to device rate. When the
+-   * runs cost more than copying the whole host buffer, which holds the current data everywhere,
++   * runs cost more than copying the whole buffer, callers with a complete host mirror may
+    * copy it whole: an 8 MB table after 64 runs, a 99 MB object table after about 800. */
+   constexpr size_t bytes_per_run = 128 * 1024;
+-  if (ranges.size() * bytes_per_run >= memory_size()) {
+-    const double start = device->stats.buffer_copy_callback ? time_dt() : 0;
+-    device->mem_copy_to(*this);
+-    if (device->stats.buffer_copy_callback) {
+-      device->stats.buffer_copy_callback(global_name(), memory_size(), time_dt() - start);
+-    }
++  if (policy == DeviceMemoryRangePolicy::COMPLETE_HOST &&
++      ranges.size() > (bytes - 1) / bytes_per_run)
++  {
++    device_copy_to();
+     return true;
+   }
+   for (const DeviceMemoryRange &range : ranges) {
+diff --git a/src/device/memory.h b/src/device/memory.h
+index ebe99e57d6ecd59995836ec666bdec13a12206fd..b4f0b1628fab6417b1661665067b5008c3e89e53 100644
+--- a/src/device/memory.h
++++ b/src/device/memory.h
+@@ -322,7 +322,9 @@ class device_memory {
+   /* Device memory allocation and copying. */
+   void device_alloc();
+   void device_copy_to();
+-  bool device_copy_to_ranges(const vector<DeviceMemoryRange> &ranges);
++  bool device_copy_to_ranges(
++      const vector<DeviceMemoryRange> &ranges,
++      DeviceMemoryRangePolicy policy = DeviceMemoryRangePolicy::EXACT);
+   void device_move_to_host();
+   void device_copy_from(const size_t y, const size_t w, size_t h, const size_t elem);
+   void device_copy_merged_bitmap_from(const size_t y, const size_t w, size_t h);
+@@ -599,13 +601,20 @@ template<typename T> class device_vector : public device_memory {
+     copy_to_device();
+   }
+ 
+-  /* Existing allocation only. False requests the ordinary full-copy fallback;
+-   * invalid bounds throw before any transfer. Never aliases device ownership. */
++  /* Existing allocation only. Transfer exactly the submitted ranges. False requests the
++   * caller's ordinary fallback; invalid bounds throw before any transfer. */
+   bool copy_to_device_ranges(const vector<DeviceMemoryRange> &ranges)
+   {
+     return device_copy_to_ranges(ranges);
+   }
+ 
++  /* The caller owns a complete, current host mirror. Transfer the whole mirror if cheaper
++   * than the submitted runs. The same bounds and allocation checks apply before either copy. */
++  bool copy_to_device_ranges_or_full(const vector<DeviceMemoryRange> &ranges)
++  {
++    return device_copy_to_ranges(ranges, DeviceMemoryRangePolicy::COMPLETE_HOST);
++  }
++
+   void clear_modified()
+   {
+     modified = false;
+diff --git a/src/device/memory_range.h b/src/device/memory_range.h
+index a5368cf6973e33902b5d18871fda227bcdc531c2..fb586f0d2a4c4dc852822a0d762777156482c5b6 100644
+--- a/src/device/memory_range.h
++++ b/src/device/memory_range.h
+@@ -16,6 +16,11 @@ struct DeviceMemoryRange {
+   size_t size = 0;
+ };
+ 
++enum class DeviceMemoryRangePolicy {
++  EXACT,
++  COMPLETE_HOST,
++};
++
+ /* Byte ranges are ordered, disjoint and checked before any device is touched. */
+ inline size_t device_memory_validate_ranges(const size_t bytes,
+                                           const vector<DeviceMemoryRange> &ranges)
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 720946118c802511adf54fbaccbc424a7dc919bc..4178c54253d04ca98da8248f7d1d490d1e2cba08 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -2389,7 +2389,7 @@ bool OptiXDevice::update_top_level_instances(BVHOptiX *bvh_optix,
+   }
+   flush_motion();
+   /* One synchronous copy per run costs about as much as copying 128 KiB in one piece (see
+-   * device_memory::device_copy_to_ranges): copy the whole motion buffer when the runs cost more. */
++   * copy_to_device_ranges_or_full): copy the whole motion buffer when the runs cost more. */
+   constexpr size_t bytes_per_run = 128 * 1024;
+   if (!motion_runs.empty() && motion_runs.size() * bytes_per_run >= cache.motion_host.size()) {
+     cuda_assert(
+@@ -2402,7 +2402,7 @@ bool OptiXDevice::update_top_level_instances(BVHOptiX *bvh_optix,
+                                run.second - run.first));
+     }
+   }
+-  if (!instance_ranges.empty() && !instances.copy_to_device_ranges(instance_ranges)) {
++  if (!instance_ranges.empty() && !instances.copy_to_device_ranges_or_full(instance_ranges)) {
+     instances.copy_to_device();
+   }
+   rewritten = slot_indices.size();
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 400109adc07cd79da9cb28662a0daa651da4ac6d..d8582046a2c5a0fba07e7568dd833c671b6f94fd 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1174,7 +1174,7 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+     }
+     /* No share limit: writing only the modified objects is never more work than writing all of
+      * them, and the upload copies the whole table when the modified objects are scattered over
+-     * many runs (see device_memory::device_copy_to_ranges). */
++     * many runs (see copy_to_device_ranges_or_full). */
+     partial = partial && candidate;
+     if (scene->update_stats) {
+       /* Counts, not times: the modified objects found and the object count of the decision. */
+@@ -1333,7 +1333,7 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+           ranges.push_back({offset, size});
+         }
+       }
+-      if (!buffer.copy_to_device_ranges(ranges)) {
++      if (!buffer.copy_to_device_ranges_or_full(ranges)) {
+         buffer.copy_to_device();
+       }
+     };
+@@ -1655,7 +1655,7 @@ void ObjectManager::device_update_flags(Device *device,
+         ranges.push_back({offset, sizeof(uint)});
+       }
+     }
+-    if (!ranges.empty() && !dscene->object_flag.copy_to_device_ranges(ranges)) {
++    if (!ranges.empty() && !dscene->object_flag.copy_to_device_ranges_or_full(ranges)) {
+       dscene->object_flag.copy_to_device();
+     }
+     dscene->object_flag.clear_modified();
+@@ -1932,7 +1932,7 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+         ranges.push_back({offset, sizeof(KernelObject)});
+       }
+     }
+-    if (!ranges.empty() && !dscene->objects.copy_to_device_ranges(ranges)) {
++    if (!ranges.empty() && !dscene->objects.copy_to_device_ranges_or_full(ranges)) {
+       dscene->objects.copy_to_device();
+     }
+     return;

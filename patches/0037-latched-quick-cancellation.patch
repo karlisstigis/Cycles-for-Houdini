@@ -1,0 +1,253 @@
+From 26812cecd9900dbbec3f6a39c1b89ad29a0e9ce0 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:35 +0100
+Subject: [PATCH] latched quick cancellation
+
+Locked-Patch: patches/0037-latched-quick-cancellation.patch
+Locked-Patch-SHA256: a5b38078f5823c1f6ca2694c890423d2d3ab26e7e0b3d32f052f79ca55924e41
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_scene_interruption_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 2336230a956d40913f965062b5481052f2589804
+Previous-Patch: patches/0037-latched-quick-cancellation.patch
+Previous-Patch-SHA256: a5b38078f5823c1f6ca2694c890423d2d3ab26e7e0b3d32f052f79ca55924e41
+Rationale: A latched explicit host cancellation must stay requested until the session becomes idle, while ordinary progressive denoise behavior keeps its default.
+Contract: latched quick cancellation
+Tests: tests/houdini_scene_interruption_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/path_trace.cpp b/src/integrator/path_trace.cpp
+index b0a751b7f1582df354f296d4ac89eb9f472c6324..9de94fe879ec3a8defc48a11eb0d41ec3e3434f5 100644
+--- a/src/integrator/path_trace.cpp
++++ b/src/integrator/path_trace.cpp
+@@ -626,7 +626,9 @@ void PathTrace::set_denoiser_params(const DenoiseParams &params)
+       /* Only take into account the "immediate" cancel to have interactive rendering responding to
+        * navigation as quickly as possible, but allow to run denoiser after user hit Escape key
+        * while doing offline rendering. */
+-      denoiser_->is_cancelled_cb = [this]() { return render_cancel_.is_requested; };
++      denoiser_->is_cancelled_cb = [this]() {
++        return render_cancel_.is_requested.load(std::memory_order_relaxed);
++      };
+     }
+   }
+ 
+@@ -948,28 +950,35 @@ void PathTrace::finalize_full_buffer_on_disk(const RenderWork &render_work)
+    * so that we never hold scene and full-frame buffer in memory at the same time). */
+ }
+ 
+-void PathTrace::cancel()
++void PathTrace::cancel(bool keep_requested)
+ {
+   thread_scoped_lock lock(render_cancel_.mutex);
+ 
+-  /* With interactive denoisers like DLSS always render 1 complete sample,
+-   * otherwise interactivity becomes bad. Otherwise cancel immediately so
+-   * the main thread isn't blocked. */
+-  if (!render_scheduler_.is_denoiser_interactive() || get_num_samples_in_buffer() > 1) {
+-    render_cancel_.is_requested = true;
++  /* A latched host interruption must stop promptly, while an ordinary interactive
++   * restart lets DLSS finish its first sample. */
++  if (keep_requested || !render_scheduler_.is_denoiser_interactive() ||
++      get_num_samples_in_buffer() > 1) {
++    render_cancel_.is_requested.store(true, std::memory_order_relaxed);
+   }
+ 
+   while (render_cancel_.is_rendering) {
+     render_cancel_.condition.wait(lock);
+   }
+ 
+-  render_cancel_.is_requested = false;
+-
++  if (!keep_requested) {
++    render_cancel_.is_requested.store(false, std::memory_order_relaxed);
++  }
+   if (display_) {
+     display_->reset();
+   }
+ }
+ 
++void PathTrace::clear_cancel()
++{
++  const thread_scoped_lock lock(render_cancel_.mutex);
++  render_cancel_.is_requested.store(false, std::memory_order_relaxed);
++}
++
+ int PathTrace::get_num_samples_in_buffer()
+ {
+   return render_scheduler_.get_num_rendered_samples();
+diff --git a/src/integrator/path_trace.h b/src/integrator/path_trace.h
+index f2400c126e2bf983917d7d2c71c801a9657d31de..a0c994789c7011bb5703c939afbdccb14c2beffe 100644
+--- a/src/integrator/path_trace.h
++++ b/src/integrator/path_trace.h
+@@ -131,7 +131,9 @@ class PathTrace {
+    *
+    * This is a blocking call, which returns as soon as there is no running `render_samples()` call.
+    */
+-  void cancel();
++  void cancel(bool keep_requested = false);
++  /* Clear a latched quick cancel only after the session thread is idle. */
++  void clear_cancel();
+ 
+   /* Copy an entire render buffer to/from the path trace. */
+ 
+@@ -199,7 +201,8 @@ class PathTrace {
+  protected:
+   bool is_render_cancel_requested() const
+   {
+-    return render_cancel_.is_requested || scene_update_requested_.load(std::memory_order_relaxed);
++    return render_cancel_.is_requested.load(std::memory_order_relaxed) ||
++           scene_update_requested_.load(std::memory_order_relaxed);
+   }
+ 
+   std::atomic<bool> scene_update_requested_{false};
+@@ -364,7 +367,7 @@ class PathTrace {
+     bool is_rendering = false;
+ 
+     /* Indicates whether rendering is requested to be canceled by `cancel()`. */
+-    bool is_requested = false;
++    std::atomic<bool> is_requested{false};
+ 
+     /* Synchronization between thread which does `render_samples()` and thread which does
+      * `cancel()`. */
+diff --git a/src/integrator/path_trace_work.cpp b/src/integrator/path_trace_work.cpp
+index 2790907435f13115c65ae685599ff187d04b8750..540a859687c7f455522b9af4a099f6c151f50aec 100644
+--- a/src/integrator/path_trace_work.cpp
++++ b/src/integrator/path_trace_work.cpp
+@@ -21,7 +21,7 @@ CCL_NAMESPACE_BEGIN
+ unique_ptr<PathTraceWork> PathTraceWork::create(Device *device,
+                                                 Film *film,
+                                                 DeviceScene *device_scene,
+-                                                const bool *cancel_requested_flag)
++                                                const std::atomic<bool> *cancel_requested_flag)
+ {
+   if (device->info.type == DEVICE_CPU) {
+     return make_unique<PathTraceWorkCPU>(device, film, device_scene, cancel_requested_flag);
+@@ -37,7 +37,7 @@ unique_ptr<PathTraceWork> PathTraceWork::create(Device *device,
+ PathTraceWork::PathTraceWork(Device *device,
+                              Film *film,
+                              DeviceScene *device_scene,
+-                             const bool *cancel_requested_flag)
++                             const std::atomic<bool> *cancel_requested_flag)
+     : device_(device),
+       film_(film),
+       device_scene_(device_scene),
+diff --git a/src/integrator/path_trace_work.h b/src/integrator/path_trace_work.h
+index 2b7ae1bdd29a096b145ac6feb1abdc92fb9cf28e..3f673d2b8b0713f1abe9f21820ae9e7c3332d572 100644
+--- a/src/integrator/path_trace_work.h
++++ b/src/integrator/path_trace_work.h
+@@ -34,7 +34,7 @@ class PathTraceWork {
+   static unique_ptr<PathTraceWork> create(Device *device,
+                                           Film *film,
+                                           DeviceScene *device_scene,
+-                                          const bool *cancel_requested_flag);
++                                          const std::atomic<bool> *cancel_requested_flag);
+ 
+   virtual ~PathTraceWork();
+ 
+@@ -147,9 +147,7 @@ class PathTraceWork {
+    * possible, without waiting for any samples to be finished. */
+   bool is_cancel_requested() const
+   {
+-    /* NOTE: Rely on the fact that on x86 CPU reading scalar can happen without atomic even in
+-     * threaded environment. */
+-    return *cancel_requested_flag_ ||
++    return (cancel_requested_flag_ && cancel_requested_flag_->load(std::memory_order_relaxed)) ||
+            (scene_update_requested_flag_ && scene_update_requested_flag_->load(std::memory_order_relaxed));
+   }
+ 
+@@ -172,7 +170,7 @@ class PathTraceWork {
+   PathTraceWork(Device *device,
+                 Film *film,
+                 DeviceScene *device_scene,
+-                const bool *cancel_requested_flag);
++                const std::atomic<bool> *cancel_requested_flag);
+ 
+   PassAccessor::PassAccessInfo get_display_pass_access_info(PassMode pass_mode) const;
+ 
+@@ -205,7 +203,7 @@ class PathTraceWork {
+   BufferParams effective_denoised_big_tile_params_;
+   BufferParams effective_denoised_buffer_params_;
+ 
+-  const bool *cancel_requested_flag_ = nullptr;
++  const std::atomic<bool> *cancel_requested_flag_ = nullptr;
+   const std::atomic<bool> *scene_update_requested_flag_ = nullptr;
+ };
+ 
+diff --git a/src/integrator/path_trace_work_cpu.cpp b/src/integrator/path_trace_work_cpu.cpp
+index fd25591b5f6b7df8f185f31a680c5caec8247ada..14068d0ccd3847fd9acf0471ccb28c1c3bc2388f 100644
+--- a/src/integrator/path_trace_work_cpu.cpp
++++ b/src/integrator/path_trace_work_cpu.cpp
+@@ -47,7 +47,7 @@ static inline ThreadKernelGlobalsCPU *kernel_thread_globals_get(
+ PathTraceWorkCPU::PathTraceWorkCPU(Device *device,
+                                    Film *film,
+                                    DeviceScene *device_scene,
+-                                   const bool *cancel_requested_flag)
++                                   const std::atomic<bool> *cancel_requested_flag)
+     : PathTraceWork(device, film, device_scene, cancel_requested_flag),
+       kernels_(Device::get_cpu_kernels())
+ {
+diff --git a/src/integrator/path_trace_work_cpu.h b/src/integrator/path_trace_work_cpu.h
+index edb4906395120e19032b4e9bf6a034b566687740..b4b9f3442793062fe3b31b7064976ed68610ce54 100644
+--- a/src/integrator/path_trace_work_cpu.h
++++ b/src/integrator/path_trace_work_cpu.h
+@@ -31,7 +31,7 @@ class PathTraceWorkCPU : public PathTraceWork {
+   PathTraceWorkCPU(Device *device,
+                    Film *film,
+                    DeviceScene *device_scene,
+-                   const bool *cancel_requested_flag);
++                   const std::atomic<bool> *cancel_requested_flag);
+ 
+   void init_execution() override;
+   void deinit_execution() override;
+diff --git a/src/integrator/path_trace_work_gpu.cpp b/src/integrator/path_trace_work_gpu.cpp
+index 5aaad3e6faeec0ba92a06a2caf87348be822b485..84c2ec03a76c3d3d9694977d02767427847c4751 100644
+--- a/src/integrator/path_trace_work_gpu.cpp
++++ b/src/integrator/path_trace_work_gpu.cpp
+@@ -79,7 +79,7 @@ static size_t estimate_single_state_size(const uint64_t kernel_features,
+ PathTraceWorkGPU::PathTraceWorkGPU(Device *device,
+                                    Film *film,
+                                    DeviceScene *device_scene,
+-                                   const bool *cancel_requested_flag)
++                                   const std::atomic<bool> *cancel_requested_flag)
+     : PathTraceWork(device, film, device_scene, cancel_requested_flag),
+       queue_(device->gpu_queue_create()),
+       integrator_state_soa_kernel_features_(0),
+diff --git a/src/integrator/path_trace_work_gpu.h b/src/integrator/path_trace_work_gpu.h
+index 58dd82a41ad15f6cf2c8a86605cba8caab288531..8f47b1b9b0881632d9330877151761103760e8fb 100644
+--- a/src/integrator/path_trace_work_gpu.h
++++ b/src/integrator/path_trace_work_gpu.h
+@@ -27,7 +27,7 @@ class PathTraceWorkGPU : public PathTraceWork {
+   PathTraceWorkGPU(Device *device,
+                    Film *film,
+                    DeviceScene *device_scene,
+-                   const bool *cancel_requested_flag);
++                   const std::atomic<bool> *cancel_requested_flag);
+ 
+   void alloc_work_memory() override;
+   void init_execution() override;
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index 2da5860ecebca04e836736e35f5905387f12f67c..f3e8e07594b52a33f93a68adeac121f40c172ab7 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -143,7 +143,10 @@ void Session::cancel(bool quick)
+     /* Cancel path trace operations. */
+     if (quick && path_trace_) {
+       const double path_trace_started = time_dt();
+-      path_trace_->cancel();
++      /* Keep quick cancellation latched until the session thread is idle.
++       * Clearing it after only the current batch can allow the render thread
++       * to start another batch before progress cancellation becomes visible. */
++      path_trace_->cancel(true);
+       cancel_statistics_.path_trace_seconds = time_dt() - path_trace_started;
+     }
+ 
+@@ -163,6 +166,9 @@ void Session::cancel(bool quick)
+     const double wait_started = time_dt();
+     wait();
+     cancel_statistics_.session_wait_seconds = time_dt() - wait_started;
++    if (quick && path_trace_) {
++      path_trace_->clear_cancel();
++    }
+   }
+   cancel_statistics_.total_seconds = time_dt() - started;
+ }

@@ -1,0 +1,20 @@
+[
+  {
+    "test": "houdini_cop_resolution_navigation_gui_smoke.py",
+    "device": "CPU",
+    "gui": true,
+    "execution": "worker"
+  },
+  {
+    "test": "houdini_tessellation_update_ipr_gui_smoke.py",
+    "device": "CPU",
+    "gui": true,
+    "execution": "worker"
+  },
+  {
+    "test": "houdini_release_response_gui_smoke.py",
+    "device": "CPU",
+    "gui": true,
+    "execution": "worker"
+  }
+]

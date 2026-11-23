@@ -1,0 +1,70 @@
+From 19153c5c9ec6cd0e7be0af5ecaee328eff238d0c Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:36 +0100
+Subject: [PATCH] panorama motion seams
+
+Locked-Patch: patches/0044-panorama-motion-seams.patch
+Locked-Patch-SHA256: c828e936abb3cc9cac66f73549aecf25091ae6bf25e27ac12bbf66498cdb6cf6
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_panorama_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: f88cfa37ec03ab52dfc4e54c1287bf9b06b570c9
+Previous-Patch: patches/0044-panorama-motion-seams.patch
+Previous-Patch-SHA256: c828e936abb3cc9cac66f73549aecf25091ae6bf25e27ac12bbf66498cdb6cf6
+Rationale: Panorama motion vectors must wrap by the actual full-turn pixel period, including partial longitude ranges; raw differences jump at seams.
+Contract: panorama motion seams
+Tests: tests/houdini_panorama_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/camera/camera.h b/src/kernel/camera/camera.h
+index db7fe0b16e228673f6c6fb03947ce4ac3c5e9a6f..dcfff6e57136b36fa8024af2aad87f2c57b6ed08 100644
+--- a/src/kernel/camera/camera.h
++++ b/src/kernel/camera/camera.h
+@@ -604,6 +604,25 @@ ccl_device_inline float3 camera_world_to_ndc(KernelGlobals kg,
+   return P;
+ }
+ 
++/* Panoramic longitude repeats every full turn, including partial or offset
++ * longitude windows. Motion follows the shortest angular displacement across
++ * the seam, rather than a jump by the complete image period. */
++ccl_device_inline float panorama_motion_wrap(ccl_constant KernelCamera *cam, const float delta)
++{
++  float span;
++  if (cam->panorama_type == PANORAMA_EQUIRECTANGULAR) {
++    span = fabsf(cam->equirectangular_range.x);
++  }
++  else if (cam->panorama_type == PANORAMA_CENTRAL_CYLINDRICAL) {
++    span = fabsf(cam->central_cylindrical_range.y - cam->central_cylindrical_range.x);
++  }
++  else {
++    return delta;
++  }
++  const float period = cam->width * (M_2PI_F / span);
++  return isfinite_safe(period) && period > 0.0f ? delta - roundf(delta / period) * period : delta;
++}
++
+ /* Motion vector for motion pass */
+ 
+ ccl_device_forceinline float4 camera_motion_vector(KernelGlobals kg,
+@@ -662,6 +681,10 @@ ccl_device_forceinline float4 camera_motion_vector(KernelGlobals kg,
+ 
+   motion_pre = motion_pre - motion_center;
+   motion_post = motion_center - motion_post;
++  if (kernel_data.cam.type == CAMERA_PANORAMA) {
++    motion_pre.x = panorama_motion_wrap(&kernel_data.cam, motion_pre.x);
++    motion_post.x = panorama_motion_wrap(&kernel_data.cam, motion_post.x);
++  }
+ 
+   return make_float4(motion_pre.x, motion_pre.y, motion_post.x, motion_post.y);
+ }
+@@ -742,6 +765,10 @@ ccl_device_forceinline float4 camera_motion_vector_direction(KernelGlobals kg,
+ 
+   motion_pre = motion_pre - motion_center;
+   motion_post = motion_center - motion_post;
++  if (kernel_data.cam.type == CAMERA_PANORAMA) {
++    motion_pre.x = panorama_motion_wrap(&kernel_data.cam, motion_pre.x);
++    motion_post.x = panorama_motion_wrap(&kernel_data.cam, motion_post.x);
++  }
+ 
+   return make_float4(motion_pre.x, motion_pre.y, motion_post.x, motion_post.y);
+ }

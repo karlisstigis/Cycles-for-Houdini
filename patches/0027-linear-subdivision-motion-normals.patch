@@ -1,0 +1,82 @@
+From 3f17913e793bba7aeae91adb0f0dd7c7d89bbfef Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:33 +0100
+Subject: [PATCH] linear subdivision motion normals
+
+Locked-Patch: patches/0027-linear-subdivision-motion-normals.patch
+Locked-Patch-SHA256: ab7f6a221e6545d78e4856c7c161ad6cf380ef18dbe24f20c4adc3402183c12b
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_velocity_normal_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 43799cb2bd617510e8b2547919dc291a82b81aae
+Previous-Patch: patches/0027-linear-subdivision-motion-normals.patch
+Previous-Patch-SHA256: ab7f6a221e6545d78e4856c7c161ad6cf380ef18dbe24f20c4adc3402183c12b
+Rationale: Linear subdivision motion normals must follow the same shutter interpolation as positions; the correction is independent of Houdini authoring.
+Contract: linear subdivision motion normals
+Tests: tests/houdini_velocity_normal_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index 985552f5848f4a10fd7a8a5fcefc681d4f1a2efe..e00eaa9cd9c163522d16297b77bca5b7a0af5b05 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -730,7 +730,8 @@ void Mesh::add_vertex_normals()
+   }
+ 
+   /* subd vertex normals */
+-  if (!subd_attributes.find(ATTR_STD_VERTEX_NORMAL) && get_num_subd_faces()) {
++  if (!subd_attributes.find(ATTR_STD_VERTEX_NORMAL) &&
++      !subd_attributes.find(ATTR_STD_CORNER_NORMAL) && get_num_subd_faces()) {
+     /* get attributes */
+     Attribute *attr_vN = subd_attributes.add(ATTR_STD_VERTEX_NORMAL);
+     packed_normal *vN = attr_vN->data_for_write<packed_normal>();
+diff --git a/src/scene/mesh_subdivision.cpp b/src/scene/mesh_subdivision.cpp
+index 09d54029fd4400485d87f22b11890f30c75eea08..83a2c6d544787404d12258e0e0a48c016c4ebd7e 100644
+--- a/src/scene/mesh_subdivision.cpp
++++ b/src/scene/mesh_subdivision.cpp
+@@ -177,9 +177,16 @@ void Mesh::tessellate(SubdParams &params)
+     dice.dice(split);
+   }
+ 
+-  if ((!params.progress || (!params.progress->get_cancel() && !params.progress->get_error())) &&
+-      subdivision_post_tessellate) {
+-    subdivision_post_tessellate(*this);
++  if (!params.progress || (!params.progress->get_cancel() && !params.progress->get_error())) {
++    /* Linear position interpolation does not compute motion normals alongside
++     * derivatives as Catmull-Clark does. Fill missing generated motion normals
++     * only after all diced triangles and position samples are complete. */
++    if (subdivision_type == SUBDIVISION_LINEAR) {
++      add_vertex_normals();
++    }
++    if (subdivision_post_tessellate) {
++      subdivision_post_tessellate(*this);
++    }
+   }
+ 
+   // TODO: Free subd base data? Or will this break interactive updates?
+diff --git a/src/subd/dice.cpp b/src/subd/dice.cpp
+index 797377cd69bc8f8f2dd9fc834d3bf9bb96ec57af..e9f2773c7813786cc9d25646fb62e225c05558f5 100644
+--- a/src/subd/dice.cpp
++++ b/src/subd/dice.cpp
+@@ -37,7 +37,9 @@ EdgeDice::EdgeDice(const SubdParams &params_,
+   mesh_shader = mesh->shader.data();
+   mesh_smooth = mesh->smooth.data();
+   mesh_P = mesh->get_position_for_write();
+-  mesh_N = attr_vN->data_for_write<packed_normal>();
++  /* Authored corner normals replace the temporary vertex-normal attribute
++   * during interpolation setup. Their values are written per triangle. */
++  mesh_N = attr_vN ? attr_vN->data_for_write<packed_normal>() : nullptr;
+ 
+   if (params.ptex) {
+     Attribute *attr_ptex_face_id = params.mesh->attributes.add(ATTR_STD_PTEX_FACE_ID);
+@@ -107,7 +109,9 @@ void EdgeDice::set_vertex(const SubPatch &sub, const int index, const float2 uv)
+   sub.patch->eval(&P, nullptr, nullptr, &N, uv.x, uv.y);
+ 
+   mesh_P[index] = P;
+-  mesh_N[index] = packed_normal(N);
++  if (mesh_N) {
++    mesh_N[index] = packed_normal(N);
++  }
+ 
+   for (const SubdAttribute &attr : interpolation.vertex_attributes) {
+     attr.interp(sub.patch->patch_index, sub.face_index, sub.corner, &index, &uv, 1);

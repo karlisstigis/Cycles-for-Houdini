@@ -1,0 +1,510 @@
+{
+  "houdini_version": "22.0.429",
+  "source": "Stock HScript Int/Toggle/Menu controls; numeric coercion and clamping",
+  "reports": [
+    {
+      "path": "artifacts\\hfs-material-expression-consumer-report.json",
+      "sha256": "ff4b951ca67345edabb988fe8fd8caabae18234d83dd9877d43cdc051a44dd52"
+    },
+    {
+      "path": "artifacts\\hfs-material-expression-consumer-boundary-report.json",
+      "sha256": "4f838025b5214272c722e27fb0f842ae334ab9e2b5e2775c66e4ac0ee2ba557e"
+    },
+    {
+      "path": "artifacts\\hfs-material-expression-large-consumer-report.json",
+      "sha256": "8d12227b4a0eae120ceb8981f279af1af2cbdbaf0e0b7f02df1cf5f3598db56f"
+    }
+  ],
+  "cases": [
+    {
+      "kind": "integer",
+      "gain": -2.6,
+      "value": -3,
+      "string": "-3",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -2.6,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -2.6,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -1.6,
+      "value": -2,
+      "string": "-2",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -1.6,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -1.6,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -0.6,
+      "value": -1,
+      "string": "-1",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -0.6,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -0.6,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -0.4,
+      "value": 0,
+      "string": "0",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -0.4,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -0.4,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 0.0,
+      "value": 0,
+      "string": "0",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 0.0,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 0.0,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 0.4,
+      "value": 0,
+      "string": "0",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 0.4,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 0.4,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 0.6,
+      "value": 1,
+      "string": "1",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 0.6,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 0.6,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 1.4,
+      "value": 1,
+      "string": "1",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 1.4,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 1.4,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 1.6,
+      "value": 2,
+      "string": "2",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 1.6,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 1.6,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 2.6,
+      "value": 3,
+      "string": "3",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 2.6,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 2.6,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 10.0,
+      "value": 10,
+      "string": "10",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 10.0,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 10.0,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 3e+38,
+      "value": -9223372036854775808,
+      "string": "-9223372036854775808",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 3e+38,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 3e+38,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -2.5,
+      "value": -2,
+      "string": "-2",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -2.5,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -2.5,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -1.5,
+      "value": -1,
+      "string": "-1",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -1.5,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -1.5,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -0.5,
+      "value": 0,
+      "string": "0",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -0.5,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -0.5,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 0.5,
+      "value": 1,
+      "string": "1",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 0.5,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 0.5,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 1.5,
+      "value": 2,
+      "string": "2",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 1.5,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 1.5,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 2.5,
+      "value": 3,
+      "string": "3",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 2.5,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 2.5,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -1000000000000.0,
+      "value": -1000000000000,
+      "string": "-1000000000000",
+      "errors": []
+    },
+    {
+      "kind": "bounded",
+      "gain": -1000000000000.0,
+      "value": 0,
+      "string": "0",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -1000000000000.0,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -1000000000000.0,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 1000000000000.0,
+      "value": 1000000000000,
+      "string": "1000000000000",
+      "errors": []
+    },
+    {
+      "kind": "bounded",
+      "gain": 1000000000000.0,
+      "value": 32767,
+      "string": "32767",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 1000000000000.0,
+      "value": 1,
+      "string": "on",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 1000000000000.0,
+      "value": 1,
+      "string": "b",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": -3e+38,
+      "value": -9223372036854775808,
+      "string": "-9223372036854775808",
+      "errors": []
+    },
+    {
+      "kind": "bounded",
+      "gain": -3e+38,
+      "value": 0,
+      "string": "0",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": -3e+38,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": -3e+38,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    },
+    {
+      "kind": "integer",
+      "gain": 3e+38,
+      "value": -9223372036854775808,
+      "string": "-9223372036854775808",
+      "errors": []
+    },
+    {
+      "kind": "bounded",
+      "gain": 3e+38,
+      "value": 32767,
+      "string": "32767",
+      "errors": []
+    },
+    {
+      "kind": "toggle",
+      "gain": 3e+38,
+      "value": 0,
+      "string": "off",
+      "errors": []
+    },
+    {
+      "kind": "mode",
+      "gain": 3e+38,
+      "value": 0,
+      "string": "a",
+      "errors": []
+    }
+  ]
+}

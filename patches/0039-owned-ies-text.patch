@@ -1,0 +1,59 @@
+From c8a2748a24386d9b036572daeaa18a887f2049e4 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:35 +0100
+Subject: [PATCH] owned ies text
+
+Locked-Patch: patches/0039-owned-ies-text.patch
+Locked-Patch-SHA256: 7bb83fb5f4097f180c507f4db0a569af358d0d4eed6fead294961a25bce7208d
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_light_material_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 9ac444b193d9d04370af605c8932623891c48113
+Previous-Patch: patches/0039-owned-ies-text.patch
+Previous-Patch-SHA256: 7bb83fb5f4097f180c507f4db0a569af358d0d4eed6fead294961a25bce7208d
+Rationale: Host-owned IES text and revision tokens support in-memory profiles without interning whole resources or pretending they are filenames.
+Contract: owned ies text
+Tests: tests/houdini_light_material_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
+index 93a2720cbc5b76b13cc404cb17c073a30d518664..93c409217606a3d70427b1582048fca60e187eee 100644
+--- a/src/scene/shader_nodes.cpp
++++ b/src/scene/shader_nodes.cpp
+@@ -1438,6 +1438,8 @@ NODE_DEFINE(IESLightNode)
+   TEXTURE_MAPPING_DEFINE(IESLightNode);
+ 
+   SOCKET_STRING(ies, "IES", ustring());
++  SOCKET_UINT64(resource_revision_high, "Resource Revision High", 0, SocketType::INTERNAL);
++  SOCKET_UINT64(resource_revision_low, "Resource Revision Low", 0, SocketType::INTERNAL);
+   SOCKET_STRING(filename, "File Name", ustring());
+ 
+   SOCKET_IN_FLOAT(strength, "Strength", 1.0f);
+@@ -1476,7 +1478,10 @@ void IESLightNode::get_slot()
+   assert(light_manager);
+ 
+   if (slot == -1) {
+-    if (ies.empty()) {
++    if (owned_ies) {
++      slot = light_manager->add_ies(*owned_ies, true);
++    }
++    else if (ies.empty()) {
+       slot = light_manager->add_ies_from_file(filename.string());
+     }
+     else {
+diff --git a/src/scene/shader_nodes.h b/src/scene/shader_nodes.h
+index 41b731b75e41b932acfadbb79db282659abf186a..d39902ddb9a025885d19b91a09f89c5595a2f20b 100644
+--- a/src/scene/shader_nodes.h
++++ b/src/scene/shader_nodes.h
+@@ -400,6 +400,11 @@ class IESLightNode : public TextureNode {
+ 
+   NODE_SOCKET_API(ustring, filename)
+   NODE_SOCKET_API(ustring, ies)
++  NODE_SOCKET_API(uint64_t, resource_revision_high)
++  NODE_SOCKET_API(uint64_t, resource_revision_low)
++
++  /* Host-owned text is shared by compiler clones; never intern whole profiles. */
++  std::shared_ptr<const string> owned_ies;
+ 
+   NODE_SOCKET_API(float, strength)
+   NODE_SOCKET_API(float3, vector)

@@ -1,0 +1,16 @@
+# Artist guides
+
+- [Render the native SOP example](try-native-sops.md)
+- [Instance Houdini geometry and animated Blender assets](point-instancing.md)
+- [Place a Blender object or collection with a packed SOP](blender-references.md)
+- [Browse Blender asset libraries and import assets](asset-browser.md)
+- [Import collections and objects of a .blend file](blender-import.md)
+- [Render hair as thick curves or rounded ribbons](native-object-properties.md#hair-and-curve-width)
+- [Render Gaussian splats](gaussian-splats.md)
+- [Set up Image Iris](image-iris.md)
+- [Assign materials](native-materials.md) and [apply overrides](native-material-overrides.md)
+- [Convert Houdini materials to Cycles](convert-materials.md)
+- [Set up lights](light-controls.md) and [the world shader](native-world.md)
+- [Configure passes](native-passes.md), [denoising](native-denoising.md) and [background rendering](native-background-final.md)
+- [Choose the output format and read render information in EXR headers](output-formats.md)
+- [Troubleshoot installation, devices and Blender references](troubleshooting.md)

@@ -1,0 +1,35 @@
+From 9f1020edd6e2509f67f2541872e6b8c8618e1404 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:32 +0100
+Subject: [PATCH] world auto map resolution
+
+Locked-Patch: patches/0020-world-auto-map-resolution.patch
+Locked-Patch-SHA256: 23d581bc91af1ccbc0b73c0eebbe0d48a4119cde5c62c69a5e3612a21e9e5e83
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_world_sampling_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: c038022952a744a0e1a590bbb64e496f3358f660
+Previous-Patch: patches/0020-world-auto-map-resolution.patch
+Previous-Patch-SHA256: 23d581bc91af1ccbc0b73c0eebbe0d48a4119cde5c62c69a5e3612a21e9e5e83
+Rationale: Automatic world-map resolution must handle multiple detected suns rather than a single-sun assumption; this affects generic background importance sampling.
+Contract: world auto map resolution
+Tests: tests/houdini_world_sampling_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index 8ebfb7afeddd9a9998c159aef058795823651415..98e4fbc3bb6baf793a307b1a960d3b305dc0b015 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -1293,8 +1293,10 @@ void LightManager::device_update_background(Device *device,
+   kbackground->use_sun_guiding = (num_suns == 1);
+   if (!kbackground->use_sun_guiding) {
+     kbackground->sun_weight = 0.0f;
+-    environment_res.x = max(environment_res.x, 4096);
+-    environment_res.y = max(environment_res.y, 2048);
++    if (num_suns > 1) {
++      environment_res.x = max(environment_res.x, 4096);
++      environment_res.y = max(environment_res.y, 2048);
++    }
+   }
+ 
+   /* Enable MIS for background sampling if any strategy is active. */

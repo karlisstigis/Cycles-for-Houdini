@@ -1,0 +1,743 @@
+From c380874bef0c34d10348e51229b48d9741a6eed8 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:39 +0100
+Subject: [PATCH] borrow immutable cached triangle emitters
+
+Locked-Patch: patches/0060-borrow-immutable-cached-triangle-emitters.patch
+Locked-Patch-SHA256: dee7c04ea06569a7bf9ffc7605ad054a0ea14e59654a5343ed19ed2836eda7cf
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_retained_emitter_update_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 34ac51709728c344ff1496e4cf8844c920235f57
+Previous-Patch: patches/0060-borrow-immutable-cached-triangle-emitters.patch
+Previous-Patch-SHA256: dee7c04ea06569a7bf9ffc7605ad054a0ea14e59654a5343ed19ed2836eda7cf
+Rationale: Borrowed immutable triangle emitter views eliminate copies only while the source cache identity/lifetime is stable.
+Contract: borrow immutable cached triangle emitters
+Tests: tests/houdini_retained_emitter_update_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/light.cpp b/src/scene/light.cpp
+index f6353e7487512f28d0bd9c49beaa22be7274029f..a8fae41dc4ac2d48269e9095c297c7d9ad160e7f 100644
+--- a/src/scene/light.cpp
++++ b/src/scene/light.cpp
+@@ -770,7 +770,7 @@ struct LightTreeInstanceRoot {
+ 
+ struct LightTreeFlatten {
+   const Scene *scene;
+-  const LightTreeEmitter *emitters;
++  const LightTree *tree;
+   const uint *object_lookup_offset;
+   uint *light_array;
+   uint *triangle_array;
+@@ -870,7 +870,7 @@ static int light_tree_flatten(LightTreeFlatten &flatten,
+                               const LightTreeInstanceRoot *instance = nullptr);
+ 
+ static void light_tree_triangle_emitter_copy_to_device(const LightTreeFlatten &flatten,
+-                                                       const LightTreeEmitter &emitter,
++                                                       const LightTreeEmitterView &emitter,
+                                                        const uint bit_trail,
+                                                        const int emitter_index,
+                                                        KernelLightTreeEmitter &destination)
+@@ -904,9 +904,10 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+                                                       int &next_node_index)
+ {
+   /* Convert emitters to kernel representation. */
++  LightTreeTriangleReader reader;
+   for (int i = 0; i < node.get_leaf().num_emitters; i++) {
+     const int emitter_index = i + node.get_leaf().first_emitter_index;
+-    const LightTreeEmitter &emitter = flatten.emitters[emitter_index];
++    const LightTreeEmitterView emitter = flatten.tree->emitter(emitter_index, reader);
+     KernelLightTreeEmitter &destination = kemitters[emitter_index];
+ 
+     if (emitter.is_triangle()) {
+@@ -938,7 +939,7 @@ static void light_tree_leaf_emitters_copy_and_flatten(LightTreeFlatten &flatten,
+ 
+       /* Create instance node. One instance node will be the same as the
+        * reference node, and for that it will recursively build the subtree. */
+-      LightTreeNode *instance_node = emitter.root.get();
++      LightTreeNode *instance_node = emitter.root;
+       LightTreeNode *reference_node = instance_node->get_reference();
+ 
+       auto map_it = flatten.instances.find(reference_node);
+@@ -1009,6 +1010,7 @@ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+     }
+   }
+   const auto flatten_range = [&](const blocked_range<int> &range) {
++    LightTreeTriangleReader reader;
+     std::array<LightTreeCachedNode, light_tree_cache_block_size> decoded;
+     for (int block = range.begin(); block < range.end(); ++block) {
+       const int first = block * light_tree_cache_block_size;
+@@ -1048,7 +1050,7 @@ static int light_tree_cached_flatten(LightTreeFlatten &flatten,
+           for (int i = 0; i < leaf.num_emitters; ++i) {
+             const int emitter_index = leaf.first_emitter_index + i;
+             light_tree_triangle_emitter_copy_to_device(
+-                flatten, flatten.emitters[emitter_index], node.bit_trail,
++                flatten, flatten.tree->emitter(emitter_index, reader), node.bit_trail,
+                 emitter_index, kemitters[emitter_index]);
+           }
+         }
+@@ -1178,8 +1180,9 @@ static std::pair<int, LightTreeMeasure> light_tree_specialize_nodes_flatten(
+     int first_emitter = -1;
+     int num_emitters = 0;
+ 
++    LightTreeTriangleReader reader;
+     for (int i = 0; i < node->get_leaf().num_emitters; i++) {
+-      const LightTreeEmitter &emitter = flatten.emitters[node->get_leaf().first_emitter_index + i];
++      const LightTreeEmitterView emitter = flatten.tree->emitter(node->get_leaf().first_emitter_index + i, reader);
+       if (emitter.light_set_membership & light_link_mask) {
+         /* Assumes emitters are consecutive due to LightTree::sort_leaf. */
+         if (first_emitter == -1) {
+@@ -1312,6 +1315,7 @@ void LightManager::device_update_tree(Device *device,
+   const double started = profiling ? time_dt() : 0;
+   double construction_seconds = 0, flatten_seconds = 0, upload_seconds = 0, work_end = 0;
+   size_t profile_nodes = 0, profile_emitters = 0, profile_instance_swaps = 0;
++  size_t profile_dense_emitters = 0, profile_cached_emitters = 0, profile_emitter_spans = 0;
+   size_t profile_parallel_cached_nodes = 0, profile_parallel_cached_ranges = 0;
+   size_t profile_retained_cached_nodes = 0, profile_retained_cached_ranges = 0;
+   const size_t profile_previous_ranges = flattened_mesh_ranges->ranges.size();
+@@ -1335,7 +1339,8 @@ void LightManager::device_update_tree(Device *device,
+                    "\"buffers_valid\":%s,\"retained_cached_nodes\":%zu,\"retained_cached_ranges\":%zu,"
+                    "\"previous_ranges\":%zu,\"recorded_ranges\":%zu,\"triangle_lookup_compared\":%s,"
+                    "\"nodes_upload_bytes\":%zu,\"nodes_upload_spans\":%zu,\"nodes_partial_upload\":%s,"
+-                   "\"emitters_upload_bytes\":%zu,\"emitters_upload_spans\":%zu,\"emitters_partial_upload\":%s}\n",
++                   "\"emitters_upload_bytes\":%zu,\"emitters_upload_spans\":%zu,\"emitters_partial_upload\":%s,"
++                   "\"dense_source_emitters\":%zu,\"cached_source_emitters\":%zu,\"source_spans\":%zu}\n",
+                    work_end > 0 && tree_buffers_valid ? "true" : "false",
+                    profile_nodes, profile_emitters, construction_seconds, flatten_seconds,
+                    upload_seconds, work_end > 0 ? finished - work_end : 0, finished - started,
+@@ -1351,7 +1356,8 @@ void LightManager::device_update_tree(Device *device,
+                    profile_triangle_lookup_compared ? "true" : "false",
+                    nodes_upload.bytes, nodes_upload.spans, nodes_upload.partial ? "true" : "false",
+                    emitters_upload.bytes, emitters_upload.spans,
+-                   emitters_upload.partial ? "true" : "false");
++                   emitters_upload.partial ? "true" : "false",
++                   profile_dense_emitters, profile_cached_emitters, profile_emitter_spans);
+     }
+   });
+ 
+@@ -1364,6 +1370,9 @@ void LightManager::device_update_tree(Device *device,
+   construction_seconds = constructed - started;
+   profile_nodes = light_tree.num_nodes;
+   profile_emitters = light_tree.num_emitters();
++  profile_dense_emitters = light_tree.dense_emitters();
++  profile_cached_emitters = light_tree.cached_emitters();
++  profile_emitter_spans = light_tree.emitter_spans();
+   mesh_light_tree_cache->report(!progress.get_cancel());
+   if (progress.get_cancel()) {
+     return;
+@@ -1375,7 +1384,7 @@ void LightManager::device_update_tree(Device *device,
+   const char *disable_ranges = std::getenv("CYCLES_HOUDINI_DISABLE_RETAINED_LIGHT_TREE_RANGES");
+   flatten.retain_ranges = !(disable_ranges && std::strcmp(disable_ranges, "1") == 0);
+   flatten.scene = scene;
+-  flatten.emitters = light_tree.get_emitters();
++  flatten.tree = &light_tree;
+   flatten.object_lookup_offset = dscene->object_lookup_offset.data();
+   /* We want to create separate arrays corresponding to triangles and lights,
+    * which will be used to index back into the light tree for PDF calculations. */
+diff --git a/src/scene/light_tree.cpp b/src/scene/light_tree.cpp
+index 86355303b4fb260ad75996428ad56d26716b88c0..125c8d45af6d6d44f60d75f63253679c355b164f 100644
+--- a/src/scene/light_tree.cpp
++++ b/src/scene/light_tree.cpp
+@@ -10,6 +10,12 @@
+ #include "util/math_fast.h"
+ #include "util/progress.h"
+ #include <unordered_set>
++#include <algorithm>
++#include <cstdlib>
++#include <cstdio>
++#include <cstring>
++#include <limits>
++#include <stdexcept>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -338,6 +344,36 @@ LightTree::LightTree(Scene *scene,
+   }
+ }
+ 
++LightTreeEmitterView LightTree::emitter(const int index, LightTreeTriangleReader &reader) const
++{
++  if (index < 0 || size_t(index) >= num_emitters()) {
++    throw std::runtime_error("Light-tree emitter index exceeds its logical owner");
++  }
++  int dense_index;
++  if (index < triangle_emitters_) {
++    auto found = std::upper_bound(triangle_spans_.begin(), triangle_spans_.end(), index,
++                                  [](int value, const EmitterSpan &span) { return value < span.first; });
++    if (found == triangle_spans_.begin()) {
++      throw std::runtime_error("Missing logical mesh-light emitter span");
++    }
++    --found;
++    const int local = index - found->first;
++    if (local < 0 || local >= found->count) {
++      throw std::runtime_error("Mesh-light emitter span is incomplete");
++    }
++    if (found->cached) {
++      return mesh_cache_->triangle(*found->cached, local, found->object_id, reader);
++    }
++    dense_index = found->dense_first + local;
++  }
++  else {
++    dense_index = dense_triangle_emitters_ + index - triangle_emitters_;
++  }
++  const LightTreeEmitter &source = emitters_.at(dense_index);
++  return {source.root.get(), source.prim_id, source.object_id,
++           source.light_set_membership, source.measure};
++}
++
+ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+ {
+   if (mesh_cache_) {
+@@ -355,10 +391,19 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   const int num_distant_lights = distant_lights_.size();
+ 
+   /* Create a node for each mesh light, and keep track of unique mesh lights. */
+-  std::unordered_map<LightTreeMeshKey, std::tuple<LightTreeNode *, int, int, bool>, LightTreeMeshKeyHash> unique_mesh;
++  struct MeshBuild {
++    LightTreeNode *root;
++    const LightTreeMeshCache::Entry *cached;
++    int object_id, start = 0, end = 0, first_emitter = 0;
++  };
++  std::unordered_map<LightTreeMeshKey, MeshBuild, LightTreeMeshKeyHash> unique_mesh;
++  vector<MeshBuild *> mesh_order;
+   std::unordered_set<Mesh *> live_meshes;
+   uint *object_offsets = dscene->object_lookup_offset.alloc(scene->objects.size());
+-  emitters_.reserve(num_triangles + num_local_lights + num_distant_lights);
++  const char *disable_views = std::getenv("CYCLES_HOUDINI_DISABLE_LIGHT_TREE_EMITTER_VIEWS");
++  const bool use_views = !(disable_views && std::strcmp(disable_views, "1") == 0);
++  size_t dense_capacity = num_local_lights + num_distant_lights;
++  size_t borrowed_triangles = 0;
+   for (LightTreeEmitter &emitter : mesh_lights_) {
+     Object *object = scene->objects[emitter.object_id];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+@@ -368,36 +413,67 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+ 
+     auto map_it = unique_mesh.find(key);
+     if (map_it == unique_mesh.end()) {
+-      const int start = emitters_.size();
+       const auto *cached = mesh_cache_ ? mesh_cache_->find(scene, mesh, emitter.object_id) : nullptr;
+-      if (cached) {
+-        mesh_cache_->restore(*cached, *this, emitter.root.get(), emitter.object_id, emitters_, progress_);
+-      }
+-      else {
+-        add_mesh(scene, mesh, emitter.object_id);
+-      }
+-      const int end = emitters_.size();
+-
+-      unique_mesh[key] = std::make_tuple(emitter.root.get(), start, end, cached != nullptr);
++      auto inserted = unique_mesh.emplace(key, MeshBuild{emitter.root.get(), cached, emitter.object_id});
++      mesh_order.push_back(&inserted.first->second);
++      dense_capacity += cached ? (use_views ? 0 : mesh_cache_->triangle_count(*cached)) :
++                                 mesh->num_triangles();
++      if (cached && use_views) borrowed_triangles += mesh_cache_->triangle_count(*cached);
+       emitter.root->object_id = emitter.object_id;
+     }
+     else {
+-      emitter.root->make_instance(std::get<0>(map_it->second), emitter.object_id);
++      emitter.root->make_instance(map_it->second.root, emitter.object_id);
+     }
+     object_offsets[emitter.object_id] = offset_map_.at(key);
+   }
+ 
++  /* Cache entries are pinned by find() for this complete build. Dense storage
++   * contains only cold triangles and the small outer forest. Logical triangle
++   * indices retain the original discovery order across mixed hit/miss builds. */
++  const char *profile = std::getenv("CYCLES_HOUDINI_PROFILE_LIGHT_TREE");
++  if (profile && std::strcmp(profile, "1") == 0) {
++    std::fprintf(stderr, "CH_LIGHT_TREE_SOURCE_PLAN {\"dense_emitters\":%zu,\"borrowed_triangles\":%zu}\n",
++                 dense_capacity, borrowed_triangles);
++  }
++  if (dense_capacity > size_t(std::numeric_limits<int>::max())) {
++    throw std::runtime_error("Dense mesh-light emitter storage exceeds the engine limit");
++  }
++  emitters_.reserve(dense_capacity);
++  for (MeshBuild *item : mesh_order) {
++    item->start = emitters_.size();
++    item->first_emitter = triangle_emitters_;
++    int count;
++    if (item->cached) {
++      count = mesh_cache_->restore(*item->cached, *this, item->root, item->object_id,
++                                   item->first_emitter, use_views ? nullptr : &emitters_, progress_);
++    }
++    else {
++      Mesh *mesh = static_cast<Mesh *>(scene->objects[item->object_id]->get_geometry());
++      add_mesh(scene, mesh, item->object_id);
++      count = int(emitters_.size()) - item->start;
++    }
++    if (progress_.get_cancel()) return nullptr;
++    item->end = emitters_.size();
++    if (count > std::numeric_limits<int>::max() - triangle_emitters_) {
++      throw std::runtime_error("Mesh-light emitter indices exceed the engine limit");
++    }
++    triangle_emitters_ += count;
++    if (count) triangle_spans_.push_back({item->first_emitter, count, item->start,
++                                         item->object_id, use_views ? item->cached : nullptr});
++  }
++  dense_triangle_emitters_ = emitters_.size();
++
+   if (mesh_cache_) {
+     mesh_cache_->prune([&](Mesh *mesh) { return live_meshes.find(mesh) != live_meshes.end(); });
+   }
+ 
+   /* Build a subtree for each unique mesh light. */
+   parallel_for_each(unique_mesh, [this](auto &map_it) {
+-    LightTreeNode *node = std::get<0>(map_it.second);
+-    int const start = std::get<1>(map_it.second);
+-    int const end = std::get<2>(map_it.second);
+-    if (!std::get<3>(map_it.second)) {
+-      recursive_build(self, node, start, end, emitters_.data(), 0, 0);
++    const MeshBuild &item = map_it.second;
++    LightTreeNode *node = item.root;
++    if (!item.cached) {
++      recursive_build(self, node, item.start, item.end, emitters_.data(), 0, 0,
++                       item.first_emitter - item.start);
+     }
+     node->type |= LIGHT_TREE_INSTANCE;
+   });
+@@ -410,10 +486,10 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+    * the reference root. Kernel flattening may later mutate instance flags. */
+   if (mesh_cache_) {
+     for (const auto &item : unique_mesh) {
+-      if (!std::get<3>(item.second)) {
+-        const auto *node = std::get<0>(item.second);
++      if (!item.second.cached) {
++        const auto *node = item.second.root;
+         mesh_cache_->store(scene, item.first.mesh, node->object_id, node, emitters_,
+-                           std::get<1>(item.second), std::get<2>(item.second), progress_);
++                           item.second.start, item.second.end, item.second.first_emitter, progress_);
+       }
+       if (progress_.get_cancel()) {
+         return nullptr;
+@@ -426,7 +502,7 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+     Object *object = scene->objects[emitter.object_id];
+     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+ 
+-    LightTreeNode *reference = std::get<0>(unique_mesh.at(light_tree_mesh_key(object)));
++    LightTreeNode *reference = unique_mesh.at(light_tree_mesh_key(object)).root;
+     /* Keep the shared reference local until every parallel instance measure is
+      * calculated. Root measures are assigned in the serial loop below. */
+     emitter.measure = reference->measure;
+@@ -454,7 +530,8 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   }
+ 
+   /* Could be different from `num_triangles` if only some triangles of an object are emissive. */
+-  const int num_emissive_triangles = emitters_.size();
++  const int num_emissive_triangles = triangle_emitters_;
++  const int dense_local_end = dense_triangle_emitters_ + num_local_lights;
+   num_local_lights += num_emissive_triangles;
+ 
+   /* Build the top level tree. */
+@@ -464,7 +541,8 @@ LightTreeNode *LightTree::build(Scene *scene, DeviceScene *dscene)
+   std::move(local_lights_.begin(), local_lights_.end(), std::back_inserter(emitters_));
+   std::move(mesh_lights_.begin(), mesh_lights_.end(), std::back_inserter(emitters_));
+   recursive_build(
+-      left, root_.get(), num_emissive_triangles, num_local_lights, emitters_.data(), 0, 1);
++      left, root_.get(), dense_triangle_emitters_, dense_local_end, emitters_.data(), 0, 1,
++      num_emissive_triangles - dense_triangle_emitters_);
+   task_pool.wait_work();
+ 
+   if (progress_.get_cancel()) {
+@@ -502,7 +580,8 @@ void LightTree::recursive_build(const Child child,
+                                 const int end,
+                                 LightTreeEmitter *emitters,
+                                 const uint bit_trail,
+-                                const int depth)
++                                const int depth,
++                                const int emitter_offset)
+ {
+   if (progress_.get_cancel()) {
+     return;
+@@ -536,27 +615,29 @@ void LightTree::recursive_build(const Child child,
+ 
+     /* Recursively build the left branch. */
+     if (middle - start > MIN_EMITTERS_PER_THREAD) {
+-      task_pool.push([this, node, start, middle, emitters, bit_trail, depth] {
+-        recursive_build(left, node, start, middle, emitters, bit_trail, depth + 1);
++      task_pool.push([this, node, start, middle, emitters, bit_trail, depth, emitter_offset] {
++        recursive_build(left, node, start, middle, emitters, bit_trail, depth + 1, emitter_offset);
+       });
+     }
+     else {
+-      recursive_build(left, node, start, middle, emitters, bit_trail, depth + 1);
++      recursive_build(left, node, start, middle, emitters, bit_trail, depth + 1, emitter_offset);
+     }
+ 
+     /* Recursively build the right branch. */
+     if (end - middle > MIN_EMITTERS_PER_THREAD) {
+-      task_pool.push([this, node, middle, end, emitters, bit_trail, depth] {
+-        recursive_build(right, node, middle, end, emitters, bit_trail | (1u << depth), depth + 1);
++      task_pool.push([this, node, middle, end, emitters, bit_trail, depth, emitter_offset] {
++        recursive_build(right, node, middle, end, emitters, bit_trail | (1u << depth), depth + 1,
++                         emitter_offset);
+       });
+     }
+     else {
+-      recursive_build(right, node, middle, end, emitters, bit_trail | (1u << depth), depth + 1);
++      recursive_build(right, node, middle, end, emitters, bit_trail | (1u << depth), depth + 1,
++                       emitter_offset);
+     }
+   }
+   else {
+     sort_leaf(start, end, emitters);
+-    node->make_leaf(start, end - start);
++    node->make_leaf(start + emitter_offset, end - start);
+   }
+ }
+ 
+diff --git a/src/scene/light_tree.h b/src/scene/light_tree.h
+index 1443247b38138a0ea8c913e279e1eb0a7a4d93c2..1bd515e628ee218b0034981d1ec70ad913499142 100644
+--- a/src/scene/light_tree.h
++++ b/src/scene/light_tree.h
+@@ -6,6 +6,7 @@
+ 
+ #include "scene/light.h"
+ #include "scene/scene.h"
++#include "scene/light_tree_cache.h"
+ 
+ #include "util/boundbox.h"
+ #include "util/task.h"
+@@ -218,6 +219,18 @@ struct LightTreeEmitter {
+   };
+ };
+ 
++/* Read-only fields consumed after construction. A mesh root is borrowed only
++ * while its builder lives; cached triangles never acquire root ownership. */
++struct LightTreeEmitterView {
++  LightTreeNode *root = nullptr;
++  int prim_id = -1, object_id = -1;
++  uint64_t light_set_membership = 0;
++  LightTreeMeasure measure = LightTreeMeasure::empty;
++  bool is_mesh() const { return root != nullptr; }
++  bool is_triangle() const { return !root && prim_id >= 0; }
++  bool is_light() const { return !root && prim_id < 0; }
++};
++
+ /* Light Tree Bucket
+  * Struct used to determine splitting costs in the light BVH. */
+ struct LightTreeBucket {
+@@ -423,6 +436,12 @@ class LightTree {
+   vector<LightTreeEmitter> local_lights_;
+   vector<LightTreeEmitter> distant_lights_;
+   vector<LightTreeEmitter> mesh_lights_;
++  struct EmitterSpan {
++    int first, count, dense_first, object_id;
++    const LightTreeMeshCache::Entry *cached = nullptr;
++  };
++  vector<EmitterSpan> triangle_spans_;
++  int triangle_emitters_ = 0, dense_triangle_emitters_ = 0;
+ 
+   std::unordered_map<LightTreeMeshKey, int, LightTreeMeshKeyHash> offset_map_;
+ 
+@@ -463,13 +482,13 @@ class LightTree {
+ 
+   size_t num_emitters() const
+   {
+-    return emitters_.size();
++    return emitters_.size() + triangle_emitters_ - dense_triangle_emitters_;
+   }
+ 
+-  const LightTreeEmitter *get_emitters() const
+-  {
+-    return emitters_.data();
+-  }
++  LightTreeEmitterView emitter(int index, LightTreeTriangleReader &reader) const;
++  size_t dense_emitters() const { return emitters_.size(); }
++  size_t cached_emitters() const { return triangle_emitters_ - dense_triangle_emitters_; }
++  size_t emitter_spans() const { return triangle_spans_.size(); }
+ 
+  private:
+   /* Thread. */
+@@ -483,7 +502,8 @@ class LightTree {
+                        const int end,
+                        LightTreeEmitter *emitters,
+                        const uint bit_trail,
+-                       int depth);
++                       int depth,
++                       int emitter_offset = 0);
+ 
+   bool should_split(LightTreeEmitter *emitters,
+                     const int start,
+diff --git a/src/scene/light_tree_cache.cpp b/src/scene/light_tree_cache.cpp
+index 70b70f5a853c058fc79389d07643e9fb01dfdae7..45ab45c1f6fb39a506f99c035e8e12b5cff674a6 100644
+--- a/src/scene/light_tree_cache.cpp
++++ b/src/scene/light_tree_cache.cpp
+@@ -232,10 +232,7 @@ static_assert(sizeof(CachedNode) == 64);
+ /* These are all triangle fields consumed by flattening after construction.
+  * Centroids/bounds are not rescanned on a hit. Nonuniform instance measures
+  * retain the upstream transformed-triangle recount. */
+-struct CachedTriangle {
+-  int primitive;
+-  float energy, theta_o, theta_e;
+-};
++using CachedTriangle = LightTreeCachedTriangle;
+ }  // namespace
+ 
+ struct LightTreeMeshCache::Entry {
+@@ -259,6 +256,7 @@ struct LightTreeMeshCache::Impl {
+   std::unordered_multimap<Mesh *, Entry> entries;
+   size_t bytes = 0, hits = 0, misses = 0, evictions = 0;
+   size_t admission_skips = 0, view_nodes = 0;
++  size_t borrowed_triangles = 0, materialized_triangles = 0;
+   size_t layout_invalidations = 0;
+   double emitter_seconds = 0, clone_seconds = 0, store_seconds = 0;
+   double view_seconds = 0;
+@@ -314,6 +312,7 @@ void LightTreeMeshCache::begin_build(const size_t triangles)
+   impl_->hits = impl_->misses = impl_->evictions = 0;
+   impl_->emitter_seconds = impl_->clone_seconds = impl_->store_seconds = 0;
+   impl_->admission_skips = impl_->view_nodes = 0;
++  impl_->borrowed_triangles = impl_->materialized_triangles = 0;
+   impl_->view_seconds = 0;
+   impl_->layout_invalidations = 0;
+   /* One direct tree is faster to borrow. Large simultaneous working sets use
+@@ -374,18 +373,62 @@ const LightTreeMeshCache::Entry *LightTreeMeshCache::find(Scene *scene, Mesh *me
+   return nullptr;
+ }
+ 
+-void LightTreeMeshCache::restore(const Entry &entry,
++int LightTreeMeshCache::triangle_count(const Entry &entry) const
++{
++  if (entry.borrowed_build != impl_->build) {
++    throw std::runtime_error("Mesh-light triangle view outlived its build");
++  }
++  return entry.num_triangles();
++}
++
++LightTreeEmitterView LightTreeMeshCache::triangle(const Entry &entry,
++                                                  const int index,
++                                                  const int object_id,
++                                                  LightTreeTriangleReader &reader) const
++{
++  if (entry.borrowed_build != impl_->build || index < 0 || index >= entry.num_triangles()) {
++    throw std::runtime_error("Invalid borrowed mesh-light triangle index");
++  }
++  const CachedTriangle *triangle;
++  if (!entry.triangles.empty()) {
++    triangle = &entry.triangles[index];
++  }
++  else {
++    const int block = index / light_tree_cache_block_size;
++    if (reader.entry != &entry || reader.identity != entry.nodes.identity || reader.block != block) {
++      if (!reader.scratch) {
++        reader.scratch = make_unique<std::array<CachedTriangle, light_tree_cache_block_size>>();
++      }
++      entry.packed_triangles.read(block, reader.scratch->data());
++      reader.entry = &entry;
++      reader.identity = entry.nodes.identity;
++      reader.block = block;
++    }
++    triangle = &(*reader.scratch)[index % light_tree_cache_block_size];
++  }
++  LightTreeEmitterView result;
++  result.prim_id = triangle->primitive;
++  result.object_id = object_id;
++  result.light_set_membership = entry.key.membership;
++  result.measure.energy = triangle->energy;
++  result.measure.bcone.theta_o = triangle->theta_o;
++  result.measure.bcone.theta_e = triangle->theta_e;
++  return result;
++}
++
++int LightTreeMeshCache::restore(const Entry &entry,
+                                  LightTree &builder,
+                                  LightTreeNode *root,
+                                  int object_id,
+-                                 vector<LightTreeEmitter> &emitters,
++                                 const int first_emitter,
++                                 vector<LightTreeEmitter> *materialized,
+                                  Progress &progress) const
+ {
+   const double started = impl_->profiling ? time_dt() : 0;
+   assert(entry.borrowed_build == impl_->build);
+-  const int start = emitters.size();
++  const int start = first_emitter;
+   std::array<CachedTriangle, light_tree_cache_block_size> decoded;
+-  for (int first = 0; first < entry.num_triangles(); first += light_tree_cache_block_size) {
++  for (int first = 0; materialized && first < entry.num_triangles(); first += light_tree_cache_block_size) {
+     const int count = std::min(light_tree_cache_block_size, entry.num_triangles() - first);
+     const CachedTriangle *triangles;
+     if (!entry.triangles.empty()) triangles = entry.triangles.data() + first;
+@@ -394,9 +437,9 @@ void LightTreeMeshCache::restore(const Entry &entry,
+       triangles = decoded.data();
+     }
+     for (int n = 0; n < count; ++n) {
+-      if ((n & 255) == 0 && progress.get_cancel()) return;
++      if ((n & 255) == 0 && progress.get_cancel()) return 0;
+       const auto &triangle = triangles[n];
+-      auto &emitter = emitters.emplace_back();
++      auto &emitter = materialized->emplace_back();
+       emitter.prim_id = triangle.primitive;
+       emitter.object_id = object_id;
+       emitter.light_set_membership = entry.key.membership;
+@@ -407,6 +450,8 @@ void LightTreeMeshCache::restore(const Entry &entry,
+       emitter.centroid = zero_float3();
+     }
+   }
++  if (materialized) impl_->materialized_triangles += entry.num_triangles();
++  else impl_->borrowed_triangles += entry.num_triangles();
+   const double view_at = impl_->profiling ? time_dt() : 0;
+   const auto &node = entry.nodes.root;
+   root->measure = node.measure();
+@@ -424,6 +469,7 @@ void LightTreeMeshCache::restore(const Entry &entry,
+     impl_->emitter_seconds += view_at - started;
+     impl_->view_seconds += time_dt() - view_at;
+   }
++  return entry.num_triangles();
+ }
+ 
+ void LightTreeMeshCache::store(Scene *scene,
+@@ -433,6 +479,7 @@ void LightTreeMeshCache::store(Scene *scene,
+                                const vector<LightTreeEmitter> &emitters,
+                                int start,
+                                int end,
++                               int first_emitter,
+                                Progress &progress)
+ {
+   auto &i = *impl_;
+@@ -534,7 +581,7 @@ void LightTreeMeshCache::store(Scene *scene,
+     value.type = node->type | (kernel_index << 8);
+     value.first = value.second = -1;
+     if (node->is_leaf()) {
+-      value.first = node->get_leaf().first_emitter_index - start;
++      value.first = node->get_leaf().first_emitter_index - first_emitter;
+       value.second = node->get_leaf().num_emitters;
+     }
+     else {
+@@ -615,12 +662,14 @@ void LightTreeMeshCache::report(bool complete) const
+                  "\"clone_seconds\":%.9f,\"store_seconds\":%.9f,\"view_seconds\":%.9f,"
+                  "\"view_nodes\":%zu,\"admission_skips\":%zu,\"compact\":%s,"
+                  "\"compact_entries\":%zu,\"decoded_bytes\":%zu,\"scratch_reserve_bytes\":%zu,"
+-                 "\"largest_entry_bytes\":%zu,\"smallest_entry_bytes\":%zu,\"layout_invalidations\":%zu}\n",
++                 "\"largest_entry_bytes\":%zu,\"smallest_entry_bytes\":%zu,\"layout_invalidations\":%zu,"
++                 "\"borrowed_triangles\":%zu,\"materialized_triangles\":%zu}\n",
+                  static_cast<unsigned long long>(i.build), i.enabled ? "true" : "false",
+                  complete ? "true" : "false", i.hits, i.misses, i.evictions, i.entries.size(),
+                  i.bytes, i.budget, i.emitter_seconds, i.clone_seconds, i.store_seconds,
+                  i.view_seconds, i.view_nodes, i.admission_skips, i.compact ? "true" : "false",
+-                 compact_entries, decoded_bytes, cache_scratch, largest, smallest, i.layout_invalidations);
++                 compact_entries, decoded_bytes, cache_scratch, largest, smallest, i.layout_invalidations,
++                 i.borrowed_triangles, i.materialized_triangles);
+   }
+ }
+ 
+diff --git a/src/scene/light_tree_cache.h b/src/scene/light_tree_cache.h
+index f4df4a1c0de2592aef111344f7275bc6e3ae50c0..ca319669d097bec708398673cc2f5783f83b590b 100644
+--- a/src/scene/light_tree_cache.h
++++ b/src/scene/light_tree_cache.h
+@@ -6,6 +6,7 @@
+ #include "util/vector.h"
+ 
+ #include <functional>
++#include <array>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -16,6 +17,7 @@ class LightTree;
+ struct LightTreeNode;
+ struct LightTreeEmitter;
+ struct LightTreeMeasure;
++struct LightTreeEmitterView;
+ 
+ /* Exact scalar records used directly by kernel flattening. They contain no
+  * scene ownership or current kernel indices. */
+@@ -33,6 +35,18 @@ struct LightTreeCachedNode {
+  * words are reconstructed bit for bit; bounds, weights and bit trails are not
+  * quantized. Only a pressured working set uses this representation. */
+ constexpr int light_tree_cache_block_size = 1024;
++struct LightTreeCachedTriangle {
++  int primitive;
++  float energy, theta_o, theta_e;
++};
++/* One reader per flattening task. Scratch is allocated only when a packed
++ * triangle block is actually requested, never for retained interiors. */
++struct LightTreeTriangleReader {
++  const void *entry = nullptr;
++  uint64_t identity = 0;
++  int block = -1;
++  unique_ptr<std::array<LightTreeCachedTriangle, light_tree_cache_block_size>> scratch;
++};
+ struct LightTreeCacheBlocks {
+   vector<vector<uint8_t>> blocks;
+   int count = 0, stride = 0;
+@@ -62,11 +76,17 @@ class LightTreeMeshCache {
+   ~LightTreeMeshCache();
+   void begin_build(size_t triangles);
+   const Entry *find(Scene *scene, Mesh *mesh, int object_id);
+-  void restore(const Entry &entry,
++  int triangle_count(const Entry &entry) const;
++  LightTreeEmitterView triangle(const Entry &entry,
++                                int index,
++                                int object_id,
++                                LightTreeTriangleReader &reader) const;
++  int restore(const Entry &entry,
+                LightTree &builder,
+                LightTreeNode *root,
+                int object_id,
+-               vector<LightTreeEmitter> &emitters,
++               int first_emitter,
++               vector<LightTreeEmitter> *materialized,
+                Progress &progress) const;
+   void store(Scene *scene,
+              Mesh *mesh,
+@@ -75,6 +95,7 @@ class LightTreeMeshCache {
+              const vector<LightTreeEmitter> &emitters,
+              int start,
+              int end,
++             int first_emitter,
+              Progress &progress);
+   void prune(const std::function<bool(Mesh *)> &is_live);
+   void clear();
+diff --git a/src/scene/light_tree_debug.cpp b/src/scene/light_tree_debug.cpp
+index ab762d592bf143eb3635cb33064cb24540113e6f..b8ecc0df224e5bc8f4a4039e60de67f371ea0e8d 100644
+--- a/src/scene/light_tree_debug.cpp
++++ b/src/scene/light_tree_debug.cpp
+@@ -19,9 +19,9 @@ static string get_node_id(const LightTreeNode &node)
+   return string_printf("node@%p", &node);
+ }
+ 
+-static string get_emitter_id(const LightTreeEmitter &emitter)
++static string get_emitter_id(const int index)
+ {
+-  return string_printf("emitter@%p", &emitter);
++  return string_printf("emitter@%d", index);
+ }
+ 
+ static string set_membership_str(const uint64_t set_membership)
+@@ -90,9 +90,9 @@ static void recursive_print_node(FILE *file, const LightTreeNode &node)
+ static void print_emitters(FILE *file, const Scene &scene, const LightTree &tree)
+ {
+   const size_t num_emitters = tree.num_emitters();
+-  const LightTreeEmitter *emitters = tree.get_emitters();
++  LightTreeTriangleReader reader;
+   for (size_t i = 0; i < num_emitters; ++i) {
+-    const LightTreeEmitter &emitter = emitters[i];
++    const LightTreeEmitterView emitter = tree.emitter(int(i), reader);
+ 
+     int field = 0;
+ 
+@@ -145,7 +145,7 @@ static void print_emitters(FILE *file, const Scene &scene, const LightTree &tree
+                            double(emitter.measure.bcone.theta_e));
+ 
+     /* Print node to the file. */
+-    fprintf(file, "\"%s\" [\n", get_emitter_id(emitter).c_str());
++    fprintf(file, "\"%s\" [\n", get_emitter_id(int(i)).c_str());
+     fprintf(file, "  label = \"%s\"\n", label.c_str());
+     fprintf(file, "  shape = \"record\"\n");
+     fprintf(file, "];\n");
+@@ -166,13 +166,14 @@ static void recursive_print_node_relations(FILE *file,
+   }
+ 
+   if (node.is_leaf() || node.is_distant()) {
+-    const LightTreeEmitter *emitters = tree.get_emitters();
++    LightTreeTriangleReader reader;
+     for (int i = 0; i < node.get_leaf().num_emitters; i++) {
+-      const LightTreeEmitter &emitter = emitters[node.get_leaf().first_emitter_index + i];
++      const int index = node.get_leaf().first_emitter_index + i;
++      tree.emitter(index, reader); /* Validate the same logical owner as rendering. */
+       fprintf(file,
+               "\"%s\":<emitters> -> \"%s\":f0 [ id = %d  ];\n",
+               from_node_id.c_str(),
+-              get_emitter_id(emitter).c_str(),
++              get_emitter_id(index).c_str(),
+               relation_id++);
+     }
+     return;

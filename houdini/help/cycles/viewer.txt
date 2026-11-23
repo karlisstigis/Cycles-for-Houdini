@@ -1,0 +1,67 @@
+= Cycles Viewer =
+
+Choose a Cycles render node (ROP) and a camera, then click Play. For a disk render with the ROP's final settings and frame range, click the clapper. Both show progress in this window. Use [Icon:/images/cycles-viewer/BUTTONS_help.svg] Help or press F1 over the image to reopen this guide.
+
+== Rendering and camera ==
+
+The ROP's IPR button opens this viewer in a separate window, or focuses that window if already open. Render to Disk writes Output Picture. Render to MPlay shows in-progress images and saves each completed frame to Output Picture. Upstream Cycles ROPs also render to MPlay and save their own outputs; other dependency types keep their normal behavior. Each Cycles ROP uses its own MPlay window for sequence playback. Both final-render actions honor the ROP's frame range, takes and upstream dependencies.
+
+* [Icon:/images/cycles-viewer/IMAGE_final_render.svg] Final Render (clapper) writes the ROP's frame or sequence to Output Picture. The Viewer shows the frame currently rendering. Stop cancels the rest of the sequence. Completed files stay on disk.
+* [Icon:/images/cycles-viewer/BUTTONS_render.svg] Play starts IPR or returns from a final render to IPR.
+* [Icon:/images/cycles-viewer/BUTTONS_pause.svg] Pause suspends or resumes IPR. [Icon:/images/cycles-viewer/BUTTONS_stop.svg] Stop ends the active render.
+* [Icon:/images/cycles-viewer/BUTTONS_reload.svg] Refresh applies pending scene changes once. [Icon:/images/cycles-viewer/BUTTONS_cook.svg] Auto applies them as you edit. With Auto off, you can make several edits before clicking Refresh.
+* [Icon:/images/cycles-viewer/IMAGE_region.svg] Region limits sampling to a rectangle. Enable it and drag on the image, or Shift+left-drag. Turn it off or Shift+right-click to restore the full frame.
+* [Icon:/images/cycles-viewer/IMAGE_denoise.svg] Denoise changes the denoising setting for the selected mode. [Icon:/images/cycles-viewer/IMAGE_diff_compare.svg] Show Noisy Beauty displays the unfiltered image when denoised Live Beauty is available. Click again to return to denoised Beauty.
+* [Icon:/images/cycles-viewer/SHOP_material.svg] Clay renders every surface with one neutral grey material (matte, 50% grey) to judge lighting and form. Lights, the world, volumes and displacement stay as they are. Click Clay again to return to the real materials. Clay is a viewer setting: it changes no material assignment and no ROP parameter, and the clapper's final renders are not affected; Save in this viewer saves what it shows. Emissive and transparent surfaces render as grey clay too.
+* [Icon:/images/cycles-viewer/IMAGE_tessellation_update.svg] Adaptive Subdivision Update allows adaptive meshes to be diced again as the scene or view changes. Turn it off to reuse existing tessellation. [Icon:/images/cycles-viewer/BUTTONS_reload.svg] Refresh Tessellation rebuilds it once.
+* [Icon:/images/cycles-viewer/IMAGE_rop.svg] ROP selects the render node. [Icon:/images/cycles-viewer/IMAGE_camera.svg] Camera selects its render camera. Hover over either name for its full path. [Icon:/images/cycles-viewer/BUTTONS_jump_to_node.svg] Jump beside either selector takes you to the corresponding node in Houdini.
+* [Icon:/images/cycles-viewer/BUTTONS_lock_closed.svg] Lock Camera disconnects viewport navigation from the render camera. Direct camera parameter edits still apply.
+* [Icon:/images/cycles-viewer/BUTTONS_image_color_picker.svg] Pick Focus sets the focus distance and enables depth of field when you click a rendered surface. Click the tool again or press Esc to cancel before picking.
+* Ctrl+click the image to select the object under the pointer, as clicking it in the viewport would: the object becomes the selected and current node. For a packed primitive or an instance, its owning object is selected. Ctrl+double-click selects the object's material instead, so the parameter pane shows it; with a ROP material override, or with object and geometry materials switched off, the override or the ROP itself is selected. Clicking the background changes nothing. In Region mode, Ctrl+drag still draws a region.
+* [Icon:/images/cycles-viewer/IMAGE_settings.svg] Mode selects Interactive or Final sampling settings for IPR. The clapper always uses the ROP's final output settings.
+* [Icon:/images/cycles-viewer/BUTTONS_maximize.svg] Fullscreen expands the image. Move to the top or bottom edge to reveal the controls. Esc returns to the panel.
+
+== Passes, channels and background ==
+
+* [Icon:/images/cycles-viewer/IMAGE_aov.svg] AOV selects Beauty or another available render pass. Use Live when changing passes.
+* RGBA shows color with coverage. RGB shows all three color channels. R, G and B isolate a channel. A shows alpha without exposure, gamma or a view transform. Press R, G, B or A again to return to RGBA.
+* ×A applies coverage when inspecting RGB or one color channel. Switch it off to inspect color at zero alpha, for example emission.
+* [Icon:/images/cycles-viewer/IMAGE_checker.svg] Checkerboard (T) shows transparency over a pattern. BG switches the chosen solid background on or off. The color swatch beside BG opens the picker. Click an active background mode again to return to the default background.
+* [Icon:/images/cycles-viewer/IMAGE_exposure.svg] Exposure adjusts brightness in stops. [Icon:/images/cycles-viewer/IMAGE_gamma.svg] Gamma adjusts the displayed midtones. Drag a label or type a value. Ctrl+middle-click resets an individual parameter. [Icon:/images/cycles-viewer/BUTTONS_revert.svg] Reset restores both defaults.
+* [Icon:/images/cycles-viewer/IMAGE_display.svg] Display and [Icon:/images/cycles-viewer/IMAGE_view.svg] View below the image select the OCIO display and view transform. These controls affect the preview and the appearance of saved display images. Linear EXR output follows the ROP.
+
+== Resolution and navigation ==
+
+* [Icon:/images/cycles-viewer/BUTTONS_resize_mode_space.svg] Keep Image Size holds the displayed size and pan when render resolution changes.
+* Render Resolution controls the number of pixels traced in IPR, as a percentage of the ROP width and height. Choose ROP % to follow the ROP's common resolution percentage. The clapper and disk renders use the ROP resolution.
+* [Icon:/images/cycles-viewer/BUTTONS_resolution_link.svg] Link matches render resolution to the display zoom, including fractional Fit values, up to 400%. It holds the display size and scales any active region proportionally. Unlink to control zoom and render resolution independently.
+* Zoom sets the image magnification. Use the wheel or right-drag to zoom around the pointer. Ctrl+right-drag zooms to a box. Middle-drag or Space+left-drag pans.
+* 1:1 (F) selects 100% zoom. [Icon:/images/cycles-viewer/IMAGE_fit_to_window.svg] Fit (Shift+F or Home) centers the whole image and keeps it fitted when the pane changes size.
+
+* Hold the left mouse button on the image to read the pixel under the pointer in the status line, and drag to move the readout: pixel coordinates (counted from the lower left), the linear values of the displayed pass, and the displayed 0-255 values after the view transform. Data passes such as depth, normal and position show their raw values. Snapshots show the displayed values only. Release to return to the render status. While Region or Pick Focus is active, the left button belongs to that tool.
+
+== Snapshots and saving ==
+
+* [Icon:/images/cycles-viewer/IMAGE_snapshot_add.svg] Take Snapshot stores the displayed image, including an unfinished render. The snapshot menu and slider browse history from oldest to newest. The rightmost position is Live. History holds up to eight images within 64 MiB.
+* [Icon:/images/cycles-viewer/IMAGE_diff_compare.svg] Compare places the selected snapshot on the left and Live on the right. Drag the divider to inspect the difference.
+* [Icon:/images/cycles-viewer/BUTTONS_save_image.svg] Save writes a timestamped image in the output location. The format selector chooses EXR, PNG or JPEG. EXR requires a completed Live render and uses the ROP's linear output settings. PNG and JPEG save the displayed appearance, including a snapshot or an unfinished image. PNG retains alpha. JPEG uses a black background.
+* [Icon:/images/cycles-viewer/BUTTONS_folder.svg] Open Saved Images Folder opens the latest saved image folder for this ROP, or its Output Picture folder before the first save.
+
+== Progress and diagnostics ==
+
+The status row shows render progress, the time and the current sample. The time counts from your action: pressing Render, a parameter edit, a camera move or a frame change. It is the whole wait, including cooking, extraction, the transfer to the renderer and its scene update. While nothing renders yet the status says Loading with the running time. A finished render keeps showing its total. During a sequence it also reports the last frame's time.
+
+Hover over the status for the split: Total, Loading (with wait, cook, extract and transfer where known), First image (after the render started) and Render, the renderer's own render time. Hover over Samples for first-image, cooking and extraction times, buffer usage and geometry conversion counts. Hover over the ⚠ warning count for the affected source and suggested action.
+
+[Icon:/images/cycles-viewer/BUTTONS_info.svg] Viewer Diagnostics at the lower right toggles memory and texture color-space details. Memory shows Houdini RAM and the render GPUs in use. Texture color spaces lists the inputs of the active render. Material Preview Warnings opens the material preview diagnostic list.
+
+Copy diagnostics puts a plain-text report on the clipboard and confirms it in the status line: build, display mode, open, hidden and released viewers, render sessions, renderer processes with their age, and the last 20 updates with their time split. Paste it into a bug report when updates are unexpectedly slow. It reads only what the viewer already knows; it does not cook or render.
+
+Collect diagnostics opens a preview of a frozen support snapshot and saves a local ZIP. Nothing is sent automatically. By default, it includes version and package identity, feature support, typed status counters, and a worker-log size summary. Private paths, node and scene names, free-form messages, raw diagnostics and log contents are omitted. Enable Include private paths to include bounded details and at most the last 64 KiB of the current worker log; review the preview before sharing. Scene files, images, textures and environment variables are never collected. The manifest lists the exported members, sizes and SHA-256 hashes. Reopen the dialog to capture the latest status.
+
+The memory tooltip distinguishes Cycles tracked device allocations for the current session from Windows process GPU counters. Tracked allocations are not total GPU usage, physical residency, or free device memory.
+
+@related
+    [Cycles Render|Node:out/cycles_ipr]
+    [Cycles camera properties|/cycles/camera]
+    [Cycles object properties|/cycles/objects]

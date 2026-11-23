@@ -1,0 +1,4984 @@
+{
+  "schema": 1,
+  "source": "Houdini 22.0.429 stock parameter HScript evaluation; no renderer plugin",
+  "reports": [
+    {
+      "path": "artifacts/hfs-material-expression-reference-report.json",
+      "sha256": "ab745dc462afec1140cc87d53814d1a401083065afe5e845cc89cb295f13a593",
+      "houdini_version": "22.0.429"
+    },
+    {
+      "path": "artifacts/hfs-material-expression-boundary-report.json",
+      "sha256": "83013e5efe7825f16e66b319009bd4d9484d7812df70dddfa37fe874717bf7d6",
+      "houdini_version": "22.0.429"
+    }
+  ],
+  "documentation": [
+    "https://www.sidefx.com/docs/houdini/expressions/fit.html",
+    "https://www.sidefx.com/docs/houdini/expressions/efit.html",
+    "https://www.sidefx.com/docs/houdini/expressions/chf.html",
+    "https://www.sidefx.com/docs/houdini/expressions/cht.html"
+  ],
+  "cases": [
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6833333333333331,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2666666666666667,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.4333333333333336,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -1.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -1.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.75,
+      "time": -0.11458333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.23541666666666666,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6833333333333331,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.1833333333333333,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6833333333333331,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.2666666666666666,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.433333333333333,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.25,
+      "time": 0.010416666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.36041666666666666,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6833333333333331,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.7666666666666666,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.9333333333333336,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.1,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.75,
+      "time": 0.07291666666666667,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.42291666666666666,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6166666666666667,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.4833333333333333,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6166666666666667,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -1.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -1.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": -1.75,
+      "time": -0.09166666666666666,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2583333333333333,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6166666666666667,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.2166666666666668,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.0,
+      "time": 0.0,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6166666666666667,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.2833333333333332,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.4166666666666665,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 1.25,
+      "time": 0.008333333333333333,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35833333333333334,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "abs_negative",
+      "expression": "abs(ch(\"../gain\")-1)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.65,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "minimum",
+      "expression": "min(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "maximum",
+      "expression": "max(ch(\"../gain\"),.2)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_low",
+      "expression": "clamp(ch(\"../gain\")-2,0,1)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_inside",
+      "expression": "clamp(ch(\"../gain\"),0,1)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_high",
+      "expression": "clamp(ch(\"../gain\")+2,0,1)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed",
+      "expression": "clamp(ch(\"../gain\"),1,0)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_equal",
+      "expression": "clamp(ch(\"../gain\"),.5,.5)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.5,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_inside",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.2,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_below",
+      "expression": "fit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_above",
+      "expression": "fit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_source",
+      "expression": "fit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_reversed_target",
+      "expression": "fit(ch(\"../gain\"),-.2,.8,6,2)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_source",
+      "expression": "fit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_below",
+      "expression": "efit(ch(\"../gain\")-2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.8,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_above",
+      "expression": "efit(ch(\"../gain\")+2,-.2,.8,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 12.200000000000001,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_reversed_source",
+      "expression": "efit(ch(\"../gain\"),.8,-.2,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.8000000000000003,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_source",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 4.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_inside",
+      "expression": "fit01(ch(\"../gain\"),2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.4,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_below",
+      "expression": "fit01(ch(\"../gain\")-2,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "fit01_above",
+      "expression": "fit01(ch(\"../gain\")+2,2,6)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 6.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "floor_negative",
+      "expression": "floor(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -3.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "ceil_negative",
+      "expression": "ceil(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "int_negative",
+      "expression": "int(ch(\"../gain\")-3)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": -2.0,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "nested",
+      "expression": "clamp(fit(abs(ch(\"../gain\")-.5),0,.5,-1,2),0,1)+max(floor(ch(\"../gain\")*10),1)/10",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.3,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chi_unknown",
+      "expression": "chi(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Unknown function in expression (/obj/material_expression_reference/chi_unknown/result))."
+      ]
+    },
+    {
+      "id": "min_bad_arity",
+      "expression": "min(ch(\"../gain\"),.1,.2)",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.0,
+      "finite": true,
+      "native_errors": [
+        "Unable to evaluate expression (Expression stack error (/obj/material_expression_reference/min_bad_arity/result))."
+      ]
+    },
+    {
+      "id": "chf_fixed",
+      "expression": "chf(\"../animated\",2)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6166666666666667,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "chf_relative",
+      "expression": "chf(\"../animated\",$FF-.5)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 1.6833333333333331,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_fixed",
+      "expression": "cht(\"../animated\",.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "cht_relative",
+      "expression": "cht(\"../animated\",$T+.125)+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 2.816666666666667,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.35,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 3.1,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "time_seconds",
+      "expression": "$T+ch(\"../gain\")",
+      "fps": 30.0,
+      "frame": 2.75,
+      "time": 0.058333333333333334,
+      "sources": {
+        "gain": 0.35,
+        "low": -0.2,
+        "high": 0.8,
+        "animated": "1+$T*8"
+      },
+      "result": 0.4083333333333333,
+      "finite": true,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": -1.65,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": -2.15,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_low",
+      "expression": "clamp(ch(\"../gain\")-2,1,0)",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.0,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_high",
+      "expression": "clamp(ch(\"../gain\")+2,1,0)",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_at",
+      "expression": "fit(ch(\"../gain\"),.35,.35,2,6)",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_above",
+      "expression": "fit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 6.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_below",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_above",
+      "expression": "efit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": -2.5,
+      "time": -0.14583333333333334,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": -0.65,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": -1.15,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_low",
+      "expression": "clamp(ch(\"../gain\")-2,1,0)",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.0,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_high",
+      "expression": "clamp(ch(\"../gain\")+2,1,0)",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_at",
+      "expression": "fit(ch(\"../gain\"),.35,.35,2,6)",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_above",
+      "expression": "fit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 6.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_below",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_above",
+      "expression": "efit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": -1.5,
+      "time": -0.10416666666666667,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.35,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": -0.15000000000000002,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_low",
+      "expression": "clamp(ch(\"../gain\")-2,1,0)",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.0,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_high",
+      "expression": "clamp(ch(\"../gain\")+2,1,0)",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_at",
+      "expression": "fit(ch(\"../gain\"),.35,.35,2,6)",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_above",
+      "expression": "fit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 6.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_below",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_above",
+      "expression": "efit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": -0.5,
+      "time": -0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.35,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.85,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_low",
+      "expression": "clamp(ch(\"../gain\")-2,1,0)",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.0,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_high",
+      "expression": "clamp(ch(\"../gain\")+2,1,0)",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_at",
+      "expression": "fit(ch(\"../gain\"),.35,.35,2,6)",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_above",
+      "expression": "fit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 6.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_below",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_above",
+      "expression": "efit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": 0.5,
+      "time": -0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 2.35,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.85,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_low",
+      "expression": "clamp(ch(\"../gain\")-2,1,0)",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.0,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_high",
+      "expression": "clamp(ch(\"../gain\")+2,1,0)",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_at",
+      "expression": "fit(ch(\"../gain\"),.35,.35,2,6)",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_above",
+      "expression": "fit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 6.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_below",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_above",
+      "expression": "efit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": 1.5,
+      "time": 0.020833333333333332,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "frame_integer",
+      "expression": "$F+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 3.35,
+      "native_errors": []
+    },
+    {
+      "id": "frame_fractional",
+      "expression": "$FF+ch(\"../gain\")",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 2.85,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_low",
+      "expression": "clamp(ch(\"../gain\")-2,1,0)",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 0.0,
+      "native_errors": []
+    },
+    {
+      "id": "clamp_reversed_high",
+      "expression": "clamp(ch(\"../gain\")+2,1,0)",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 1.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_at",
+      "expression": "fit(ch(\"../gain\"),.35,.35,2,6)",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "fit_equal_above",
+      "expression": "fit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 6.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_below",
+      "expression": "efit(ch(\"../gain\"),.5,.5,2,6)",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    },
+    {
+      "id": "efit_equal_above",
+      "expression": "efit(ch(\"../gain\"),.1,.1,2,6)",
+      "fps": 24.0,
+      "frame": 2.5,
+      "time": 0.0625,
+      "sources": {
+        "gain": 0.35
+      },
+      "result": 4.0,
+      "native_errors": []
+    }
+  ]
+}

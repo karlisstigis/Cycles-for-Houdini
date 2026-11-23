@@ -1,0 +1,277 @@
+From 6304a7441014d8d836ccdcf9677eda5163543528 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Mon, 16 Nov 2026 04:39:54 +0000
+Subject: [PATCH 97/98] Precompute subdivision edge factors in parallel
+
+DiagSplit::split_patches splits every face serially, and most of its time
+goes to edge factors: each T() evaluates the patch at several points along
+an edge. With millions of faces this serial pass dominates tessellation,
+while dicing is already parallel.
+
+T() depends only on its arguments (patch, parameter range, depth and
+resolve mode). Split batches of faces speculatively in parallel first, each
+range of faces with its own edges and without allocating subpatches, and
+record the arguments and result of every T() call per face. Then split all
+faces in order as before; T() returns a recorded result when the arguments
+match exactly and computes it otherwise, for example where a neighbouring
+face already assigned a shared edge differently. Edges, vertex and triangle
+indices, and subpatches are therefore identical to the serial split. The
+next batch is precomputed while the current batch is split.
+
+Rationale: Edge factor evaluation in the serial patch split dominated tessellation time for large subdivided meshes on every update.
+Contract: Subpatches, edge factors, vertex and triangle indices and the diced mesh are identical to the serial split; errors and limits are reported only by the ordered split.
+Tests: tests/houdini_subdivision_smoke.py
+---
+ src/subd/split.cpp | 131 +++++++++++++++++++++++++++++++++++++++------
+ src/subd/split.h   |  22 ++++++++
+ 2 files changed, 138 insertions(+), 15 deletions(-)
+
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index 562101dcbddefbdaaea00551bba296247589822a..657a626f8e86a18744d5ba48aa5f447e5c40e94f 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -2,6 +2,7 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <cstring>
+ #include <limits>
+ #include <stdexcept>
+ 
+@@ -16,6 +17,7 @@
+ #include "util/algorithm.h"
+ 
+ #include "util/math.h"
++#include "util/tbb.h"
+ #include "util/types.h"
+ 
+ CCL_NAMESPACE_BEGIN
+@@ -27,6 +29,10 @@ DiagSplit::DiagSplit(const SubdParams &params_) : params(params_) {}
+ int DiagSplit::alloc_verts(int num)
+ {
+   if (num < 0 || num > std::numeric_limits<int>::max() - num_verts) {
++    if (record_edge_factors) {
++      /* A speculative split only records edge factors, it reports no errors. */
++      return 0;
++    }
+     if (params.progress) {
+       params.progress->set_error("Subdivision vertex indexing limit exceeded");
+       return 0;
+@@ -77,6 +83,9 @@ void DiagSplit::alloc_edge(SubPatch::Edge *sub_edge,
+ 
+ void DiagSplit::alloc_subpatch(SubPatch &&sub)
+ {
++  if (record_edge_factors) {
++    return;
++  }
+   if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+     return;
+   }
+@@ -125,10 +134,44 @@ float3 DiagSplit::to_world(const Patch *patch, const float2 uv)
+ }
+ 
+ std::pair<int, float> DiagSplit::T(const Patch *patch,
+-                                   float2 uv_start,
+-                                   float2 uv_end,
++                                   const float2 uv_start,
++                                   const float2 uv_end,
+                                    const int depth,
+                                    const bool recursive_resolve)
++{
++  if (record_edge_factors) {
++    const std::pair<int, float> result = compute_T(
++        patch, uv_start, uv_end, depth, recursive_resolve);
++    record_edge_factors->push_back({patch, uv_start, uv_end, depth, recursive_resolve, result});
++    return result;
++  }
++
++  /* compute_T() depends only on its arguments, so a precomputed result with exactly the
++   * same arguments is the result it would compute. They are usually requested in the
++   * order they were recorded. */
++  for (int pass = 0; pass < 2; pass++) {
++    const EdgeFactor *begin = (pass == 0) ? precomputed_next : precomputed_begin;
++    const EdgeFactor *end = (pass == 0) ? precomputed_end : precomputed_next;
++    for (const EdgeFactor *factor = begin; factor < end; factor++) {
++      if (factor->patch == patch && factor->depth == depth &&
++          factor->recursive_resolve == recursive_resolve &&
++          memcmp(&factor->uv_start, &uv_start, sizeof(float2)) == 0 &&
++          memcmp(&factor->uv_end, &uv_end, sizeof(float2)) == 0)
++      {
++        precomputed_next = factor + 1;
++        return factor->result;
++      }
++    }
++  }
++
++  return compute_T(patch, uv_start, uv_end, depth, recursive_resolve);
++}
++
++std::pair<int, float> DiagSplit::compute_T(const Patch *patch,
++                                           float2 uv_start,
++                                           float2 uv_end,
++                                           const int depth,
++                                           const bool recursive_resolve)
+ {
+   if (params.fixed || (params.camera && params.camera->get_camera_type() == CAMERA_PANORAMA &&
+                        params.camera->has_intrinsic_projection_motion())) {
+@@ -183,8 +226,8 @@ std::pair<int, float> DiagSplit::T(const Patch *patch,
+     }
+     else {
+       const float2 uv_mid = (uv_start + uv_end) * 0.5f;
+-      const auto result_a = T(patch, uv_start, uv_mid, depth, true);
+-      const auto result_b = T(patch, uv_mid, uv_end, depth, true);
++      const auto result_a = compute_T(patch, uv_start, uv_mid, depth, true);
++      const auto result_b = compute_T(patch, uv_mid, uv_end, depth, true);
+       res = result_a.first + result_b.first;
+       Lsum_world = result_a.second + result_b.second;
+     }
+@@ -799,11 +842,25 @@ void DiagSplit::split_ngon(const Mesh::SubdFace &face,
+   }
+ }
+ 
++void DiagSplit::split_face(const Patch *patches,
++                           const size_t patches_byte_stride,
++                           const int face_index)
++{
++  Mesh::SubdFace face = params.mesh->get_subd_face(face_index);
++  const Patch *patch = (const Patch *)(((char *)patches) +
++                                       (face.ptex_offset * patches_byte_stride));
++  if (face.is_quad()) {
++    split_quad(face, face_index, patch);
++  }
++  else {
++    split_ngon(face, face_index, patch, patches_byte_stride);
++  }
++}
++
+ void DiagSplit::split_patches(const Patch *patches, const size_t patches_byte_stride)
+ {
+   /* TODO: reuse edge factor vertex position computations. */
+   /* TODO: support not splitting n-gons if not needed. */
+-  /* TODO: multi-threading. */
+ 
+   /* Keep base mesh vertices, create new triangles. */
+   num_verts = params.mesh->get_num_subd_base_verts();
+@@ -811,21 +868,65 @@ void DiagSplit::split_patches(const Patch *patches, const size_t patches_byte_st
+ 
+   owned_verts.resize(num_verts, false);
+ 
++  /* Edge factors need patch evaluations and dominate the cost of splitting. Precompute
++   * them by splitting batches of faces speculatively in parallel, each range of faces
++   * with its own edges. Then split the faces in order exactly as before, taking an edge
++   * factor from the precomputed ones when its arguments match and computing it
++   * otherwise, so the result is identical to a serial split. The next batch is
++   * precomputed while the current one is split. */
++  const int num_faces = params.mesh->get_num_subd_faces();
++  const int num_base_verts = num_verts;
++  const int batch_size = 16384;
++  vector<vector<EdgeFactor>> batch_factors[2];
++
++  const auto precompute = [&](const int begin, vector<vector<EdgeFactor>> &factors) {
++    const int end = min(begin + batch_size, num_faces);
++    factors.clear();
++    factors.resize(end - begin);
++    parallel_for(blocked_range<int>(begin, end, 64), [&](const blocked_range<int> &r) {
++      DiagSplit speculative(params);
++      speculative.num_verts = num_base_verts;
++      for (int f = r.begin(); f != r.end(); f++) {
++        if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
++          return;
++        }
++        speculative.record_edge_factors = &factors[f - begin];
++        speculative.split_face(patches, patches_byte_stride, f);
++      }
++    });
++  };
++
++  if (num_faces > 0) {
++    precompute(0, batch_factors[0]);
++  }
++
+   /* Split all faces in the mesh. */
+-  for (int f = 0; f < params.mesh->get_num_subd_faces(); f++) {
+-    if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+-      return;
++  for (int begin = 0, batch = 0; begin < num_faces; begin += batch_size, batch ^= 1) {
++    const int next = begin + batch_size;
++    tbb::task_group group;
++    if (next < num_faces) {
++      group.run([&, next, batch] { precompute(next, batch_factors[batch ^ 1]); });
+     }
+-    Mesh::SubdFace face = params.mesh->get_subd_face(f);
+-    const Patch *patch = (const Patch *)(((char *)patches) +
+-                                         (face.ptex_offset * patches_byte_stride));
+-    if (face.is_quad()) {
+-      split_quad(face, f, patch);
++
++    const int end = min(next, num_faces);
++    for (int f = begin; f < end; f++) {
++      if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
++        break;
++      }
++      const vector<EdgeFactor> &factors = batch_factors[batch][f - begin];
++      precomputed_begin = factors.data();
++      precomputed_next = precomputed_begin;
++      precomputed_end = precomputed_begin + factors.size();
++      split_face(patches, patches_byte_stride, f);
+     }
+-    else {
+-      split_ngon(face, f, patch, patches_byte_stride);
++    group.wait();
++
++    if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
++      break;
+     }
+   }
++
++  precomputed_begin = precomputed_next = precomputed_end = nullptr;
+ }
+ 
+ CCL_NAMESPACE_END
+diff --git a/src/subd/split.h b/src/subd/split.h
+index 514d5c3249daa5a003551d808fa80f46ab2fe937..3e27c345dbae2912ad9d5baacd3a189c2a3db4bf 100644
+--- a/src/subd/split.h
++++ b/src/subd/split.h
+@@ -33,6 +33,22 @@ class DiagSplit {
+   int num_verts = 0;
+   int num_triangles = 0;
+ 
++  /* Edge factor of one T() call, precomputed by a speculative split of the face. */
++  struct EdgeFactor {
++    const Patch *patch;
++    float2 uv_start;
++    float2 uv_end;
++    int depth;
++    bool recursive_resolve;
++    std::pair<int, float> result;
++  };
++  /* When set, only record the edge factors of the faces being split. */
++  vector<EdgeFactor> *record_edge_factors = nullptr;
++  /* Edge factors precomputed for the face being split. */
++  const EdgeFactor *precomputed_begin = nullptr;
++  const EdgeFactor *precomputed_end = nullptr;
++  const EdgeFactor *precomputed_next = nullptr;
++
+   /* Allocate vertices, edges and subpatches. */
+   int alloc_verts(const int num);
+   SubEdge *alloc_edge(const int v0, const int v1, const int depth, bool &was_missing);
+@@ -51,6 +67,11 @@ class DiagSplit {
+                           const float2 uv_end,
+                           const int depth,
+                           const bool recursive_resolve = false);
++  std::pair<int, float> compute_T(const Patch *patch,
++                                  float2 uv_start,
++                                  float2 uv_end,
++                                  const int depth,
++                                  const bool recursive_resolve);
+   int limit_edge_factor(const Patch *patch,
+                         const float2 uv_start,
+                         const float2 uv_end,
+@@ -77,6 +98,7 @@ class DiagSplit {
+                   const int face_index,
+                   const Patch *patches,
+                   const size_t patches_byte_stride);
++  void split_face(const Patch *patches, const size_t patches_byte_stride, const int face_index);
+ 
+  public:
+   explicit DiagSplit(const SubdParams &params);

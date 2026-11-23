@@ -1,0 +1,93 @@
+From f955d860dc62807a200947e1115a758fcd2d6182 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:34 +0100
+Subject: [PATCH] compact output passes
+
+Locked-Patch: patches/0032-compact-output-passes.patch
+Locked-Patch-SHA256: 1bee5f61a4292dccc123d26a01734e28b1ccddfbe6c3fdcf26be9c939f3ef0d7
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_pass_outputs_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: c8a554e25d071aa7662c3d8c53aad323f9e1031a
+Previous-Patch: patches/0032-compact-output-passes.patch
+Previous-Patch-SHA256: 1bee5f61a4292dccc123d26a01734e28b1ccddfbe6c3fdcf26be9c939f3ef0d7
+Rationale: Compact pass extraction avoids unused output lanes for the worker's shared-memory representation; the shape is part of this integration's frame contract.
+Contract: compact output passes
+Tests: tests/houdini_pass_outputs_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/path_trace_tile.cpp b/src/integrator/path_trace_tile.cpp
+index 2048748a0ff598ad99475338eb47fcd46cbd1250..8dd0b57fed69e9c9bfc51911cf10d9e86b7248c9 100644
+--- a/src/integrator/path_trace_tile.cpp
++++ b/src/integrator/path_trace_tile.cpp
+@@ -59,6 +59,21 @@ int2 PathTraceTile::get_pass_render_size(const string_view pass_name) const
+ bool PathTraceTile::get_pass_pixels(const string_view pass_name,
+                                     const int num_channels,
+                                     float *pixels) const
++{
++  return get_pass_pixels_impl(pass_name, num_channels, pixels, false);
++}
++
++bool PathTraceTile::get_pass_pixels_compact(const string_view pass_name,
++                                            const int num_channels,
++                                            float *pixels) const
++{
++  return get_pass_pixels_impl(pass_name, num_channels, pixels, true);
++}
++
++bool PathTraceTile::get_pass_pixels_impl(const string_view pass_name,
++                                         const int num_channels,
++                                         float *pixels,
++                                         const bool compact) const
+ {
+   /* The caller holds the session at a synchronization point for this read. */
+   const BufferPass *pass = find_pass(pass_name);
+@@ -88,7 +103,7 @@ bool PathTraceTile::get_pass_pixels(const string_view pass_name,
+   if (rendered.x <= 0 || rendered.y <= 0 || rendered.x > size.x || rendered.y > size.y) {
+     return false;
+   }
+-  if (rendered != size) {
++  if (!compact && rendered != size) {
+     /* Preserve OutputDriver's full tile contract. Read packed effective pixels,
+      * then expand with nearest sampling so raw IDs/data are never interpolated.
+      * No allocated-but-unrendered rows can reach the host. */
+diff --git a/src/integrator/path_trace_tile.h b/src/integrator/path_trace_tile.h
+index 2b374ba457bda5c984028eff31a6ca33b90126eb..972f3498a21572c5dd268d12132c1fdc2cf44db6 100644
+--- a/src/integrator/path_trace_tile.h
++++ b/src/integrator/path_trace_tile.h
+@@ -24,11 +24,15 @@ class PathTraceTile : public OutputDriver::Tile {
+   bool get_pass_pixels(const string_view pass_name,
+                        const int num_channels,
+                        float *pixels) const override;
++  bool get_pass_pixels_compact(const string_view pass_name,
++                               const int num_channels,
++                               float *pixels) const override;
+   bool set_pass_pixels(const string_view pass_name,
+                        const int num_channels,
+                        const float *pixels) const override;
+ 
+  private:
++  bool get_pass_pixels_impl(string_view pass_name, int num_channels, float *pixels, bool compact) const;
+   const BufferPass *find_pass(const string_view pass_name) const;
+   PathTrace &path_trace_;
+   mutable bool copied_from_device_;
+diff --git a/src/session/output_driver.h b/src/session/output_driver.h
+index ad910bbc5ddbe2294df48ec99c6ce05719ce7b4e..6779c0b60ff0c46054154b067998e2e56fe38b0d 100644
+--- a/src/session/output_driver.h
++++ b/src/session/output_driver.h
+@@ -50,6 +50,15 @@ class OutputDriver {
+     virtual bool get_pass_pixels(const string_view pass_name,
+                                  const int num_channels,
+                                  float *pixels) const = 0;
++    /* Opt-in packed effective pixels, sized by get_pass_render_size(). Existing
++     * full-tile clients keep their established get_pass_pixels() contract. */
++    virtual bool get_pass_pixels_compact(const string_view pass_name,
++                                         const int num_channels,
++                                         float *pixels) const
++    {
++      return get_pass_render_size(pass_name) == size &&
++             get_pass_pixels(pass_name, num_channels, pixels);
++    }
+     virtual bool set_pass_pixels(const string_view pass_name,
+                                  const int num_channels,
+                                  const float *pixels) const = 0;

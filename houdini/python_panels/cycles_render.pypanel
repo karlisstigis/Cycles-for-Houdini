@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<pythonPanelDocument>
+  <interface name="cycles_houdini_render" label="Cycles Render" icon="cycles_render_view" showNetworkNavigationBar="false" help_url="/cycles/viewer">
+    <script><![CDATA[
+import hou
+from cycles_houdini.viewer.panel import RenderPanel
+panel = None
+def onCreateInterface():
+    global panel
+    import time
+    from cycles_houdini.ipr import session_log
+    started = time.monotonic()
+    kwargs['paneTab'].showToolbar(False)
+    try:
+        panel = RenderPanel()
+    except Exception as error:
+        session_log.write('viewer could not be created', error=error, seconds=time.monotonic() - started)
+        raise
+    session_log.write('viewer created', seconds=time.monotonic() - started)
+    # Changing this tab's type hides the viewer without onDestroyInterface;
+    # the viewer then notices the tab is gone and releases its render.
+    panel.set_host_pane_tab(kwargs['paneTab'])
+    return panel
+def onDestroyInterface():
+    global panel
+    if panel is not None:
+        panel.dispose()
+    panel = None
+def onActivateInterface():
+    if panel is not None:
+        panel.update_lifetime()
+def onDeactivateInterface():
+    if panel is not None:
+        panel.update_lifetime()
+def onNodePathChanged(node):
+    if panel is None or node is None:
+        return
+    try:
+        if node.type().name() == 'cycles_ipr' and panel._viewer_state.allow_follow():
+            panel.set_rop(node)
+    except hou.ObjectWasDeleted:
+        # Houdini may deliver the previous path during scene replacement.
+        pass
+]]></script>
+    <includeInToolbarMenu menu_position="0" create_separator="false"/>
+    <includeInPaneTabMenu menu_position="0" create_separator="false"/>
+    <help><![CDATA[[Cycles Viewer controls and shortcuts|/cycles/viewer]]]></help>
+  </interface>
+</pythonPanelDocument>
+

@@ -1,0 +1,74 @@
+From 5088010f7f0704dd8b0606f44588e473ef167b40 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Tue, 17 Nov 2026 04:19:02 +0000
+Subject: [PATCH] Build OptiX acceleration structures under a lock per device
+
+build_optix_bvh serialised every acceleration structure build behind one
+static mutex shared by all devices. With two GPUs the bottom level builds
+of both devices ran strictly one after the other: for 20,000 small objects
+the sum of both devices' time inside the lock equalled the whole object
+BVH stage, and neither GPU built while the other held the lock.
+
+The lock exists so that parallel builds on one device do not hold the
+temporary, output and compacted memory of several builds at once. That
+memory belongs to one device, so the lock is now a member of OptiXDevice:
+builds on one device stay serial, and the devices build at the same time.
+The environment variable CYCLES_OPTIX_GLOBAL_BVH_LOCK restores the single
+shared lock as a reference.
+
+Rationale: One static lock made all bottom level builds of all GPUs strictly serial although each device has its own memory, stream and OptiX context.
+Contract: Build inputs, build calls and results are unchanged; builds on one device stay serial; only builds on different devices may overlap.
+Tests: tests/houdini_curve_subdivisions_smoke.py
+---
+ src/device/optix/device_impl.cpp | 17 +++++++++++------
+ src/device/optix/device_impl.h   |  2 ++
+ 2 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 2107aae069caf845f608e4e454c5ef4aa6d5c890..496b41e875cedd39231f3a43cec834090763a916 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -26,6 +26,8 @@
+ #  include "util/tbb.h"
+ #  include "util/time.h"
+ 
++#  include <cstdlib>
++
+ #  define __KERNEL_OPTIX__
+ #  include "kernel/device/optix/globals.h"
+ 
+@@ -1343,12 +1345,15 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+                                   const OptixBuildInput &build_input,
+                                   const uint16_t num_motion_steps)
+ {
+-  /* Allocate and build acceleration structures only one at a time, to prevent parallel builds
+-   * from running out of memory (since both original and compacted acceleration structure memory
+-   * may be allocated at the same time for the duration of this function). The builds would
+-   * otherwise happen on the same CUDA stream anyway. */
+-  static thread_mutex mutex;
+-  thread_scoped_lock lock(mutex);
++  /* Allocate and build acceleration structures only one at a time per device, to prevent
++   * parallel builds from running out of memory (since both original and compacted acceleration
++   * structure memory may be allocated at the same time for the duration of this function). The
++   * builds would otherwise happen on the same CUDA stream anyway. Each device has its own memory
++   * and stream, so devices build at the same time. CYCLES_OPTIX_GLOBAL_BVH_LOCK restores one
++   * lock shared by all devices, as a reference. */
++  static thread_mutex global_mutex;
++  static const bool global_lock = getenv("CYCLES_OPTIX_GLOBAL_BVH_LOCK") != nullptr;
++  thread_scoped_lock lock(global_lock ? global_mutex : bvh_build_mutex);
+ 
+   const CUDAContextScope scope(this);
+ 
+diff --git a/src/device/optix/device_impl.h b/src/device/optix/device_impl.h
+index 7cc00c6cad2b56ae7048f3f9fd96f5e582cde037..0a8f1ba29079d9badb1f43be02b7163e71567be2 100644
+--- a/src/device/optix/device_impl.h
++++ b/src/device/optix/device_impl.h
+@@ -123,6 +123,8 @@ class OptiXDevice : public CUDADevice {
+   OptixTraversableHandle tlas_handle = 0;
+   vector<unique_ptr<device_only_memory<char>>> delayed_free_bvh_memory;
+   thread_mutex delayed_free_bvh_mutex;
++  /* Serialises acceleration structure builds on this device, see build_optix_bvh. */
++  thread_mutex bvh_build_mutex;
+ 
+  public:
+   OptiXDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);

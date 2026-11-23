@@ -1,0 +1,17 @@
+{
+  "declared_before_measurements": true,
+  "date": "2026-11-10",
+  "rule": "K28 requires at least 50 ms median saving for BOTH frequent transform and emission edits on the original four-palette regression scene. Artist observation overrides this measurement.",
+  "trials": 9,
+  "random_seed": 20261110,
+  "pairing": "Fresh process per arm with common deterministic fixture, seed and edit history; seeded randomized arm order within each pair. Two CPU render threads, affinity mask 5 (logical processors 0 and 2 on distinct Ryzen 7950X physical cores), below-normal priority. Pilot originally used mask 3; production measurements use mask 5 and a repeated pilot. One cold render and one transform warmup precede the measured transform and emission edits.",
+  "noise": "No timing outliers discarded. Exact distribution-free median interval is order statistics 2 and 8 of 9 (96.1% coverage). Keep only if both lower endpoints >=50ms; retire a performance bundle if either upper endpoint <50ms. Otherwise inconclusive; no unplanned repetitions to chase significance. Run errors preserved and corrected separately before the 9 valid pairs.",
+  "images": "Compare each measured incremental transform and emission output with a fresh scene at the same edit state. All finite and shape-matched, linear RGBA maximum absolute error <=1e-5 for directly visible emission. A receiver-lighting control uses deterministic same-seed CPU paths and explicit error reporting. No image equivalence claim from timing alone.",
+  "scope": "Standalone engine scene edit through complete frame, plus prior host end-to-end evidence reported separately. Viewer paint excluded. No nightly, no installed activation, no policy or patch disposition mutation.",
+  "arms": {
+    "pristine": "Pinned 74e9d9e4 source/libraries, uniform-material shared-mesh fixture only",
+    "reference": "Fork libraries with pristine light_tree and light tree flattening transplanted; object material-slot semantics retained and palettes distinguished in subtree key",
+    "patched": "Unchanged production fork algorithms and libraries",
+    "ablations": "Existing production same-binary feature controls; report only what each control actually isolates"
+  }
+}

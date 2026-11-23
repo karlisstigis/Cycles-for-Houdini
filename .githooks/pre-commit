@@ -1,0 +1,5 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Check the staged source when this workstation has opted into project CI.
+runner=$(git config --local --get cycles.ciPython) || exit 0
+exec "$runner" "$(git rev-parse --show-toplevel)/scripts/format-source.py" --staged

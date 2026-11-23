@@ -1,0 +1,486 @@
+From f3dc653bd55442dc131d2beadecffa38a9af1552 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:33 +0100
+Subject: [PATCH] sampled named tangent bases
+
+Locked-Patch: patches/0030-sampled-named-tangent-bases.patch
+Locked-Patch-SHA256: 104ec8ad51b37740652472baeb533aa5679c471dd05cdd4433bc5516cca5f5d8
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_tangent_basis_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: b78bb4e6eebaa115037bd65410f304cdea745f6b
+Previous-Patch: patches/0030-sampled-named-tangent-bases.patch
+Previous-Patch-SHA256: 104ec8ad51b37740652472baeb533aa5679c471dd05cdd4433bc5516cca5f5d8
+Rationale: Named tangent bases carry authored samples rather than assuming one built-in tangent set; shader lookup and storage must share their identity.
+Contract: sampled named tangent bases
+Tests: tests/houdini_tangent_basis_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index db2900e737a1567066ca1d2f7e70d1c7fa3c0be2..06a51bcf9645177d94ebe479e87f277c0812869f 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -976,9 +976,9 @@ void GeometryManager::device_update(Device *device,
+     }
+ 
+     /* Apply tangents for generated and UVs (if any need them) or remove if not needed */
+-    mesh->update_tangents(scene, true);
++    mesh->update_tangents(scene, true, &progress);
+     if (!mesh->has_true_displacement()) {
+-      mesh->update_tangents(scene, false);
++      mesh->update_tangents(scene, false, &progress);
+     }
+   });
+ 
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index e00eaa9cd9c163522d16297b77bca5b7a0af5b05..1d3c00a6b04ad7473dba4b54fa5e7070b760879f 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -18,6 +18,7 @@
+ #include "subd/split.h"
+ 
+ #include "util/log.h"
++#include "util/progress.h"
+ #include "util/set.h"
+ 
+ #include "mikktspace.hh"
+@@ -28,16 +29,19 @@ CCL_NAMESPACE_BEGIN
+ 
+ struct MikkMeshWrapper {
+   MikkMeshWrapper(const Mesh *mesh,
++                  const packed_float3 *positions,
+                   const packed_normal *vertex_normal,
+                   const packed_normal *corner_normal,
+                   const float2 *uv,
++                  const packed_float3 *uv3,
+                   packed_float3 *tangent,
+                   float *tangent_sign)
+       : mesh(mesh),
+-        position(mesh->get_position()),
++        position(positions),
+         vertex_normal(vertex_normal),
+         corner_normal(corner_normal),
+         uv(uv),
++        uv3(uv3),
+         tangent(tangent),
+         tangent_sign(tangent_sign)
+   {
+@@ -76,7 +80,8 @@ struct MikkMeshWrapper {
+      * turn this into a constexpr is worth it. */
+     if (has_uv()) {
+       const int corner_index = CornerIndex(face_num, vert_num);
+-      const float2 tfuv = uv[corner_index];
++      const float2 tfuv = uv ? uv[corner_index] :
++                                   make_float2(uv3[corner_index].x, uv3[corner_index].y);
+       return mikk::float3(tfuv.x, tfuv.y, 1.0f);
+     }
+     /* revert to vertex position */
+@@ -111,7 +116,7 @@ struct MikkMeshWrapper {
+ 
+   bool has_uv() const
+   {
+-    return uv != nullptr;
++    return uv != nullptr || uv3 != nullptr;
+   }
+ 
+   const Mesh *mesh;
+@@ -120,6 +125,7 @@ struct MikkMeshWrapper {
+   const packed_normal *vertex_normal;
+   const packed_normal *corner_normal;
+   const float2 *uv;
++  const packed_float3 *uv3;
+ 
+   packed_float3 *tangent;
+   float *tangent_sign;
+@@ -131,7 +137,8 @@ static void mikk_compute_tangents(Attribute *attr_uv,
+                                   const AttributeStandard tangent_std,
+                                   const AttributeStandard tangent_sign_std,
+                                   const char *tangent_postfix,
+-                                  const char *tangent_sign_postfix)
++                                  const char *tangent_sign_postfix,
++                                  Progress *progress)
+ {
+   /* Create tangent attributes. */
+   AttributeSet &attributes = mesh->attributes;
+@@ -143,9 +150,12 @@ static void mikk_compute_tangents(Attribute *attr_uv,
+     return;
+   }
+ 
+-  const packed_normal *vertex_normal = attr_vN ? attr_vN->data<packed_normal>() : nullptr;
+-  const packed_normal *corner_normal = attr_cN ? attr_cN->data<packed_normal>() : nullptr;
+-  const float2 *uv = (attr_uv) ? attr_uv->data<float2>() : nullptr;
++  Attribute *attr_P = attributes.find(ATTR_STD_POSITION);
++  const bool sampled = mesh->has_motion_blur() &&
++                       ((attr_P && attr_P->has_motion()) ||
++                        (attr_vN && attr_vN->has_motion()) ||
++                        (attr_cN && attr_cN->has_motion()) ||
++                        (attr_uv && attr_uv->has_motion()));
+ 
+   const ustring name = ustring((attr_uv) ? attr_uv->name.string() + tangent_postfix :
+                                            Attribute::standard_name(tangent_std));
+@@ -156,25 +166,55 @@ static void mikk_compute_tangents(Attribute *attr_uv,
+   else {
+     attr = attributes.add(name, TypeVector, ATTR_ELEMENT_CORNER);
+   }
+-  packed_float3 *tangent = attr->data_for_write<packed_float3>();
++  if (sampled) {
++    attr->add_motion(mesh);
++  }
+   /* Create bitangent sign attribute. */
+-  float *tangent_sign = nullptr;
++  Attribute *attr_sign = nullptr;
+   if (need_sign) {
+     const ustring name_sign = ustring((attr_uv) ? attr_uv->name.string() + tangent_sign_postfix :
+                                                   Attribute::standard_name(tangent_sign_std));
+-    Attribute *attr_sign;
+     if (attr_uv == nullptr || attr_uv->std == ATTR_STD_UV) {
+       attr_sign = attributes.add(tangent_sign_std, name_sign);
+     }
+     else {
+       attr_sign = attributes.add(name_sign, TypeFloat, ATTR_ELEMENT_CORNER);
+     }
+-    tangent_sign = attr_sign->data_for_write<float>();
++    if (sampled) {
++      attr_sign->add_motion(mesh);
++    }
+   }
+ 
+-  MikkMeshWrapper userdata(mesh, vertex_normal, corner_normal, uv, tangent, tangent_sign);
+-  /* Compute tangents. */
+-  mikk::Mikktspace(userdata).genTangSpace();
++  /* Attribute storage is centre-first for every generic field. Compute from
++   * the corresponding positions, normals and UVs, without modifying live inputs. */
++  const int steps = sampled ? mesh->get_motion_steps() : 1;
++  for (int step = 0; step < steps; step++) {
++    if (progress && (progress->get_cancel() || progress->get_error())) {
++      return;
++    }
++    const packed_float3 *positions = attr_P ?
++                                         attr_P->data<packed_float3>(attr_P->has_motion() ? step : 0) :
++                                         mesh->get_position();
++    const packed_normal *vertex_normal = attr_vN ?
++                                             attr_vN->data<packed_normal>(attr_vN->has_motion() ? step : 0) :
++                                             nullptr;
++    const packed_normal *corner_normal = attr_cN ?
++                                             attr_cN->data<packed_normal>(attr_cN->has_motion() ? step : 0) :
++                                             nullptr;
++    const int uv_step = attr_uv && attr_uv->has_motion() ? step : 0;
++    const float2 *uv = attr_uv && attr_uv->type == TypeFloat2 ? attr_uv->data<float2>(uv_step) : nullptr;
++    const packed_float3 *uv3 = attr_uv && attr_uv->type == TypeVector ?
++                                   attr_uv->data<packed_float3>(uv_step) : nullptr;
++    MikkMeshWrapper userdata(mesh,
++                            positions,
++                            vertex_normal,
++                            corner_normal,
++                            uv,
++                            uv3,
++                            attr->data_for_write<packed_float3>(step),
++                            attr_sign ? attr_sign->data_for_write<float>(step) : nullptr);
++    mikk::Mikktspace(userdata).genTangSpace();
++  }
+ }
+ 
+ /* Triangle */
+@@ -772,6 +812,13 @@ void Mesh::add_undisplaced(Scene *scene)
+ 
+     size_t size = attr->buffer_size(this, ATTR_PRIM_GEOMETRY) / sizeof(packed_float3);
+     std::copy_n(get_position(), size, attr->data_for_write<packed_float3>());
++    const Attribute *source = attributes.find(ATTR_STD_POSITION);
++    if (source && source->has_motion()) {
++      attr->add_motion(this);
++      for (int step = 1; step < source->num_motion_steps(); step++) {
++        std::copy_n(source->data<packed_float3>(step), size, attr->data_for_write<packed_float3>(step));
++      }
++    }
+   }
+ 
+   if (need_attribute(scene, ATTR_STD_NORMAL_UNDISPLACED) &&
+@@ -792,6 +839,12 @@ void Mesh::add_undisplaced(Scene *scene)
+ 
+       size_t size = attr->buffer_size(this, ATTR_PRIM_GEOMETRY) / sizeof(packed_normal);
+       std::copy_n(attr_N->data<packed_normal>(), size, attr->data_for_write<packed_normal>());
++      if (attr_N->has_motion()) {
++        attr->add_motion(this);
++        for (int step = 1; step < attr_N->num_motion_steps(); step++) {
++          std::copy_n(attr_N->data<packed_normal>(step), size, attr->data_for_write<packed_normal>(step));
++        }
++      }
+     }
+   }
+ }
+@@ -819,7 +872,7 @@ void Mesh::update_generated(Scene *scene)
+   }
+ }
+ 
+-void Mesh::update_tangents(Scene *scene, bool undisplaced)
++void Mesh::update_tangents(Scene *scene, bool undisplaced, Progress *progress)
+ {
+   if (!num_triangles()) {
+     return;
+@@ -847,12 +900,14 @@ void Mesh::update_tangents(Scene *scene, bool undisplaced)
+                           tangent_std,
+                           tangent_sign_std,
+                           tangent_postfix,
+-                          tangent_sign_postfix); /* sign */
++                          tangent_sign_postfix,
++                          progress); /* sign */
+   }
+ 
+   /* now generate for any other UVs requested */
+   for (Attribute &attr : attributes.attributes) {
+-    if (!(attr.type == TypeFloat2 && attr.element == ATTR_ELEMENT_CORNER)) {
++    if (!((attr.type == TypeFloat2 || attr.type == TypeVector) &&
++          attr.element == ATTR_ELEMENT_CORNER)) {
+       continue;
+     }
+ 
+@@ -868,7 +923,8 @@ void Mesh::update_tangents(Scene *scene, bool undisplaced)
+                             tangent_std,
+                             tangent_sign_std,
+                             tangent_postfix,
+-                            tangent_sign_postfix); /* sign */
++                            tangent_sign_postfix,
++                            progress); /* sign */
+     }
+   }
+ }
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index bf73a703b49a0daec21a4521b4bc397a390fcf11..203935bfcefcf363a7ac814c734e9aca881b150e 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -219,7 +219,7 @@ class Mesh : public Geometry {
+   void add_vertex_normals();
+   void add_undisplaced(Scene *scene);
+   void update_generated(Scene *scene);
+-  void update_tangents(Scene *scene, bool undisplaced);
++  void update_tangents(Scene *scene, bool undisplaced, Progress *progress = nullptr);
+ 
+   void get_uv_tiles(ustring map, unordered_set<int> &tiles) override;
+ 
+diff --git a/src/scene/mesh_displace.cpp b/src/scene/mesh_displace.cpp
+index 06deb55af41962d4bbacffa8e2ade3d7c443344a..398837fe2a871b645f86efc023cbaf573e3e86af 100644
+--- a/src/scene/mesh_displace.cpp
++++ b/src/scene/mesh_displace.cpp
+@@ -477,7 +477,7 @@ bool GeometryManager::displace(Device *device, Scene *scene, Mesh *mesh, Progres
+     }
+   }
+ 
+-  mesh->update_tangents(scene, false);
++  mesh->update_tangents(scene, false, &progress);
+ 
+   return true;
+ }
+diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
+index 0040e4705e8a305ccb07d5c2e17478ebf995d14a..93a2720cbc5b76b13cc404cb17c073a30d518664 100644
+--- a/src/scene/shader_nodes.cpp
++++ b/src/scene/shader_nodes.cpp
+@@ -7924,6 +7924,8 @@ NODE_DEFINE(NormalMapNode)
+ 
+   SOCKET_OUT_NORMAL(normal, "Normal");
+ 
++  SOCKET_INT(context_tangent_bases, "Context Tangent Bases", 0, SocketType::INTERNAL);
++
+   return type;
+ }
+ 
+@@ -7932,45 +7934,47 @@ NormalMapNode::NormalMapNode() : ShaderNode(get_node_type()) {}
+ void NormalMapNode::attributes(Shader *shader, AttributeRequestSet *attributes)
+ {
+   if (shader->has_surface_link() && space == NODE_NORMAL_MAP_TANGENT) {
++    const int bases = context_tangent_bases ? context_tangent_bases :
++                                            (base == NODE_NORMAL_MAP_BASE_DISPLACED ? 2 : 1);
+     if (attribute.empty()) {
+-      /* We don't need the UV ourselves, but we need to compute the tangent from it. */
+       attributes->add(ATTR_STD_UV);
+-      if (base == NODE_NORMAL_MAP_BASE_DISPLACED) {
++      if (bases & 2) {
+         attributes->add(ATTR_STD_UV_TANGENT);
+         attributes->add(ATTR_STD_UV_TANGENT_SIGN);
+       }
+-      else {
++      if (bases & 1) {
+         attributes->add(ATTR_STD_UV_TANGENT_UNDISPLACED);
+         attributes->add(ATTR_STD_UV_TANGENT_SIGN_UNDISPLACED);
+-        attributes->add(ATTR_STD_NORMAL_UNDISPLACED);
+       }
+     }
+     else {
+       attributes->add(attribute);
+-      if (base == NODE_NORMAL_MAP_BASE_DISPLACED) {
+-        attributes->add(ustring((string(attribute.c_str()) + ".tangent").c_str()));
+-        attributes->add(ustring((string(attribute.c_str()) + ".tangent_sign").c_str()));
++      if (bases & 2) {
++        attributes->add(ustring(attribute.string() + ".tangent"));
++        attributes->add(ustring(attribute.string() + ".tangent_sign"));
+       }
+-      else {
+-        attributes->add(ustring((string(attribute.c_str()) + ".undisplaced_tangent").c_str()));
+-        attributes->add(
+-            ustring((string(attribute.c_str()) + ".undisplaced_tangent_sign").c_str()));
+-        attributes->add(ATTR_STD_NORMAL_UNDISPLACED);
++      if (bases & 1) {
++        attributes->add(ustring(attribute.string() + ".undisplaced_tangent"));
++        attributes->add(ustring(attribute.string() + ".undisplaced_tangent_sign"));
+       }
+     }
++    if (bases & 1) {
++      attributes->add(ATTR_STD_NORMAL_UNDISPLACED);
++    }
+   }
+-
+   ShaderNode::attributes(shader, attributes);
+ }
+ 
+ void NormalMapNode::compile(SVMCompiler &compiler)
+ {
++  const bool original = base == NODE_NORMAL_MAP_BASE_ORIGINAL ||
++                        (context_tangent_bases && compiler.output_type() == SHADER_TYPE_DISPLACEMENT);
+   int attr_id = 0;
+   int attr_sign_id = 0;
+ 
+   if (space == NODE_NORMAL_MAP_TANGENT) {
+     if (attribute.empty()) {
+-      if (base == NODE_NORMAL_MAP_BASE_DISPLACED) {
++      if (!original) {
+         attr_id = compiler.attribute(ATTR_STD_UV_TANGENT);
+         attr_sign_id = compiler.attribute(ATTR_STD_UV_TANGENT_SIGN);
+       }
+@@ -7980,7 +7984,7 @@ void NormalMapNode::compile(SVMCompiler &compiler)
+       }
+     }
+     else {
+-      if (base == NODE_NORMAL_MAP_BASE_DISPLACED) {
++      if (!original) {
+         attr_id = compiler.attribute(ustring((string(attribute.c_str()) + ".tangent").c_str()));
+         attr_sign_id = compiler.attribute(
+             ustring((string(attribute.c_str()) + ".tangent_sign").c_str()));
+@@ -7999,7 +8003,7 @@ void NormalMapNode::compile(SVMCompiler &compiler)
+                     SVMNodeNormalMap{
+                         .space = space,
+                         .invert_green = (convention == NODE_NORMAL_MAP_CONVENTION_DIRECTX) ? 1 : 0,
+-                        .use_original_base = (base == NODE_NORMAL_MAP_BASE_ORIGINAL) ? 1 : 0,
++                        .use_original_base = original ? 1 : 0,
+                         .attr = attr_id,
+                         .attr_sign = attr_sign_id,
+                         .color = compiler.input_float3("Color"),
+@@ -8010,11 +8014,13 @@ void NormalMapNode::compile(SVMCompiler &compiler)
+ 
+ void NormalMapNode::compile(OSLCompiler &compiler)
+ {
++  const bool original = base == NODE_NORMAL_MAP_BASE_ORIGINAL ||
++                        (context_tangent_bases && compiler.output_type() == SHADER_TYPE_DISPLACEMENT);
+   if (space == NODE_NORMAL_MAP_TANGENT) {
+     std::string attr_name, attr_sign_name;
+ 
+     if (attribute.empty()) {
+-      if (base == NODE_NORMAL_MAP_BASE_DISPLACED) {
++      if (!original) {
+         attr_name = "geom:tangent";
+         attr_sign_name = "geom:tangent_sign";
+       }
+@@ -8024,7 +8030,7 @@ void NormalMapNode::compile(OSLCompiler &compiler)
+       }
+     }
+     else {
+-      if (base == NODE_NORMAL_MAP_BASE_DISPLACED) {
++      if (!original) {
+         attr_name = string(attribute.c_str()) + ".tangent";
+         attr_sign_name = string(attribute.c_str()) + ".tangent_sign";
+       }
+@@ -8040,7 +8046,7 @@ void NormalMapNode::compile(OSLCompiler &compiler)
+ 
+   compiler.parameter(this, "space");
+   compiler.parameter(this, "convention");
+-  compiler.parameter(this, "base");
++  compiler.parameter("base", original ? "original" : "displaced");
+   compiler.add(this, "node_normal_map");
+ }
+ 
+@@ -8108,6 +8114,8 @@ NODE_DEFINE(TangentNode)
+ 
+   SOCKET_OUT_NORMAL(tangent, "Tangent");
+ 
++  SOCKET_INT(context_tangent_bases, "Context Tangent Bases", 0, SocketType::INTERNAL);
++
+   return type;
+ }
+ 
+@@ -8117,34 +8125,36 @@ void TangentNode::attributes(Shader *shader, AttributeRequestSet *attributes)
+ {
+   if (shader->has_surface_link()) {
+     if (direction_type == NODE_TANGENT_UVMAP) {
++      const int bases = context_tangent_bases ? context_tangent_bases : 2;
+       if (attribute.empty()) {
+-        /* We don't need the UV ourselves, but we need to compute the tangent from it. */
+         attributes->add(ATTR_STD_UV);
+-        attributes->add(ATTR_STD_UV_TANGENT);
++        if (bases & 2) attributes->add(ATTR_STD_UV_TANGENT);
++        if (bases & 1) attributes->add(ATTR_STD_UV_TANGENT_UNDISPLACED);
+       }
+       else {
+         attributes->add(attribute);
+-        attributes->add(ustring((string(attribute.c_str()) + ".tangent").c_str()));
++        if (bases & 2) attributes->add(ustring(attribute.string() + ".tangent"));
++        if (bases & 1) attributes->add(ustring(attribute.string() + ".undisplaced_tangent"));
+       }
+     }
+     else {
+       attributes->add(ATTR_STD_GENERATED);
+     }
+   }
+-
+   ShaderNode::attributes(shader, attributes);
+ }
+ 
+ void TangentNode::compile(SVMCompiler &compiler)
+ {
++  const bool original = context_tangent_bases && compiler.output_type() == SHADER_TYPE_DISPLACEMENT;
+   int attr;
+ 
+   if (direction_type == NODE_TANGENT_UVMAP) {
+     if (attribute.empty()) {
+-      attr = compiler.attribute(ATTR_STD_UV_TANGENT);
++      attr = compiler.attribute(original ? ATTR_STD_UV_TANGENT_UNDISPLACED : ATTR_STD_UV_TANGENT);
+     }
+     else {
+-      attr = compiler.attribute(ustring((string(attribute.c_str()) + ".tangent").c_str()));
++      attr = compiler.attribute(ustring((string(attribute.c_str()) + (original ? ".undisplaced_tangent" : ".tangent")).c_str()));
+     }
+   }
+   else {
+@@ -8163,12 +8173,13 @@ void TangentNode::compile(SVMCompiler &compiler)
+ 
+ void TangentNode::compile(OSLCompiler &compiler)
+ {
++  const bool original = context_tangent_bases && compiler.output_type() == SHADER_TYPE_DISPLACEMENT;
+   if (direction_type == NODE_TANGENT_UVMAP) {
+     if (attribute.empty()) {
+-      compiler.parameter("attr_name", ustring("geom:tangent"));
++      compiler.parameter("attr_name", ustring(original ? "geom:undisplaced_tangent" : "geom:tangent"));
+     }
+     else {
+-      compiler.parameter("attr_name", ustring((string(attribute.c_str()) + ".tangent").c_str()));
++      compiler.parameter("attr_name", ustring((string(attribute.c_str()) + (original ? ".undisplaced_tangent" : ".tangent")).c_str()));
+     }
+   }
+ 
+diff --git a/src/scene/shader_nodes.h b/src/scene/shader_nodes.h
+index aff086c2029cc039ade6e0df6bcf187233acc94c..41b731b75e41b932acfadbb79db282659abf186a 100644
+--- a/src/scene/shader_nodes.h
++++ b/src/scene/shader_nodes.h
+@@ -1816,6 +1816,7 @@ class NormalMapNode : public ShaderNode {
+   NODE_SOCKET_API(float3, color)
+   NODE_SOCKET_API(int, convention)
+   NODE_SOCKET_API(int, base)
++  NODE_SOCKET_API(int, context_tangent_bases)
+ };
+ 
+ class RadialTilingNode : public ShaderNode {
+@@ -1848,6 +1849,7 @@ class TangentNode : public ShaderNode {
+   NODE_SOCKET_API(NodeTangentDirectionType, direction_type)
+   NODE_SOCKET_API(NodeTangentAxis, axis)
+   NODE_SOCKET_API(ustring, attribute)
++  NODE_SOCKET_API(int, context_tangent_bases)
+ };
+ 
+ class BevelNode : public ShaderNode {

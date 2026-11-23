@@ -1,0 +1,67 @@
+From 303f2f1b3c269e7a2a94e3ab68e11f9259b1aba7 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:44 +0100
+Subject: [PATCH] Preserve full float RGB diffuse/glossy light-pass fractions
+ in main and shadow GPU state so independent half rounding cannot leak
+ non-transmitting reflection into an unreconstructable transmission remainder;
+ retain the remaining compact state and Beauty estimator.
+
+Locked-Patch: patches/0083-full-precision-light-pass-weights.patch
+Locked-Patch-SHA256: 8bc91890b0f48b9aeb6890571a70f6d2df84697f149cb1fe056115c7c24ba4d5
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_selective_rls_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: bc8dc63c42ef04203c2109542efe941d1aa26603
+Previous-Patch: patches/0083-full-precision-light-pass-weights.patch
+Previous-Patch-SHA256: 8bc91890b0f48b9aeb6890571a70f6d2df84697f149cb1fe056115c7c24ba4d5
+Rationale: Independent half rounding of diffuse/glossy fractions leaks reflection into reconstructed transmission; float RGB pass weights preserve separability without changing Beauty.
+Contract: Preserve full float RGB diffuse/glossy light-pass fractions in main and shadow GPU state so independent half rounding cannot leak non-transmitting reflection into an unreconstructable transmission remainder; retain the remaining compact state and Beauty estimator.
+Tests: tests/houdini_selective_rls_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/integrator/shadow_state_template.h b/src/kernel/integrator/shadow_state_template.h
+index d1e2e648c7db87b8750f749b827dea7340b4e069..4616f40505de364be62fae59ee5cf01e6b78c095 100644
+--- a/src/kernel/integrator/shadow_state_template.h
++++ b/src/kernel/integrator/shadow_state_template.h
+@@ -42,13 +42,15 @@ KERNEL_STRUCT_MEMBER(shadow_path,
+                      PackedSpectrum,
+                      unshadowed_throughput,
+                      KERNEL_FEATURE_AO_ADDITIVE)
+-/* Ratio of throughput to distinguish diffuse / glossy / transmission render passes. */
++/* Ratio of throughput to distinguish diffuse / glossy / transmission render passes.
++ * Preserve float precision: independent half rounding leaks reflection energy into the
++ * implicit transmission remainder, which cannot reconstruct a zero-transmission material. */
+ KERNEL_STRUCT_MEMBER(shadow_path,
+-                     SpectrumCompressedOnGPU,
++                     PackedSpectrum,
+                      pass_diffuse_weight,
+                      KERNEL_FEATURE_LIGHT_PASSES)
+ KERNEL_STRUCT_MEMBER(shadow_path,
+-                     SpectrumCompressedOnGPU,
++                     PackedSpectrum,
+                      pass_glossy_weight,
+                      KERNEL_FEATURE_LIGHT_PASSES)
+ /* Packed number of intersections found by ray-tracing, and on GPU also the resume hit index
+diff --git a/src/kernel/integrator/state_template.h b/src/kernel/integrator/state_template.h
+index 9a178e322d67002d4636db72a220a485511f790a..f55be255d3dd6e79bb932c3efe12e8fd1713ba44 100644
+--- a/src/kernel/integrator/state_template.h
++++ b/src/kernel/integrator/state_template.h
+@@ -76,13 +76,15 @@ KERNEL_STRUCT_MEMBER(path, float, image_iris_transparency_scale, KERNEL_FEATURE_
+ /* Factor to multiple with throughput to get remove any guiding PDFS.
+  * Such throughput without guiding PDFS is used for Russian roulette termination. */
+ KERNEL_STRUCT_MEMBER(path, float, unguided_throughput, KERNEL_FEATURE_PATH_GUIDING)
+-/* Ratio of throughput to distinguish diffuse / glossy / transmission render passes. */
++/* Ratio of throughput to distinguish diffuse / glossy / transmission render passes.
++ * Preserve float precision: independent half rounding leaks reflection energy into the
++ * implicit transmission remainder, which cannot reconstruct a zero-transmission material. */
+ KERNEL_STRUCT_MEMBER(path,
+-                     SpectrumCompressedOnGPU,
++                     PackedSpectrum,
+                      pass_diffuse_weight,
+                      KERNEL_FEATURE_LIGHT_PASSES)
+ KERNEL_STRUCT_MEMBER(path,
+-                     SpectrumCompressedOnGPU,
++                     PackedSpectrum,
+                      pass_glossy_weight,
+                      KERNEL_FEATURE_LIGHT_PASSES)
+ /* Denoising. */

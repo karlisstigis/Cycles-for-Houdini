@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Optional Setup component "Asset browser": loaded only when the package hpath
+     contains <host>/addons/asset_browser (see docs/dev/asset-browser.md). -->
+<pythonPanelDocument>
+  <interface name="cycles_houdini_assets" label="Cycles Asset Browser" icon="NETWORKS_shop" showNetworkNavigationBar="false" help_url="/cycles/asset_browser">
+    <script><![CDATA[
+from cycles_houdini import assets
+panel = None
+def onCreateInterface():
+    global panel
+    kwargs['paneTab'].showToolbar(False)
+    if not assets.enabled():
+        from PySide6 import QtWidgets
+        label = QtWidgets.QLabel('The Cycles asset browser is disabled (CYCLES_HOUDINI_ASSET_BROWSER=0). '
+                                 'Run Setup and select the Asset browser component to enable it.')
+        label.setWordWrap(True)
+        return label
+    from cycles_houdini.assets.panel import AssetBrowserPanel
+    panel = AssetBrowserPanel()
+    return panel
+def onDestroyInterface():
+    global panel
+    if panel is not None:
+        panel.dispose()
+    panel = None
+]]></script>
+    <includeInToolbarMenu menu_position="1" create_separator="false"/>
+    <includeInPaneTabMenu menu_position="1" create_separator="false"/>
+    <help><![CDATA[[Cycles Asset Browser|/cycles/asset_browser]]]></help>
+  </interface>
+</pythonPanelDocument>

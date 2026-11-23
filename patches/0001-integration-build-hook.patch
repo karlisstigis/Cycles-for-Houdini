@@ -1,0 +1,35 @@
+From 000022e55ca051c6f035d7525eabbc80881f32dd Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:28 +0100
+Subject: [PATCH] Attach the integration targets to the official engine build
+ with its configured dependencies.
+
+Locked-Patch: patches/0001-integration-build-hook.patch
+Locked-Patch-SHA256: 70e8afd80c45042ec91be31607c9c355619a6857e84a360e3813204ccabf9604
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_release_runtime_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: cccab836ae1822ed0199bae821a58c59f8b859f2
+Previous-Patch: patches/0001-integration-build-hook.patch
+Previous-Patch-SHA256: 70e8afd80c45042ec91be31607c9c355619a6857e84a360e3813204ccabf9604
+Rationale: The integration build hook injects Houdini-owned targets into the standalone Cycles dependency graph; upstream cannot name this repository's targets.
+Contract: Attach the integration targets to the official engine build with its configured dependencies.
+Tests: tests/houdini_release_runtime_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 422aed75b24a2672c5067e22da66bf725288b345..c182b67aafc909da730b667cb17d02f9d6cfd976 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -416,6 +416,11 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE OR (WITH_CYCLES_STANDALONE AND WITH_USD))
+   add_subdirectory(hydra)
+ endif()
+ 
++if(CYCLES_HOUDINI_INTEGRATION_ROOT)
++  add_subdirectory("${CYCLES_HOUDINI_INTEGRATION_ROOT}/src"
++                   "${CMAKE_BINARY_DIR}/houdini_integration")
++endif()
++
+ if(NOT WITH_BLENDER)
+   if(CYCLES_STANDALONE_REPOSITORY)
+     delayed_do_install()

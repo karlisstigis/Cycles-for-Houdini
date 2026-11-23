@@ -1,0 +1,807 @@
+From 0ffb4672f6af2048f5637e8face4a414cdc6b1ee Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:41 +0100
+Subject: [PATCH] shutter sampled camera intrinsics
+
+Locked-Patch: patches/0068-shutter-sampled-camera-intrinsics.patch
+Locked-Patch-SHA256: ff8014419f331cc6b7c78cf717bb1baae6f79718c98dba847bdcadd75bfe1a22
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_camera_intrinsic_motion_gui_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 3c68fee0e104722b68e38072a53767e9275cbc5b
+Previous-Patch: patches/0068-shutter-sampled-camera-intrinsics.patch
+Previous-Patch-SHA256: ff8014419f331cc6b7c78cf717bb1baae6f79718c98dba847bdcadd75bfe1a22
+Rationale: Sampled camera intrinsics change projection and dicing at shutter times while retaining requested-frame semantics for unsampled operations.
+Contract: shutter sampled camera intrinsics
+Tests: tests/houdini_camera_intrinsic_motion_gui_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/camera/camera.h b/src/kernel/camera/camera.h
+index f7b7f1f5194e1485953e3781a3c24dbe421f3716..2f3f881a9c559c9122f0493012d1c2894d46ba03 100644
+--- a/src/kernel/camera/camera.h
++++ b/src/kernel/camera/camera.h
+@@ -17,6 +17,43 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++/* Owned active projection samples; negative time selects requested-frame optics. */
++ccl_device_inline KernelCameraIntrinsic camera_intrinsic_at(ccl_constant KernelCamera *cam,
++    const ccl_global KernelCameraIntrinsic *motion, const float time)
++{
++  if (time < 0.0f || !cam->num_intrinsic_motion_steps || motion == nullptr) return cam->intrinsic;
++  const float position = saturatef(time) * float(cam->num_intrinsic_motion_steps - 1);
++  const int index = min(int(position), cam->num_intrinsic_motion_steps - 2);
++  const float fraction = position - float(index);
++  KernelCameraIntrinsic result;
++  result.projection = motion[index].projection * (1.0f - fraction) + motion[index + 1].projection * fraction;
++  result.fisheye = motion[index].fisheye * (1.0f - fraction) + motion[index + 1].fisheye * fraction;
++  result.equirectangular_range = motion[index].equirectangular_range * (1.0f - fraction) + motion[index + 1].equirectangular_range * fraction;
++  result.cylindrical_range = motion[index].cylindrical_range * (1.0f - fraction) + motion[index + 1].cylindrical_range * fraction;
++  result.polynomial = motion[index].polynomial * (1.0f - fraction) + motion[index + 1].polynomial * fraction;
++  result.extra = motion[index].extra * (1.0f - fraction) + motion[index + 1].extra * fraction;
++  return result;
++}
++ccl_device_inline float3 camera_intrinsic_raster(ccl_constant KernelCamera *cam,
++    const ccl_private KernelCameraIntrinsic &intrinsic,const float2 raster)
++{
++  const float scale = cam->type == CAMERA_PERSPECTIVE ? intrinsic.projection.z : intrinsic.projection.w;
++  return make_float3((cam->intrinsic_raster.x + raster.x * cam->intrinsic_raster.z) * scale,
++                     (cam->intrinsic_raster.y + raster.y * cam->intrinsic_raster.w) * scale,
++                     cam->type == CAMERA_PERSPECTIVE ? 1.0f : 0.0f);
++}
++ccl_device_inline float3 camera_intrinsic_project(ccl_constant KernelCamera *cam,
++    const ccl_private KernelCameraIntrinsic &intrinsic,const float3 point)
++{
++  /* Match transform_perspective at a shutter endpoint on the lens plane. */
++  if (cam->type == CAMERA_PERSPECTIVE && point.z == 0.0f) return zero_float3();
++  const float scale = cam->type == CAMERA_PERSPECTIVE ? intrinsic.projection.z : intrinsic.projection.w;
++  const float inverse_z = cam->type == CAMERA_PERSPECTIVE ? 1.0f / point.z : 1.0f;
++  return make_float3(((point.x * inverse_z / scale) - cam->intrinsic_raster.x) / (cam->intrinsic_raster.z * cam->width),
++                     ((point.y * inverse_z / scale) - cam->intrinsic_raster.y) / (cam->intrinsic_raster.w * cam->height),
++                     0.0f);
++}
++
+ /* Perspective Camera */
+ 
+ ccl_device_inline float4 camera_sample_dof(ccl_constant KernelCamera *cam,
+@@ -73,7 +110,13 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+   const float3 raster = make_float3(raster_xy);
+   float3 Pcamera = transform_perspective(&rastertocamera, raster);
+ 
+-  if (kernel_data.cam.have_perspective_motion) {
++  const auto intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion),
++      kernel_data.cam.shuttertime == -1.0f ? -1.0f : ray->time);
++  const bool sampled_intrinsic = kernel_data.cam.num_intrinsic_motion_steps && kernel_data.cam.shuttertime != -1.0f;
++  if (sampled_intrinsic) {
++    Pcamera = camera_intrinsic_raster(&kernel_data.cam, intrinsic, raster_xy);
++  }
++  if (!sampled_intrinsic && kernel_data.cam.have_perspective_motion) {
+     /* TODO(sergey): Currently we interpolate projected coordinate which
+      * gives nice looking result and which is simple, but is in fact a bit
+      * different comparing to constructing projective matrix from an
+@@ -138,8 +181,16 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+     /* TODO: can this be optimized to give compact differentials directly? */
+     ray->dP = differential_zero_compact();
+     differential3 dD;
+-    dD.dx = normalize(Dcenter + make_float3(kernel_data.cam.dx)) - Dcenter_normalized;
+-    dD.dy = normalize(Dcenter + make_float3(kernel_data.cam.dy)) - Dcenter_normalized;
++    if (sampled_intrinsic) {
++      const float3 Dx = camera_intrinsic_raster(&kernel_data.cam, intrinsic, raster_xy + make_float2(1, 0));
++      const float3 Dy = camera_intrinsic_raster(&kernel_data.cam, intrinsic, raster_xy + make_float2(0, 1));
++      dD.dx = normalize(transform_direction(&cameratoworld, Dx)) - Dcenter_normalized;
++      dD.dy = normalize(transform_direction(&cameratoworld, Dy)) - Dcenter_normalized;
++    }
++    else {
++      dD.dx = normalize(Dcenter + make_float3(kernel_data.cam.dx)) - Dcenter_normalized;
++      dD.dy = normalize(Dcenter + make_float3(kernel_data.cam.dy)) - Dcenter_normalized;
++    }
+     ray->dD = differential_make_compact(dD) * kernel_data.cam.differential_scale;
+ #endif
+   }
+@@ -188,11 +239,11 @@ ccl_device Spectrum camera_sample_perspective(KernelGlobals kg,
+ 
+   /* clipping */
+   const float z_inv = 1.0f / normalize(Pcamera).z;
+-  const float nearclip = kernel_data.cam.nearclip * z_inv;
++  const float nearclip = intrinsic.projection.x * z_inv;
+   ray->P += nearclip * ray->D;
+   ray->dP += nearclip * ray->dD;
+   ray->tmin = 0.0f;
+-  ray->tmax = kernel_data.cam.cliplength * z_inv;
++  ray->tmax = (intrinsic.projection.y - intrinsic.projection.x) * z_inv;
+ 
+   return one_spectrum();
+ }
+@@ -205,7 +256,11 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+ {
+   /* create ray form raster position */
+   const ProjectionTransform rastertocamera = kernel_data.cam.rastertocamera;
+-  const float3 Pcamera = transform_perspective(&rastertocamera, make_float3(raster_xy));
++  const auto intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion),
++      kernel_data.cam.shuttertime == -1.0f ? -1.0f : ray->time);
++  const bool sampled_intrinsic = kernel_data.cam.num_intrinsic_motion_steps && kernel_data.cam.shuttertime != -1.0f;
++  const float3 Pcamera = sampled_intrinsic ? camera_intrinsic_raster(&kernel_data.cam, intrinsic, raster_xy) :
++      transform_perspective(&rastertocamera, make_float3(raster_xy));
+ 
+   float3 P;
+   float3 D = make_float3(0.0f, 0.0f, 1.0f);
+@@ -227,10 +282,10 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+     D = camera_dof_normalize(focus_direction);
+     /* Compute position the ray will be if it traveled until it intersected the near clip plane.
+      * This allows for correct DOF while allowing near clipping. */
+-    P = Pcamera + lens_uvw + focus_direction * kernel_data.cam.nearclip;
++    P = Pcamera + lens_uvw + focus_direction * intrinsic.projection.x;
+   }
+   else {
+-    P = Pcamera + make_float3(0.0f, 0.0f, kernel_data.cam.nearclip);
++    P = Pcamera + make_float3(0.0f, 0.0f, intrinsic.projection.x);
+   }
+   /* transform ray from camera to world */
+   Transform cameratoworld = kernel_data.cam.cameratoworld;
+@@ -248,8 +303,9 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+ #ifdef __RAY_DIFFERENTIALS__
+   /* ray differential */
+   differential3 dP;
+-  dP.dx = make_float3(kernel_data.cam.dx);
+-  dP.dy = make_float3(kernel_data.cam.dy);
++  const float intrinsic_scale = sampled_intrinsic ? intrinsic.projection.w / kernel_data.cam.intrinsic.projection.w : 1.0f;
++  dP.dx = make_float3(kernel_data.cam.dx) * intrinsic_scale;
++  dP.dy = make_float3(kernel_data.cam.dy) * intrinsic_scale;
+ 
+   ray->dP = differential_make_compact(dP) * kernel_data.cam.differential_scale;
+   ray->dD = differential_zero_compact();
+@@ -257,7 +313,7 @@ ccl_device Spectrum camera_sample_orthographic(KernelGlobals kg,
+ 
+   /* clipping */
+   ray->tmin = 0.0f;
+-  ray->tmax = kernel_data.cam.cliplength;
++  ray->tmax = intrinsic.projection.y - intrinsic.projection.x;
+ 
+   return one_spectrum();
+ }
+@@ -398,23 +454,26 @@ ccl_device_inline Spectrum camera_sample_custom(KernelGlobals kg,
+ 
+ ccl_device_inline float3 camera_panorama_direction(ccl_constant KernelCamera *cam,
+                                                    const float x,
+-                                                   const float y)
++                                                   const float y,
++                                                   const ccl_private KernelCameraIntrinsic &intrinsic)
+ {
+   const ProjectionTransform rastertocamera = cam->rastertocamera;
+   const float3 Pcamera = transform_perspective(&rastertocamera, make_float3(x, y, 0.0f));
+-  return panorama_to_direction(cam, Pcamera.x, Pcamera.y);
++  return panorama_to_direction(cam, intrinsic, Pcamera.x, Pcamera.y);
+ }
+ 
+ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam,
+                                                   const ccl_global DecomposedTransform *cam_motion,
+                                                   const ccl_global float4 *dof_motion,
++                                                  const ccl_global KernelCameraIntrinsic *intrinsic_motion,
+                                                   const float2 raster,
+                                                   const float2 rand_lens,
+                                                   ccl_private Ray *ray)
+ {
+   /* Create ray from raster position. */
+   float3 P = zero_float3();
+-  float3 D = camera_panorama_direction(cam, raster.x, raster.y);
++  const auto intrinsic = camera_intrinsic_at(cam, intrinsic_motion, cam->shuttertime == -1.0f ? -1.0f : ray->time);
++  float3 D = camera_panorama_direction(cam, raster.x, raster.y, intrinsic);
+ 
+ #ifdef __RAY_DIFFERENTIALS__
+   /* Ray differentials, computed from scratch using the raster coordinates
+@@ -422,8 +481,8 @@ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam
+    * ray origin and direction for the center and two neighboring pixels
+    * and simply take their differences. */
+   float3 Dcenter = D;
+-  float3 Dx = camera_panorama_direction(cam, raster.x + 1.0f, raster.y);
+-  float3 Dy = camera_panorama_direction(cam, raster.x, raster.y + 1.0f);
++  float3 Dx = camera_panorama_direction(cam, raster.x + 1.0f, raster.y, intrinsic);
++  float3 Dy = camera_panorama_direction(cam, raster.x, raster.y + 1.0f, intrinsic);
+ #endif
+ 
+   /* Here, zero indicates failed sampling, e.g. when the raster position is outside
+@@ -472,6 +531,10 @@ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam
+ #endif
+                        ray);
+ 
++  const float clip_delta = intrinsic.projection.x - cam->nearclip;
++  ray->P += clip_delta * ray->D;
++  ray->dP += clip_delta * ray->dD;
++  ray->tmax = intrinsic.projection.y - intrinsic.projection.x;
+   return one_spectrum();
+ }
+ 
+@@ -549,7 +612,7 @@ ccl_device_inline Spectrum camera_sample(KernelGlobals kg,
+   if (kernel_data.cam.type == CAMERA_PANORAMA) {
+     const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
+     return camera_sample_panorama(&kernel_data.cam, cam_motion,
+-                                   kernel_data_array(camera_dof_motion), raster, lens_uv, ray);
++                                   kernel_data_array(camera_dof_motion), kernel_data_array(camera_intrinsic_motion), raster, lens_uv, ray);
+   }
+   if (kernel_data.cam.type == CAMERA_CUSTOM) {
+     const ccl_global DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
+@@ -607,6 +670,14 @@ ccl_device_inline float3 camera_world_to_ndc(KernelGlobals kg,
+                                              ccl_private ShaderData *sd,
+                                              float3 P)
+ {
++  const auto intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion),
++      kernel_data.cam.shuttertime == -1.0f ? -1.0f : sd->time);
++  if (kernel_data.cam.num_intrinsic_motion_steps &&
++      (kernel_data.cam.type == CAMERA_PERSPECTIVE || kernel_data.cam.type == CAMERA_ORTHOGRAPHIC)) {
++    if (sd->object == PRIM_NONE && kernel_data.cam.type == CAMERA_PERSPECTIVE) P += camera_position(kg);
++    const Transform transform = kernel_data.cam.worldtocamera;
++    return camera_intrinsic_project(&kernel_data.cam, intrinsic, transform_point(&transform, P));
++  }
+   if (kernel_data.cam.type == CAMERA_PERSPECTIVE || kernel_data.cam.type == CAMERA_ORTHOGRAPHIC) {
+     /* perspective / ortho */
+     if (sd->object == PRIM_NONE && kernel_data.cam.type == CAMERA_PERSPECTIVE) {
+@@ -627,7 +698,7 @@ ccl_device_inline float3 camera_world_to_ndc(KernelGlobals kg,
+   }
+ 
+   if (kernel_data.cam.type == CAMERA_PANORAMA) {
+-    return make_float3(direction_to_panorama(&kernel_data.cam, P));
++    return make_float3(direction_to_panorama(&kernel_data.cam, intrinsic, P));
+   }
+   /* TODO: Fall back to camera coordinates until we have inverse mappings for custom cameras. */
+   return P;
+@@ -636,14 +707,16 @@ ccl_device_inline float3 camera_world_to_ndc(KernelGlobals kg,
+ /* Panoramic longitude repeats every full turn, including partial or offset
+  * longitude windows. Motion follows the shortest angular displacement across
+  * the seam, rather than a jump by the complete image period. */
+-ccl_device_inline float panorama_motion_wrap(ccl_constant KernelCamera *cam, const float delta)
++ccl_device_inline float panorama_motion_wrap(ccl_constant KernelCamera *cam,
++                                             const KernelCameraIntrinsic intrinsic,
++                                             const float delta)
+ {
+   float span;
+   if (cam->panorama_type == PANORAMA_EQUIRECTANGULAR) {
+-    span = fabsf(cam->equirectangular_range.x);
++    span = fabsf(intrinsic.equirectangular_range.x);
+   }
+   else if (cam->panorama_type == PANORAMA_CENTRAL_CYLINDRICAL) {
+-    span = fabsf(cam->central_cylindrical_range.y - cam->central_cylindrical_range.x);
++    span = fabsf(intrinsic.cylindrical_range.y - intrinsic.cylindrical_range.x);
+   }
+   else {
+     return delta;
+@@ -651,6 +724,13 @@ ccl_device_inline float panorama_motion_wrap(ccl_constant KernelCamera *cam, con
+   const float period = cam->width * (M_2PI_F / span);
+   return isfinite_safe(period) && period > 0.0f ? delta - roundf(delta / period) * period : delta;
+ }
++ccl_device_inline float panorama_motion_wrap(ccl_constant KernelCamera *cam, const float delta)
++{
++  KernelCameraIntrinsic intrinsic{};
++  intrinsic.equirectangular_range = cam->equirectangular_range;
++  intrinsic.cylindrical_range = cam->central_cylindrical_range;
++  return panorama_motion_wrap(cam, intrinsic, delta);
++}
+ 
+ /* Motion vector for motion pass */
+ 
+@@ -661,10 +741,26 @@ ccl_device_forceinline float4 camera_motion_vector(KernelGlobals kg,
+ {
+   Transform tfm;
+ 
+-  /* camera motion, for perspective/orthographic motion.pre/post will be a
+-   * world-to-raster matrix, for panorama it's world-to-camera, for custom
+-   * we fall back to the world position until we have inverse mapping for it */
+-  if (kernel_data.cam.type == CAMERA_CUSTOM) {
++  /* Full intrinsic samples use world-to-camera endpoint transforms followed
++   * by their own projection. The static/legacy perspective path below retains
++   * precomputed world-to-raster matrices; custom inverse mapping is unchanged. */
++  const auto pre_intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion), 0.0f);
++  const auto post_intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion), 1.0f);
++  if (kernel_data.cam.num_intrinsic_motion_steps && kernel_data.cam.type != CAMERA_CUSTOM) {
++    tfm = kernel_data.cam.worldtocamera;
++    motion_center = transform_point(&tfm, motion_center);
++    motion_center = kernel_data.cam.type == CAMERA_PANORAMA ? make_float3(direction_to_panorama(&kernel_data.cam, kernel_data.cam.intrinsic, normalize(motion_center))) : camera_intrinsic_project(&kernel_data.cam, kernel_data.cam.intrinsic, motion_center);
++    motion_center.x *= kernel_data.cam.width; motion_center.y *= kernel_data.cam.height;
++    tfm = kernel_data.cam.motion_pass_pre;
++    motion_pre = transform_point(&tfm, motion_pre);
++    motion_pre = kernel_data.cam.type == CAMERA_PANORAMA ? make_float3(direction_to_panorama(&kernel_data.cam, pre_intrinsic, normalize(motion_pre))) : camera_intrinsic_project(&kernel_data.cam, pre_intrinsic, motion_pre);
++    motion_pre.x *= kernel_data.cam.width; motion_pre.y *= kernel_data.cam.height;
++    tfm = kernel_data.cam.motion_pass_post;
++    motion_post = transform_point(&tfm, motion_post);
++    motion_post = kernel_data.cam.type == CAMERA_PANORAMA ? make_float3(direction_to_panorama(&kernel_data.cam, post_intrinsic, normalize(motion_post))) : camera_intrinsic_project(&kernel_data.cam, post_intrinsic, motion_post);
++    motion_post.x *= kernel_data.cam.width; motion_post.y *= kernel_data.cam.height;
++  }
++  else   if (kernel_data.cam.type == CAMERA_CUSTOM) {
+     /* TODO: Custom cameras don't have inverse mappings yet, so we fall back to
+      * camera-space vectors here for now. */
+     tfm = kernel_data.cam.worldtocamera;
+@@ -711,8 +807,8 @@ ccl_device_forceinline float4 camera_motion_vector(KernelGlobals kg,
+   motion_pre = motion_pre - motion_center;
+   motion_post = motion_center - motion_post;
+   if (kernel_data.cam.type == CAMERA_PANORAMA) {
+-    motion_pre.x = panorama_motion_wrap(&kernel_data.cam, motion_pre.x);
+-    motion_post.x = panorama_motion_wrap(&kernel_data.cam, motion_post.x);
++    motion_pre.x = panorama_motion_wrap(&kernel_data.cam, pre_intrinsic, motion_pre.x);
++    motion_post.x = panorama_motion_wrap(&kernel_data.cam, post_intrinsic, motion_post.x);
+   }
+ 
+   return make_float4(motion_pre.x, motion_pre.y, motion_post.x, motion_post.y);
+@@ -730,7 +826,23 @@ ccl_device_forceinline float4 camera_motion_vector_direction(KernelGlobals kg,
+   /* Camera motion, for perspective/orthographic motion.pre/post will be a
+    * world-to-raster matrix, for panorama it's world-to-camera, for custom
+    * we fall back to the world position until we have inverse mapping for it */
+-  if (kernel_data.cam.type == CAMERA_CUSTOM) {
++  const auto pre_intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion), 0.0f);
++  const auto post_intrinsic = camera_intrinsic_at(&kernel_data.cam, kernel_data_array(camera_intrinsic_motion), 1.0f);
++  if (kernel_data.cam.num_intrinsic_motion_steps && kernel_data.cam.type != CAMERA_CUSTOM) {
++    tfm = kernel_data.cam.worldtocamera;
++    motion_center = transform_direction(&tfm, D);
++    motion_center = kernel_data.cam.type == CAMERA_PANORAMA ? make_float3(direction_to_panorama(&kernel_data.cam, kernel_data.cam.intrinsic, normalize(motion_center))) : camera_intrinsic_project(&kernel_data.cam, kernel_data.cam.intrinsic, motion_center);
++    motion_center.x *= kernel_data.cam.width; motion_center.y *= kernel_data.cam.height;
++    tfm = kernel_data.cam.motion_pass_pre;
++    motion_pre = transform_direction(&tfm, D);
++    motion_pre = kernel_data.cam.type == CAMERA_PANORAMA ? make_float3(direction_to_panorama(&kernel_data.cam, pre_intrinsic, normalize(motion_pre))) : camera_intrinsic_project(&kernel_data.cam, pre_intrinsic, motion_pre);
++    motion_pre.x *= kernel_data.cam.width; motion_pre.y *= kernel_data.cam.height;
++    tfm = kernel_data.cam.motion_pass_post;
++    motion_post = transform_direction(&tfm, D);
++    motion_post = kernel_data.cam.type == CAMERA_PANORAMA ? make_float3(direction_to_panorama(&kernel_data.cam, post_intrinsic, normalize(motion_post))) : camera_intrinsic_project(&kernel_data.cam, post_intrinsic, motion_post);
++    motion_post.x *= kernel_data.cam.width; motion_post.y *= kernel_data.cam.height;
++  }
++  else   if (kernel_data.cam.type == CAMERA_CUSTOM) {
+     /* TODO: Custom cameras don't have inverse mappings yet, so we fall back to
+      * camera-space vectors here for now. */
+     tfm = kernel_data.cam.worldtocamera;
+@@ -795,8 +907,8 @@ ccl_device_forceinline float4 camera_motion_vector_direction(KernelGlobals kg,
+   motion_pre = motion_pre - motion_center;
+   motion_post = motion_center - motion_post;
+   if (kernel_data.cam.type == CAMERA_PANORAMA) {
+-    motion_pre.x = panorama_motion_wrap(&kernel_data.cam, motion_pre.x);
+-    motion_post.x = panorama_motion_wrap(&kernel_data.cam, motion_post.x);
++    motion_pre.x = panorama_motion_wrap(&kernel_data.cam, pre_intrinsic, motion_pre.x);
++    motion_post.x = panorama_motion_wrap(&kernel_data.cam, post_intrinsic, motion_post.x);
+   }
+ 
+   return make_float4(motion_pre.x, motion_pre.y, motion_post.x, motion_post.y);
+diff --git a/src/kernel/camera/projection.h b/src/kernel/camera/projection.h
+index c3dbf38fe54fb948cb8925e2790630773893234a..0d432c77b369bacc001313c9ae6b08059a2c647b 100644
+--- a/src/kernel/camera/projection.h
++++ b/src/kernel/camera/projection.h
+@@ -303,61 +303,86 @@ ccl_device float2 direction_to_equiangular_cubemap_face(const float3 dir)
+ }
+ 
+ ccl_device_inline float3 panorama_to_direction(ccl_constant KernelCamera *cam,
++                                               const ccl_private KernelCameraIntrinsic &intrinsic,
+                                                const float u,
+                                                float v)
+ {
+   switch (cam->panorama_type) {
+     case PANORAMA_EQUIRECTANGULAR:
+-      return equirectangular_range_to_direction(u, v, cam->equirectangular_range);
++      return equirectangular_range_to_direction(u, v, intrinsic.equirectangular_range);
+     case PANORAMA_EQUIANGULAR_CUBEMAP_FACE:
+       return equiangular_cubemap_face_to_direction(u, v);
+     case PANORAMA_MIRRORBALL:
+       return mirrorball_to_direction(u, v);
+     case PANORAMA_FISHEYE_EQUIDISTANT:
+-      return fisheye_equidistant_to_direction(u, v, cam->fisheye_fov);
++      return fisheye_equidistant_to_direction(u, v, intrinsic.fisheye.x);
+     case PANORAMA_FISHEYE_LENS_POLYNOMIAL:
+       return fisheye_lens_polynomial_to_direction(u,
+                                                   v,
+-                                                  cam->fisheye_lens_polynomial_bias,
+-                                                  cam->fisheye_lens_polynomial_coefficients,
+-                                                  cam->fisheye_fov,
+-                                                  cam->sensorwidth,
+-                                                  cam->sensorheight);
++                                                  intrinsic.extra.x,
++                                                  intrinsic.polynomial,
++                                                  intrinsic.fisheye.x,
++                                                  intrinsic.fisheye.z,
++                                                  intrinsic.fisheye.w);
+     case PANORAMA_CENTRAL_CYLINDRICAL:
+-      return central_cylindrical_to_direction(u, v, cam->central_cylindrical_range);
++      return central_cylindrical_to_direction(u, v, intrinsic.cylindrical_range);
+     case PANORAMA_FISHEYE_EQUISOLID:
+     default:
+       return fisheye_equisolid_to_direction(
+-          u, v, cam->fisheye_lens, cam->fisheye_fov, cam->sensorwidth, cam->sensorheight);
++          u, v, intrinsic.fisheye.y, intrinsic.fisheye.x, intrinsic.fisheye.z, intrinsic.fisheye.w);
+   }
+ }
+ 
+-ccl_device_inline float2 direction_to_panorama(ccl_constant KernelCamera *cam, const float3 dir)
++ccl_device_inline float3 panorama_to_direction(ccl_constant KernelCamera *cam,const float u,const float v)
++{
++  KernelCameraIntrinsic nominal;
++  nominal.fisheye=make_float4(cam->fisheye_fov,cam->fisheye_lens,cam->sensorwidth,cam->sensorheight);
++  nominal.equirectangular_range=cam->equirectangular_range;
++  nominal.cylindrical_range=cam->central_cylindrical_range;
++  nominal.polynomial=cam->fisheye_lens_polynomial_coefficients;
++  nominal.extra=make_float4(cam->fisheye_lens_polynomial_bias,0,0,0);
++  return panorama_to_direction(cam, nominal, u, v);
++}
++
++ccl_device_inline float2 direction_to_panorama(ccl_constant KernelCamera *cam,
++                                               const ccl_private KernelCameraIntrinsic &intrinsic,
++                                               const float3 dir)
+ {
+   switch (cam->panorama_type) {
+     case PANORAMA_EQUIRECTANGULAR:
+-      return direction_to_equirectangular_range(dir, cam->equirectangular_range);
++      return direction_to_equirectangular_range(dir, intrinsic.equirectangular_range);
+     case PANORAMA_EQUIANGULAR_CUBEMAP_FACE:
+       return direction_to_equiangular_cubemap_face(dir);
+     case PANORAMA_MIRRORBALL:
+       return direction_to_mirrorball(dir);
+     case PANORAMA_FISHEYE_EQUIDISTANT:
+-      return direction_to_fisheye_equidistant(dir, cam->fisheye_fov);
++      return direction_to_fisheye_equidistant(dir, intrinsic.fisheye.x);
+     case PANORAMA_FISHEYE_LENS_POLYNOMIAL:
+       return direction_to_fisheye_lens_polynomial(dir,
+-                                                  cam->fisheye_lens_polynomial_bias,
+-                                                  cam->fisheye_lens_polynomial_coefficients,
+-                                                  cam->sensorwidth,
+-                                                  cam->sensorheight);
++                                                  intrinsic.extra.x,
++                                                  intrinsic.polynomial,
++                                                  intrinsic.fisheye.z,
++                                                  intrinsic.fisheye.w);
+     case PANORAMA_CENTRAL_CYLINDRICAL:
+-      return direction_to_central_cylindrical(dir, cam->central_cylindrical_range);
++      return direction_to_central_cylindrical(dir, intrinsic.cylindrical_range);
+     case PANORAMA_FISHEYE_EQUISOLID:
+     default:
+       return direction_to_fisheye_equisolid(
+-          dir, cam->fisheye_lens, cam->sensorwidth, cam->sensorheight);
++          dir, intrinsic.fisheye.y, intrinsic.fisheye.z, intrinsic.fisheye.w);
+   }
+ }
+ 
++ccl_device_inline float2 direction_to_panorama(ccl_constant KernelCamera *cam,const float3 dir)
++{
++  KernelCameraIntrinsic nominal;
++  nominal.fisheye=make_float4(cam->fisheye_fov,cam->fisheye_lens,cam->sensorwidth,cam->sensorheight);
++  nominal.equirectangular_range=cam->equirectangular_range;
++  nominal.cylindrical_range=cam->central_cylindrical_range;
++  nominal.polynomial=cam->fisheye_lens_polynomial_coefficients;
++  nominal.extra=make_float4(cam->fisheye_lens_polynomial_bias,0,0,0);
++  return direction_to_panorama(cam, nominal, dir);
++}
++
+ ccl_device_inline void spherical_stereo_transform(ccl_constant KernelCamera *cam,
+                                                   ccl_private float3 *P,
+                                                   ccl_private float3 *D)
+diff --git a/src/kernel/data_arrays.h b/src/kernel/data_arrays.h
+index 40f7b7e77291154cbe0f24d1ab444aae6410b148..f9a35c33e9ad86165a1c8a445ba84f1c7ec395d4 100644
+--- a/src/kernel/data_arrays.h
++++ b/src/kernel/data_arrays.h
+@@ -31,6 +31,7 @@ KERNEL_DATA_ARRAY(uint, object_prim_offset)
+ /* cameras */
+ KERNEL_DATA_ARRAY(DecomposedTransform, camera_motion)
+ KERNEL_DATA_ARRAY(float4, camera_dof_motion)
++KERNEL_DATA_ARRAY(KernelCameraIntrinsic, camera_intrinsic_motion)
+ 
+ /* triangles */
+ KERNEL_DATA_ARRAY(uint, tri_shader)
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index 96979f2dc46c5df18053411f36dc18b6faea0ea8..4f649b1e574a6ec0a5bb1125af3919872526424c 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1216,6 +1216,16 @@ struct LocalIntersection {
+  * must match exactly. Structs are padded to ensure 16 byte alignment, and we
+  * do not use float3 because its size may not be the same on all devices. */
+ 
++struct ccl_align(16) KernelCameraIntrinsic {
++  float4 projection; /* Near, far, tan(half FOV), orthographic scale. */
++  float4 fisheye; /* FOV, lens, fitted sensor width/height. */
++  float4 equirectangular_range;
++  float4 cylindrical_range;
++  float4 polynomial;
++  float4 extra; /* Polynomial bias; remaining components reserved/zero. */
++};
++static_assert_align(KernelCameraIntrinsic, 16);
++
+ struct KernelCamera {
+   /* type */
+   int type;
+@@ -1233,7 +1243,9 @@ struct KernelCamera {
+ 
+   int num_dof_motion_steps;
+   float aperture_ratio;
+-  int pad3;
++  int num_intrinsic_motion_steps;
++  KernelCameraIntrinsic intrinsic;
++  float4 intrinsic_raster; /* Unit projection-space raster offset and dx/dy. */
+ 
+   /* panorama */
+   int panorama_type;
+diff --git a/src/scene/camera.cpp b/src/scene/camera.cpp
+index f5c3b7c61aca5aa911343fec3b58b2dbda01d591..64be9028630a62b9e893996c8bb3d5263f796b7f 100644
+--- a/src/scene/camera.cpp
++++ b/src/scene/camera.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include <algorithm>
+ #include <cmath>
++#include <cstring>
+ 
+ #include "scene/camera.h"
+ #include "scene/mesh.h"
+@@ -99,6 +100,7 @@ NODE_DEFINE(Camera)
+   SOCKET_FLOAT(aperturesize, "Aperture Size", 0.0f);
+   SOCKET_FLOAT(focaldistance, "Focal Distance", 10.0f);
+   SOCKET_FLOAT_ARRAY(dof_motion, "Depth of Field Motion", array<float>());
++  SOCKET_FLOAT_ARRAY(intrinsic_motion, "Projection Intrinsic Motion", array<float>());
+   SOCKET_UINT(blades, "Blades", 0);
+   SOCKET_FLOAT(bladesrotation, "Blades Rotation", 0.0f);
+ 
+@@ -570,6 +572,31 @@ void Camera::update(Scene *scene)
+   kcam->nearclip = nearclip;
+   kcam->cliplength = (farclip == FLT_MAX) ? FLT_MAX : farclip - nearclip;
+ 
++  const float3 intrinsic_origin = transform_point(&rastertoscreen, zero_float3());
++  const float3 intrinsic_dx = transform_direction(&rastertoscreen, make_float3(1, 0, 0));
++  const float3 intrinsic_dy = transform_direction(&rastertoscreen, make_float3(0, 1, 0));
++  const float intrinsic_unit = camera_type == CAMERA_ORTHOGRAPHIC ? viewplane.top - viewplane.bottom : 1.0f;
++  kcam->intrinsic_raster = make_float4(intrinsic_origin.x / intrinsic_unit,
++                                      intrinsic_origin.y / intrinsic_unit,
++                                      intrinsic_dx.x / intrinsic_unit,
++                                      intrinsic_dy.y / intrinsic_unit);
++  kcam->intrinsic.projection = make_float4(nearclip, farclip, tanf(fov * 0.5f), viewplane.top - viewplane.bottom);
++  kcam->intrinsic.fisheye = make_float4(fisheye_fov, fisheye_lens, sensorwidth, sensorheight);
++  kcam->intrinsic.equirectangular_range = kcam->equirectangular_range;
++  kcam->intrinsic.cylindrical_range = kcam->central_cylindrical_range;
++  kcam->intrinsic.polynomial = kcam->fisheye_lens_polynomial_coefficients;
++  kcam->intrinsic.extra = make_float4(fisheye_polynomial_k0, 0, 0, 0);
++  kcam->num_intrinsic_motion_steps = 0;
++  kernel_camera_intrinsic_motion.clear();
++  if (need_motion != Scene::MOTION_NONE && !intrinsic_motion.empty()) {
++    static_assert(sizeof(KernelCameraIntrinsic) == sizeof(float) * 24);
++    assert(intrinsic_motion.size() % 24 == 0);
++    const size_t count = intrinsic_motion.size() / 24;
++    kernel_camera_intrinsic_motion.resize(count);
++    std::memcpy(kernel_camera_intrinsic_motion.data(), intrinsic_motion.data(), count * sizeof(KernelCameraIntrinsic));
++    kcam->num_intrinsic_motion_steps = int(count);
++  }
++
+   /* Rolling shutter effect */
+   kcam->rolling_shutter_type = rolling_shutter_type;
+   kcam->rolling_shutter_duration = rolling_shutter_duration;
+@@ -642,6 +669,14 @@ void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scen
+   else {
+     dscene->camera_dof_motion.free();
+   }
++  if (!kernel_camera_intrinsic_motion.empty()) {
++    auto *samples = dscene->camera_intrinsic_motion.alloc(kernel_camera_intrinsic_motion.size());
++    std::copy_n(kernel_camera_intrinsic_motion.data(), kernel_camera_intrinsic_motion.size(), samples);
++    dscene->camera_intrinsic_motion.copy_to_device();
++  }
++  else {
++    dscene->camera_intrinsic_motion.free();
++  }
+ }
+ 
+ void Camera::device_update_volume(Device * /*device*/, DeviceScene *dscene, Scene *scene)
+@@ -655,11 +690,12 @@ void Camera::device_update_volume(Device * /*device*/, DeviceScene *dscene, Scen
+   KernelIntegrator *kintegrator = &dscene->data.integrator;
+   if (kintegrator->use_volumes) {
+     if (camera_type == CAMERA_CUSTOM ||
+-        (!kernel_camera_dof_motion.empty() && !kernel_camera_motion.empty())) {
++        !kernel_camera_motion.empty() ||
++        !kernel_camera_intrinsic_motion.empty()) {
+       kernel_camera.is_inside_volume = 1;
+-      /* Sampled pupil origins under a rotating camera need a swept bound.
+-       * Conservatively initialize the volume stack rather than relying on the
+-       * centre-pose near-plane bound in this combined case. */
++      /* Shutter ray origins can enter a local volume even when the requested
++       * pose is outside it. Initialize per ray for a full transform array or
++       * sampled optics rather than relying on the requested near-plane bound. */
+       LOG_INFO << "Conservatively initializing camera volume stack.";
+     }
+     else {
+@@ -701,6 +737,7 @@ void Camera::device_free(Device * /*device*/, DeviceScene *dscene, Scene *scene)
+   scene->lookup_tables->remove_table(&shutter_table_offset);
+   dscene->camera_motion.free();
+   dscene->camera_dof_motion.free();
++  dscene->camera_intrinsic_motion.free();
+ }
+ 
+ float3 Camera::transform_full_raster_to_world(const float raster_x, const float raster_y)
+@@ -741,6 +778,13 @@ BoundBox Camera::viewplane_bounds_get()
+ 
+   double max_aperture = aperturesize, min_ratio = aperture_ratio;
+   double min_focus = max(focaldistance, 1e-5f);
++  double max_near = nearclip, max_ortho = viewplane.top - viewplane.bottom;
++  double max_tangent = tanf(fov * 0.5f);
++  for (const auto &sample : kernel_camera_intrinsic_motion) {
++    max_near = std::max(max_near, double(sample.projection.x));
++    max_ortho = std::max(max_ortho, double(sample.projection.w));
++    max_tangent = std::max(max_tangent, double(sample.projection.z));
++  }
+   for (const float4 sample : kernel_camera_dof_motion) {
+     max_aperture = std::max(max_aperture, double(sample.x));
+     min_ratio = std::min(min_ratio, double(sample.w));
+@@ -752,7 +796,7 @@ BoundBox Camera::viewplane_bounds_get()
+   const double max_aperture_size = max_aperture * std::max(1.0, 1.0 / min_ratio);
+ 
+   if (camera_type == CAMERA_PANORAMA || camera_type == CAMERA_CUSTOM) {
+-    const float extend = float(max_aperture_size + nearclip);
++    const float extend = float(max_aperture_size + max_near);
+     if (use_spherical_stereo == false) {
+       bounds.grow(make_float3(cameratoworld.x.w, cameratoworld.y.w, cameratoworld.z.w), extend);
+     }
+@@ -798,14 +842,42 @@ BoundBox Camera::viewplane_bounds_get()
+      *  0, 0
+      */
+ 
+-    const double scaled_horz_dof_ray = max_aperture_size * (double(nearclip) / min_focus);
+-    const float extend = float(max_aperture_size + std::max(double(nearclip), scaled_horz_dof_ray));
+-
++    const double scaled_horz_dof_ray = max_aperture_size * (max_near / min_focus);
++    const float extend = float(max_aperture_size + std::max(max_near, scaled_horz_dof_ray));
++
++    if (camera_type == CAMERA_ORTHOGRAPHIC && !kernel_camera_intrinsic_motion.empty()) {
++      const double half_y = max_ortho * 0.5;
++      /* The viewplane ratio includes non-square pixel aspect. Raster width /
++       * height alone would underbound the sampled width for wide pixels. */
++      const double half_x = half_y * (double(viewplane.right) - viewplane.left) /
++                            (double(viewplane.top) - viewplane.bottom);
++      for (int x : {-1, 1}) for (int y : {-1, 1}) {
++        const float3 point = make_float3(float(double(cameratoworld.x.w) + cameratoworld.x.x * (x * half_x) + cameratoworld.x.y * (y * half_y)),
++                                         float(double(cameratoworld.y.w) + cameratoworld.y.x * (x * half_x) + cameratoworld.y.y * (y * half_y)),
++                                         float(double(cameratoworld.z.w) + cameratoworld.z.x * (x * half_x) + cameratoworld.z.y * (y * half_y)));
++        bounds.grow(point, extend);
++      }
++    }
+     bounds.grow(transform_full_raster_to_world(0.0f, 0.0f), extend);
+     bounds.grow(transform_full_raster_to_world(0.0f, (float)full_height), extend);
+     bounds.grow(transform_full_raster_to_world((float)full_width, (float)full_height), extend);
+     bounds.grow(transform_full_raster_to_world((float)full_width, 0.0f), extend);
+     if (camera_type == CAMERA_PERSPECTIVE) {
++      if (!kernel_camera_intrinsic_motion.empty()) {
++        /* Every linearly sampled near-plane ray origin lies inside the box
++         * formed by independent near/tangent extrema. Include its actual XY
++         * footprint, not only the nominal frustum plus a radial clip margin. */
++        const double half_x = max_near * max_tangent *
++                              std::max(std::abs(double(viewplane.left)), std::abs(double(viewplane.right)));
++        const double half_y = max_near * max_tangent *
++                              std::max(std::abs(double(viewplane.bottom)), std::abs(double(viewplane.top)));
++        for (int x : {-1, 1}) for (int y : {-1, 1}) {
++          const float3 point = make_float3(float(double(cameratoworld.x.w) + cameratoworld.x.x * (x * half_x) + cameratoworld.x.y * (y * half_y) + cameratoworld.x.z * max_near),
++                                           float(double(cameratoworld.y.w) + cameratoworld.y.x * (x * half_x) + cameratoworld.y.y * (y * half_y) + cameratoworld.y.z * max_near),
++                                           float(double(cameratoworld.z.w) + cameratoworld.z.x * (x * half_x) + cameratoworld.z.y * (y * half_y) + cameratoworld.z.z * max_near));
++          bounds.grow(point, extend);
++        }
++      }
+       /* Center point has the most distance in local Z axis,
+        * use it to construct bounding box/
+        */
+@@ -964,7 +1036,8 @@ float Camera::world_to_raster_size(const float3 P)
+ #else
+       camera_sample_panorama(&kernel_camera,
+                              kernel_camera_motion.data(),
+-                             nullptr, /* Dicing footprints use requested-frame optics. */
++                             nullptr, /* Dicing footprints use requested-frame DOF. */
++                             nullptr, /* Projection dicing uses conservative host bounds. */
+                              0.5f * make_float2(full_width, full_height),
+                              zero_float2(),
+                              &ray);
+@@ -975,9 +1048,41 @@ float Camera::world_to_raster_size(const float3 P)
+     return differential_transfer_compact(ray.dP, ray.D, ray.dD, dist);
+   }
+ 
++  if (!kernel_camera_intrinsic_motion.empty()) {
++    float scale = 1.0f;
++    for (const auto &sample : kernel_camera_intrinsic_motion) {
++      if (camera_type == CAMERA_ORTHOGRAPHIC) {
++        scale = min(scale, sample.projection.w / (viewplane.top - viewplane.bottom));
++      }
++      else if (camera_type == CAMERA_PERSPECTIVE) {
++        scale = min(scale, sample.projection.z / tanf(fov * 0.5f));
++      }
++      else {
++        /* Animated panorama footprints are bounded by the configured maximum
++         * subdivision level in DiagSplit, not by an arbitrary safety factor. */
++      }
++    }
++    res *= scale;
++  }
+   return res;
+ }
+ 
++bool Camera::has_intrinsic_projection_motion() const
++{
++  return std::any_of(kernel_camera_intrinsic_motion.begin(), kernel_camera_intrinsic_motion.end(), [&](const auto &sample) {
++    const auto &nominal = kernel_camera.intrinsic;
++    if (camera_type == CAMERA_PERSPECTIVE) return sample.projection.z != nominal.projection.z;
++    if (camera_type == CAMERA_ORTHOGRAPHIC) return sample.projection.w != nominal.projection.w;
++    if (panorama_type == PANORAMA_EQUIRECTANGULAR) return !(sample.equirectangular_range == nominal.equirectangular_range);
++    if (panorama_type == PANORAMA_CENTRAL_CYLINDRICAL) return !(sample.cylindrical_range == nominal.cylindrical_range);
++    if (panorama_type == PANORAMA_FISHEYE_EQUIDISTANT) return sample.fisheye.x != nominal.fisheye.x;
++    if (panorama_type == PANORAMA_FISHEYE_EQUISOLID) return !(sample.fisheye == nominal.fisheye);
++    if (panorama_type == PANORAMA_FISHEYE_LENS_POLYNOMIAL) return sample.fisheye.x != nominal.fisheye.x ||
++        sample.fisheye.z != nominal.fisheye.z || sample.fisheye.w != nominal.fisheye.w || sample.extra.x != nominal.extra.x || !(sample.polynomial == nominal.polynomial);
++    return false;
++  });
++}
++
+ bool Camera::use_motion() const
+ {
+   return motion.size() > 1;
+diff --git a/src/scene/camera.h b/src/scene/camera.h
+index 1ed3a7ac5ff681f9b614221c2e2dbfe7d427b319..d0e38b511cb8d989a3e1042ffde2e240dd939513 100644
+--- a/src/scene/camera.h
++++ b/src/scene/camera.h
+@@ -81,6 +81,7 @@ class Camera : public Node {
+   NODE_SOCKET_API(float, aperturesize)
+   /* Complete chronological samples: aperture, focus, rotation, ratio. */
+   NODE_SOCKET_API_ARRAY(array<float>, dof_motion)
++  NODE_SOCKET_API_ARRAY(array<float>, intrinsic_motion)
+   NODE_SOCKET_API(uint, blades)
+   NODE_SOCKET_API(float, bladesrotation)
+ 
+@@ -211,6 +212,7 @@ class Camera : public Node {
+   KernelCamera kernel_camera;
+   array<DecomposedTransform> kernel_camera_motion;
+   array<float4> kernel_camera_dof_motion;
++  array<KernelCameraIntrinsic> kernel_camera_intrinsic_motion;
+ 
+   /* Custom camera script. */
+   std::string script_name;
+@@ -245,6 +247,7 @@ class Camera : public Node {
+   float motion_time(const int step) const;
+   int motion_step(const float time) const;
+   bool use_motion() const;
++  bool has_intrinsic_projection_motion() const;
+ 
+   uint64_t get_kernel_features() const;
+ 
+diff --git a/src/scene/devicescene.cpp b/src/scene/devicescene.cpp
+index 608e62e9d19c3634ae608d2d1fb1996fd8644c96..29cad761cc5d80a6e84f716bb0364146c175e3cd 100644
+--- a/src/scene/devicescene.cpp
++++ b/src/scene/devicescene.cpp
+@@ -34,6 +34,7 @@ DeviceScene::DeviceScene(Device *device)
+       object_prim_offset(device, "object_prim_offset", MEM_GLOBAL),
+       camera_motion(device, "camera_motion", MEM_GLOBAL),
+       camera_dof_motion(device, "camera_dof_motion", MEM_GLOBAL),
++      camera_intrinsic_motion(device, "camera_intrinsic_motion", MEM_GLOBAL),
+       attributes_map(device, "attributes_map", MEM_GLOBAL),
+       attributes_float(device, "attributes_float", MEM_GLOBAL),
+       attributes_float2(device, "attributes_float2", MEM_GLOBAL),
+diff --git a/src/scene/devicescene.h b/src/scene/devicescene.h
+index a3fcd5a1aab95538763026388b79fdd2d402b2a4..27f1f98e050122c92db64f628c77f48d6a4f6dbf 100644
+--- a/src/scene/devicescene.h
++++ b/src/scene/devicescene.h
+@@ -50,6 +50,7 @@ class DeviceScene {
+   /* cameras */
+   device_vector<DecomposedTransform> camera_motion;
+   device_vector<float4> camera_dof_motion;
++  device_vector<KernelCameraIntrinsic> camera_intrinsic_motion;
+ 
+   /* attributes */
+   device_vector<AttributeMap> attributes_map;
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index a0a7ab000287c9115d5727fcc7d5b0f9d1584350..a45df5b63d9c52a8ed2bae93e4f92f2dce8a8fa0 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -110,7 +110,8 @@ std::pair<int, float> DiagSplit::T(const Patch *patch,
+                                    const int depth,
+                                    const bool recursive_resolve)
+ {
+-  if (params.fixed) {
++  if (params.fixed || (params.camera && params.camera->get_camera_type() == CAMERA_PANORAMA &&
++                       params.camera->has_intrinsic_projection_motion())) {
+     /* Equal parameter-space spacing, independent of camera and edge length.
+      * N-gon first-level splits are accounted for by limit_edge_factor. */
+     return std::make_pair(limit_edge_factor(patch, uv_start, uv_end, 1 << params.max_level),
+@@ -148,10 +149,12 @@ std::pair<int, float> DiagSplit::T(const Patch *patch,
+     Plast = P;
+   }
+ 
+-  const int tmin = (int)ceilf(Lsum / params.dicing_rate);
+-  const int tmax = (int)ceilf(
+-      (params.test_steps - 1) * Lmax /
+-      params.dicing_rate);  // XXX paper says N instead of N-1, seems wrong?
++  /* A tiny, valid animated projection can make the unbounded float estimate
++   * infinite. Bound before conversion to int, at the already configured cap. */
++  const float max_factor = float(1 << params.max_level);
++  const int tmin = (int)ceilf(min(Lsum / params.dicing_rate, max_factor));
++  const int tmax = (int)ceilf(min((params.test_steps - 1) * Lmax /
++      params.dicing_rate, max_factor));  // XXX paper says N instead of N-1, seems wrong?
+   int res = max(tmax, 1);
+ 
+   if (tmax - tmin > params.split_threshold) {

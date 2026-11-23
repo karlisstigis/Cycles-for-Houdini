@@ -1,0 +1,268 @@
+From aa05faf4e97accb082217c8a6225ccbda8dce477 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:29 +0100
+Subject: [PATCH] Add per-point existence intervals to CPU/custom GPU
+ intersections and Embree filters. Read stationary OptiX ray time from the
+ original Cycles ray payload.
+
+Locked-Patch: patches/0005-point-lifetime-intersections.patch
+Locked-Patch-SHA256: 460df55c81c241b9ffc5be6ebb272a9175930be4cb330da8aaf0acccb0dbb874
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/core_point_lifetime_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 9bba13b5abf63e86c205f10e7e82fff92d2ea245
+Previous-Patch: patches/0005-point-lifetime-intersections.patch
+Previous-Patch-SHA256: 460df55c81c241b9ffc5be6ebb272a9175930be4cb330da8aaf0acccb0dbb874
+Rationale: Per-point birth/death intervals are an added geometry contract spanning custom intersections, Embree and OptiX ray time; upstream has no matching lifetime socket in this pin.
+Contract: Add per-point existence intervals to CPU/custom GPU intersections and Embree filters. Read stationary OptiX ray time from the original Cycles ray payload.
+Tests: tests/core_point_lifetime_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/device/cpu/bvh.h b/src/kernel/device/cpu/bvh.h
+index 0b39a1655df02e35aa2c6e52a8d5d002e00a5be6..80fd5b2f36762733b14da79ce4bb2a37cf19bd7c 100644
+--- a/src/kernel/device/cpu/bvh.h
++++ b/src/kernel/device/cpu/bvh.h
+@@ -23,6 +23,7 @@
+ #include "kernel/bvh/util.h"
+ #include "kernel/geom/gsplat_intersect.h"
+ #include "kernel/geom/object.h"
++#include "kernel/geom/point_lifetime.h"
+ #include "kernel/integrator/state.h"
+ #include "kernel/integrator/state_util.h"
+ #include "kernel/sample/lcg.h"
+@@ -214,6 +215,19 @@ ccl_device_forceinline void kernel_embree_filter_intersection_func_impl(
+ #endif
+   const Ray *cray = ctx->ray;
+ 
++#ifdef __POINTCLOUD__
++  const int object = kernel_embree_get_hit_object(hit);
++  if ((kernel_data_fetch(objects, object).primitive_type & PRIMITIVE_POINT) &&
++      !point_is_alive(kg,
++                      object,
++                      hit->primID + kernel_data_fetch(object_prim_offset, object),
++                      cray->time))
++  {
++    *args->valid = 0;
++    return;
++  }
++#endif
++
+   if (kernel_embree_is_self_intersection(kg, hit, cray)) {
+     *args->valid = 0;
+     return;
+@@ -424,6 +438,15 @@ ccl_device_forceinline void kernel_embree_filter_occluded_shadow_all_func_impl(
+   Intersection isect;
+   kernel_embree_convert_hit(kg, ray, hit, &isect);
+ 
++#ifdef __POINTCLOUD__
++  if ((isect.type & PRIMITIVE_POINT) &&
++      !point_is_alive(kg, isect.object, isect.prim, ray->time))
++  {
++    *args->valid = 0;
++    return;
++  }
++#endif
++
+   if (!bvh_shadow_all_anyhit_filter<ISECT_TEST_ALL & ~ISECT_TEST_VISIBILITY_FLAG>(
+           kg, payload.state, payload, payload.base.ray_self, 0, isect))
+   {
+@@ -462,6 +485,14 @@ ccl_device_forceinline void kernel_embree_filter_occluded_local_func_impl(
+       return;
+     }
+   }
++#ifdef __POINTCLOUD__
++  if ((current_isect.type & PRIMITIVE_POINT) &&
++      !point_is_alive(kg, current_isect.object, current_isect.prim, ray->time))
++  {
++    *args->valid = 0;
++    return;
++  }
++#endif
+   if (intersection_skip_self_local(cray->self, current_isect.prim)) {
+     *args->valid = 0;
+     return;
+@@ -549,6 +580,15 @@ ccl_device_forceinline void kernel_embree_filter_occluded_volume_all_func_impl(
+     Intersection current_isect;
+     kernel_embree_convert_hit(kg, ray, hit, &current_isect);
+ 
++#ifdef __POINTCLOUD__
++    if ((current_isect.type & PRIMITIVE_POINT) &&
++        !point_is_alive(kg, current_isect.object, current_isect.prim, ray->time))
++    {
++      *args->valid = 0;
++      return;
++    }
++#endif
++
+     if (bvh_volume_anyhit_triangle_filter<false>(
+             kg, current_isect.object, current_isect.prim, cray->self, 0))
+     {
+diff --git a/src/kernel/device/optix/bvh.h b/src/kernel/device/optix/bvh.h
+index a9d8faf384baf930588f7753c19fc6df2f68f1b8..6803392bdd1794995f66d5a056b80a682c9772fe 100644
+--- a/src/kernel/device/optix/bvh.h
++++ b/src/kernel/device/optix/bvh.h
+@@ -371,11 +371,10 @@ extern "C" __global__ void __intersection__point()
+   const float3 ray_D = optixGetObjectRayDirection();
+   const float ray_tmin = optixGetRayTmin();
+ 
+-#  ifdef __OBJECT_MOTION__
+-  const float time = optixGetRayTime();
+-#  else
+-  const float time = 0.0f;
+-#  endif
++  /* Existence can vary even for a static point BVH. OptiX's motion-disabled
++   * pipeline does not retain ray time, but every traversal already carries
++   * the original Cycles Ray in payload registers 6/7. */
++  const float time = get_payload_ptr_6<Ray>()->time;
+ 
+   Intersection isect;
+   isect.t = optixGetRayTmax();
+diff --git a/src/kernel/geom/point_intersect.h b/src/kernel/geom/point_intersect.h
+index a05a06334dc1d7724e0e805e28214faf37c9739e..f625da7f77f8d60f4b6f53ce39adb73b890556e8 100644
+--- a/src/kernel/geom/point_intersect.h
++++ b/src/kernel/geom/point_intersect.h
+@@ -10,6 +10,7 @@
+ #include "kernel/geom/gsplat.h"
+ #include "kernel/geom/motion_point.h"
+ #include "kernel/geom/object.h"
++#include "kernel/geom/point_lifetime.h"
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -75,6 +76,9 @@ ccl_device_forceinline bool point_intersect(KernelGlobals kg,
+                                             const float time,
+                                             const int type)
+ {
++  if (!point_is_alive(kg, object, prim, time)) {
++    return false;
++  }
+   const int position_offset = kernel_data_fetch(objects, object).position_offset;
+   const float4 point = (type & PRIMITIVE_MOTION) ?
+                            motion_point(kg, object, prim, time) :
+diff --git a/src/kernel/geom/point_lifetime.h b/src/kernel/geom/point_lifetime.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..38610c12c18146233bd93464cce65336ab350469
+--- /dev/null
++++ b/src/kernel/geom/point_lifetime.h
+@@ -0,0 +1,30 @@
++/* SPDX-FileCopyrightText: 2026 Cycles Houdini contributors
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++#include "kernel/geom/attribute.h"
++
++CCL_NAMESPACE_BEGIN
++
++#ifdef __POINTCLOUD__
++ccl_device_inline bool point_is_alive(KernelGlobals kg,
++                                     const int object,
++                                     const int prim,
++                                     const float time)
++{
++  if (!(kernel_data_fetch(object_flag, object) & SD_OBJECT_HAS_POINT_LIFETIME)) {
++    return true;
++  }
++  const AttributeDescriptor desc = find_attribute(kg, object, prim, ATTR_STD_POINT_LIFETIME);
++  if (!is_attribute_found(desc)) {
++    return true;
++  }
++  const float2 interval = attribute_data_fetch<float2>(kg, desc.element, desc.offset + prim);
++  /* A zero-length interval is always empty, including at shutter endpoints. */
++  return interval.x <= time && time < interval.y;
++}
++#endif
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index 72faff206cfaf24ed715c4105fd82fff34b9b999..7079b9104e3fb0c69b66408e90493fb885031868 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -839,6 +839,8 @@ enum AttributeStandard : int {
+   ATTR_STD_GSPLAT_ROTATION,
+   ATTR_STD_GSPLAT_SCALE,
+ 
++  /* Normalized shutter interval for particle existence, independent of radius. */
++  ATTR_STD_POINT_LIFETIME,
+   ATTR_STD_NUM,
+ 
+   ATTR_STD_NOT_FOUND = -0x7fffffff
+@@ -1045,6 +1047,8 @@ enum ShaderDataObjectFlag : uint {
+   SD_OBJECT_HAS_VOLUME_MOTION = (1u << 11),
+   /* Geometry has per-corner normals instead of per-vertex. */
+   SD_OBJECT_HAS_CORNER_NORMALS = (1u << 12),
++  /* Point intersections are clipped to a per-point shutter interval. */
++  SD_OBJECT_HAS_POINT_LIFETIME = (1u << 13),
+ 
+   /* object is using caustics */
+   SD_OBJECT_CAUSTICS = (SD_OBJECT_CAUSTICS_CASTER | SD_OBJECT_CAUSTICS_RECEIVER),
+@@ -1053,7 +1057,8 @@ enum ShaderDataObjectFlag : uint {
+                      SD_OBJECT_NEGATIVE_SCALE | SD_OBJECT_HAS_VOLUME |
+                      SD_OBJECT_INTERSECTS_VOLUME | SD_OBJECT_SHADOW_CATCHER |
+                      SD_OBJECT_HAS_VOLUME_ATTRIBUTES | SD_OBJECT_CAUSTICS |
+-                     SD_OBJECT_HAS_VOLUME_MOTION | SD_OBJECT_HAS_CORNER_NORMALS)
++                     SD_OBJECT_HAS_VOLUME_MOTION | SD_OBJECT_HAS_CORNER_NORMALS |
++                     SD_OBJECT_HAS_POINT_LIFETIME)
+ };
+ 
+ struct ccl_align(SHADER_DATA_ALIGNMENT) ShaderData {
+diff --git a/src/scene/attribute.cpp b/src/scene/attribute.cpp
+index 6116f3aa1118f7a6e1cbaf58985889946fb6dba5..1dfa163c57dd9db2846c2cd37fe045dc7f782e92 100644
+--- a/src/scene/attribute.cpp
++++ b/src/scene/attribute.cpp
+@@ -504,6 +504,8 @@ const char *Attribute::standard_name(AttributeStandard std)
+       return "curve_random";
+     case ATTR_STD_POINT_RANDOM:
+       return "point_random";
++    case ATTR_STD_POINT_LIFETIME:
++      return "point_lifetime";
+     case ATTR_STD_PTEX_FACE_ID:
+       return "ptex_face_id";
+     case ATTR_STD_PTEX_UV:
+@@ -831,6 +833,7 @@ static bool standard_type_element(const Geometry *geometry,
+         element = ATTR_ELEMENT_VERTEX;
+         return true;
+       case ATTR_STD_UV:
++      case ATTR_STD_POINT_LIFETIME:
+         type = TypeFloat2;
+         element = ATTR_ELEMENT_VERTEX;
+         return true;
+@@ -918,6 +921,7 @@ static bool standard_type_element(const Geometry *geometry,
+         element = ATTR_ELEMENT_CURVE_KEY_NORMAL;
+         return true;
+       case ATTR_STD_UV:
++      case ATTR_STD_POINT_LIFETIME:
+         type = TypeFloat2;
+         element = ATTR_ELEMENT_CURVE;
+         return true;
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 8befbe1b84889020da3dc64617f7e13029fe987d..ce213b69b0a16a4850a074bd86df9b41bd9e5bad 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -634,6 +634,9 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+     if (attr_P->has_motion()) {
+       flag |= SD_OBJECT_HAS_VERTEX_MOTION;
+     }
++    if (geom->attributes.find(ATTR_STD_POINT_LIFETIME)) {
++      flag |= SD_OBJECT_HAS_POINT_LIFETIME;
++    }
+   }
+   else if (geom->is_volume()) {
+     Volume *volume = static_cast<Volume *>(geom);
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index fe56ce4fec4e91089fd9ff403733cb3fd56bac38..abbb17a86011d1fc692bd2631a35999f2dd2e481 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -454,6 +454,11 @@ float Scene::motion_shutter_time()
+ 
+ bool Scene::need_global_attribute(AttributeStandard std) const
+ {
++  /* Existence is a traversal property, including shadows and motion-disabled
++   * rays at time 0.5. It cannot depend on shader attribute requests. */
++  if (std == ATTR_STD_POINT_LIFETIME) {
++    return true;
++  }
+   if (std == ATTR_STD_UV) {
+     return Pass::contains(passes, PASS_UV);
+   }

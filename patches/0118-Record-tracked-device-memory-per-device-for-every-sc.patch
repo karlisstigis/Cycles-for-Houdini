@@ -1,0 +1,316 @@
+From 595a827d6635ed72cd0b2f215d6f76604d2ba709 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 14:02:08 +0000
+Subject: [PATCH] Record tracked device memory per device for every scene
+ device update
+
+Scene::device_update now publishes an immutable record of its tracked
+device memory per leaf device when it ends (also on cancel or error):
+the update serial, a tag set by the integration (its generation), the
+outcome, and per device the exact DeviceInfo id, description and type,
+live bytes at the start and end, the highest live bytes during the
+update, the largest OptiX build temporary as the driver reports it and as
+allocated, the number of builds and how many used the reused temporary or
+a local one, and the build temporary still kept at the attributes
+boundary. The per-update values are kept apart from the lifetime peak of
+Stats, which is unchanged. Scene::get_device_update_memory copies the
+record under a lock and never waits for a running update.
+
+Rationale: The memory regression guard for the OptiX build temporaries (0103/0104) needs a whole-update peak per physical GPU and the actual build temporary sizes, which the lifetime peak cannot give.
+Contract: Statistics only; scene and device data, allocations and images are unchanged; the existing lifetime memory statistics keep their meaning.
+Tests: tests/houdini_device_update_memory_smoke.py
+---
+ src/device/device.h              | 10 ++++++
+ src/device/multi/device.cpp      |  7 ++++
+ src/device/optix/device_impl.cpp |  9 +++++
+ src/device/optix/device_impl.h   |  1 +
+ src/scene/geometry.cpp           |  9 +++++
+ src/scene/scene.cpp              | 60 ++++++++++++++++++++++++++++++++
+ src/scene/scene.h                | 36 +++++++++++++++++++
+ src/util/stats.h                 | 39 +++++++++++++++++++--
+ 8 files changed, 169 insertions(+), 2 deletions(-)
+
+diff --git a/src/device/device.h b/src/device/device.h
+index a03306df136a87992be21f6db0b2eeaf595349d1..d583add93b31d80ad2f0dcfaa65b7c97876236bc 100644
+--- a/src/device/device.h
++++ b/src/device/device.h
+@@ -259,6 +259,16 @@ class Device {
+   /* Free memory kept between acceleration structure builds of one update, such as a reused
+    * temporary build buffer. Called when the geometry update no longer builds structures. */
+   virtual void release_bvh_build_memory() {}
++  /* The devices that allocate memory: this one, or every sub-device of a multi-device. */
++  virtual void leaf_devices(vector<Device *> &out)
++  {
++    out.push_back(this);
++  }
++  /* Bytes of acceleration structure build memory currently kept between builds. */
++  virtual size_t kept_build_temp_bytes()
++  {
++    return 0;
++  }
+ 
+   /* Verification only: read the device copy of a linear allocation back and compare it with the
+    * host data, on every sub-device of a multi-device. Returns false and describes the first
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index 583816113c156e1ec85c5b264cd061dd59ad3e10..465b41a30b10fec242ef2dc35b4626928f985c11 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -238,6 +238,13 @@ class MultiDevice : public Device {
+     }
+   }
+ 
++  void leaf_devices(vector<Device *> &out) override
++  {
++    for (SubDevice &sub : devices) {
++      sub.device->leaf_devices(out);
++    }
++  }
++
+   bool verify_device_copy(device_memory &mem, string &difference) override
+   {
+     const device_ptr key = mem.device_pointer;
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index fc76098e5c57d4bd43a8a0e7311d71462fc4f22c..720946118c802511adf54fbaccbc424a7dc919bc 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -1413,6 +1413,9 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+     temp_mem_ptr = bvh_build_temp_mem.get();
+   }
+   device_only_memory<char> &temp_mem = *temp_mem_ptr;
++  if (temp_mem.device_pointer) {
++    stats.update_build(sizes.tempSizeInBytes, temp_size, reuse_temp);
++  }
+   if (!temp_mem.device_pointer) {
+     /* Make sure temporary memory allocation succeeded. */
+     if (reuse_temp) {
+@@ -2503,6 +2506,12 @@ void OptiXDevice::release_bvh_build_memory()
+   bvh_build_temp_mem.reset();
+ }
+ 
++size_t OptiXDevice::kept_build_temp_bytes()
++{
++  thread_scoped_lock lock(bvh_build_mutex);
++  return bvh_build_temp_mem ? bvh_build_temp_mem->device_size : 0;
++}
++
+ void OptiXDevice::free_bvh_memory_delayed()
+ {
+   thread_scoped_lock lock(delayed_free_bvh_mutex);
+diff --git a/src/device/optix/device_impl.h b/src/device/optix/device_impl.h
+index 571e29ee073a8a2bae6d620221ea3b008f4ba343..22f8c68e608d602ba7effd1234fbe2b9cf6d4d9d 100644
+--- a/src/device/optix/device_impl.h
++++ b/src/device/optix/device_impl.h
+@@ -182,6 +182,7 @@ class OptiXDevice : public CUDADevice {
+ 
+   void release_bvh(BVH *bvh) override;
+   void release_bvh_build_memory() override;
++  size_t kept_build_temp_bytes() override;
+   void free_bvh_memory_delayed();
+ 
+   void const_copy_to(const char *name, void *host, const size_t size) override;
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 8e14ef82ad1aabf03c22cb1d2765a4f9a257e143..14635fe07a7ee19d96f3eb202d99c12cc1104e93 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1334,6 +1334,15 @@ void GeometryManager::device_update(Device *device,
+   /* Release memory kept between the builds above before the attribute buffers are allocated
+    * below, so the two never overlap. */
+   device->release_bvh_build_memory();
++  {
++    /* Record what is still kept at the attributes boundary (expected zero). */
++    vector<Device *> leaves;
++    device->leaf_devices(leaves);
++    for (Device *leaf : leaves) {
++      atomic_fetch_and_update_max_z(&leaf->stats.update_kept_temp_before_attributes,
++                                    leaf->kept_build_temp_bytes());
++    }
++  }
+ 
+   /* Always set BVH layout again after displacement where it was set to none,
+    * to avoid ray-tracing at that stage. */
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index e3f5fcc8a3fcfc4439116de7b9034e076e0657a2..367a9b7c27f583215cd1807f079c2f5c20743a36 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -191,6 +191,52 @@ void Scene::device_update(Device *device_, Progress &progress)
+     device = device_;
+   }
+ 
++  /* Tracked device memory over this whole update, per leaf device: started here, published when
++   * the update ends, also on cancel or error. Starts after device selection and ends after every
++   * manager, including deferred geometry attributes and constant memory. */
++  struct DeviceUpdateMemoryScope {
++    Scene *scene;
++    Progress &progress;
++    vector<Device *> leaves;
++    uint64_t tag;
++    DeviceUpdateMemoryScope(Scene *scene_, Progress &progress_)
++        : scene(scene_), progress(progress_), tag(scene_->device_update_tag)
++    {
++      scene->device->leaf_devices(leaves);
++      for (Device *leaf : leaves) {
++        leaf->stats.update_begin();
++      }
++    }
++    ~DeviceUpdateMemoryScope()
++    {
++      DeviceUpdateMemoryRecord record;
++      record.update_tag = tag;
++      record.outcome = progress.get_cancel()                                   ? "cancelled" :
++                       (scene->device->have_error() || progress.get_error()) ? "error" :
++                                                                               "complete";
++      for (Device *leaf : leaves) {
++        const Stats &s = leaf->stats;
++        DeviceUpdateMemoryRecord::DeviceEntry entry;
++        entry.id = leaf->info.id;
++        entry.description = leaf->info.description;
++        entry.backend = Device::string_from_type(leaf->info.type);
++        entry.start_bytes = s.update_start;
++        entry.end_bytes = s.mem_used;
++        entry.peak_bytes = std::max(std::max(s.update_peak, entry.start_bytes), entry.end_bytes);
++        entry.max_build_temp_bytes = s.update_max_build_temp;
++        entry.max_build_temp_allocation_bytes = s.update_max_build_temp_allocation;
++        entry.build_count = s.update_build_count;
++        entry.reused_temp_build_count = s.update_reused_temp_builds;
++        entry.local_temp_build_count = s.update_local_temp_builds;
++        entry.kept_temp_bytes_before_attributes = s.update_kept_temp_before_attributes;
++        record.devices.push_back(std::move(entry));
++      }
++      const thread_scoped_lock lock(scene->device_update_memory_mutex);
++      record.update_serial = ++scene->device_update_serial;
++      scene->device_update_memory = std::move(record);
++    }
++  } device_update_memory_scope(this, progress);
++
+   const bool print_stats = need_data_update();
+   bool kernels_reloaded = false;
+ 
+@@ -1550,3 +1596,17 @@ template SunLight *Scene::create_light_node<SunLight>();
+ template BackgroundLight *Scene::create_light_node<BackgroundLight>();
+ 
+ CCL_NAMESPACE_END
++
++CCL_NAMESPACE_BEGIN
++
++bool Scene::get_device_update_memory(DeviceUpdateMemoryRecord &record)
++{
++  const thread_scoped_lock lock(device_update_memory_mutex);
++  if (device_update_memory.update_serial == 0) {
++    return false;
++  }
++  record = device_update_memory;
++  return true;
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/scene/scene.h b/src/scene/scene.h
+index 4002729a8e64b7930f8f2373989a4335dce462db..b325291eaf926bac33b1afe249efc808277597c2 100644
+--- a/src/scene/scene.h
++++ b/src/scene/scene.h
+@@ -136,6 +136,34 @@ class SceneParams {
+ /* Integrations can query the nested-dielectrics diagnostics below. */
+ #define CYCLES_HOUDINI_HAS_NESTED_WARNINGS 1
+ 
++/* Tracked device memory of one completed (or ended) Scene::device_update, per leaf device. Bytes
++ * of tracked device allocations, not physical residency or total VRAM usage. */
++struct DeviceUpdateMemoryRecord {
++  struct DeviceEntry {
++    string id;          /* Exact DeviceInfo::id. */
++    string description; /* DeviceInfo::description, not unique for two cards of one model. */
++    string backend;     /* Device type name. */
++    size_t start_bytes = 0;
++    size_t peak_bytes = 0;
++    size_t end_bytes = 0;
++    size_t max_build_temp_bytes = 0;
++    size_t max_build_temp_allocation_bytes = 0;
++    size_t build_count = 0;
++    size_t reused_temp_build_count = 0;
++    size_t local_temp_build_count = 0;
++    size_t kept_temp_bytes_before_attributes = 0;
++  };
++  /* Serial of the scene device update, counting every update of this scene from 1; 0 when no
++   * update has been recorded. */
++  uint64_t update_serial = 0;
++  /* Scene::device_update_tag when the update started (set by the integration, e.g. its scene
++   * generation). */
++  uint64_t update_tag = 0;
++  /* "complete", "cancelled" or "error". */
++  string outcome;
++  vector<DeviceEntry> devices;
++};
++
+ class Scene : public NodeOwner {
+  public:
+   /* Optional name. Is used for logging and reporting. */
+@@ -203,6 +231,14 @@ class Scene : public NodeOwner {
+ 
+   /* scene update statistics */
+   unique_ptr<SceneUpdateStats> update_stats;
++  thread_mutex device_update_memory_mutex;
++  DeviceUpdateMemoryRecord device_update_memory;
++  uint64_t device_update_serial = 0;
++  /* Copied into the device update memory record when an update starts; set by the integration. */
++  uint64_t device_update_tag = 0;
++  /* The record of the last scene device update (copied under a lock, never torn). Returns false
++   * when no update has been recorded yet. */
++  bool get_device_update_memory(DeviceUpdateMemoryRecord &record);
+   bool update_stats_print_report = true;
+   bool update_stats_accumulate = false;
+ 
+diff --git a/src/util/stats.h b/src/util/stats.h
+index 102c849ff511f006d1248a9941e1a8b70471a02d..460b1fcc2c75f379e9e08686b411ca99c72963d0 100644
+--- a/src/util/stats.h
++++ b/src/util/stats.h
+@@ -18,8 +18,33 @@ class Stats {
+ 
+   void mem_alloc(const size_t size)
+   {
+-    atomic_add_and_fetch_z(&mem_used, size);
+-    atomic_fetch_and_update_max_z(&mem_peak, mem_used);
++    const size_t used = atomic_add_and_fetch_z(&mem_used, size);
++    atomic_fetch_and_update_max_z(&mem_peak, used);
++    atomic_fetch_and_update_max_z(&update_peak, used);
++  }
++
++  /* Start of a scene device update: the update statistics below restart, the lifetime peak
++   * above does not. Called at a quiescent update boundary (Scene::device_update). */
++  void update_begin()
++  {
++    update_start = atomic_add_and_fetch_z(&mem_used, 0);
++    update_peak = update_start;
++    update_max_build_temp = 0;
++    update_max_build_temp_allocation = 0;
++    update_build_count = 0;
++    update_reused_temp_builds = 0;
++    update_local_temp_builds = 0;
++    update_kept_temp_before_attributes = 0;
++  }
++
++  /* An acceleration structure build: the driver's temporary size and the allocated size, and
++   * whether the temporary was a reused buffer kept for the update or a local allocation. */
++  void update_build(const size_t temp_bytes, const size_t temp_allocation_bytes, const bool reused)
++  {
++    atomic_fetch_and_update_max_z(&update_max_build_temp, temp_bytes);
++    atomic_fetch_and_update_max_z(&update_max_build_temp_allocation, temp_allocation_bytes);
++    atomic_add_and_fetch_z(&update_build_count, 1);
++    atomic_add_and_fetch_z(reused ? &update_reused_temp_builds : &update_local_temp_builds, 1);
+   }
+ 
+   void mem_free(const size_t size)
+@@ -31,6 +56,16 @@ class Stats {
+   size_t mem_used;
+   size_t mem_peak;
+ 
++  /* Current scene device update (see update_begin). */
++  size_t update_start = 0;
++  size_t update_peak = 0;
++  size_t update_max_build_temp = 0;
++  size_t update_max_build_temp_allocation = 0;
++  size_t update_build_count = 0;
++  size_t update_reused_temp_builds = 0;
++  size_t update_local_temp_builds = 0;
++  size_t update_kept_temp_before_attributes = 0;
++
+   /* Optional logical buffer-copy diagnostic, set only while rendering is
+    * stopped. This counts high-level requests, not physical bus traffic. */
+   std::function<void(const char *, size_t, double)> buffer_copy_callback;

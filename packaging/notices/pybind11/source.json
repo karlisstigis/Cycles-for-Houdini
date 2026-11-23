@@ -1,0 +1,29 @@
+{
+  "name": "pybind11",
+  "version": "2.13.6",
+  "source": "https://github.com/pybind/pybind11/tree/v2.13.6/include/pybind11",
+  "provenance": "Unmodified header closure of pybind11.h and stl.h from installed pybind11 2.13.6 distribution",
+  "license": "BSD-3-Clause",
+  "files": {
+    "attr.h": "40f8c7ec17e12fc405c071e4ac36a4f2034e2cc95bd62b403b97e86e37682e9f",
+    "buffer_info.h": "fc57108aca9da6985f59729e08636fdc6ab98afcb5cfea85dddd4da1eb5e6a89",
+    "cast.h": "f202786389dcf37772ab5d82b94ee2adc02f015d47a0464456bd14c9f78b40d0",
+    "detail/class.h": "0639372bac40320c313cd4ca7e293b482e58db8c202acf0ecf9563bc5772d240",
+    "detail/common.h": "bb114c558296f3b60f6d4cfc328ef4c6856ba4ad83d4dce1292c250e9c2b271a",
+    "detail/cpp_conduit.h": "05bc79ef6f17cefc822f681f5bb906eaf80396d4b9f95e60b6435014f15ebd78",
+    "detail/descr.h": "0fade9207b05de5b8efe0e750a36c953c5a5f553a285c8845d0857bdf460f919",
+    "detail/exception_translation.h": "7ccd49d7dcf4d00b83968cc7b74b2ba4226bfb5b965b8923fdf2dd4890db758f",
+    "detail/init.h": "49bd5490f79c0b997dc63e676982dd50ceea2112d5a5eeb5e07f45aefca0f318",
+    "detail/internals.h": "c6cf88ec9749002c71ee025fd761c12e32f4d3b8d15dc01f7cf0ec774a13aeae",
+    "detail/type_caster_base.h": "99d819f85224c5d49284c3cf7baf445f18ef7757900c30555fcdf907b5ea08da",
+    "detail/typeid.h": "8f0e69afd9bbdaf903b25a13f2fc65f708f5ed52467047570f2ce2065b7cf49b",
+    "detail/value_and_holder.h": "87035896ac63521954aa2870323afab372e184a9598932da59112d42b80e0244",
+    "gil.h": "86c263eb3d625ea968e5cedf3c2804bcaffe79e0e82999bb3ca3f03cd09d555a",
+    "gil_safe_call_once.h": "28a732f5681cfcc258f94e56a4265e372cd6ee85660be77ac979207a9859ef3b",
+    "options.h": "a97be69e3fbef5f652a79e8d61e7e70775b9575ee9a47958d52ae0a370cd069c",
+    "pybind11.h": "85bcd71d1081216eddc2dc1a2a35ca3c2d0d9753061d9e7e0631ac3251372ee5",
+    "pytypes.h": "045f31e12e5fb00cd67fe77da6ef3752caa3c11468d2b6a01cfcbdb033a952f9",
+    "stl.h": "68c8b53820b0d996fe2112d2940b50109247b56b112622d3f5d283307493d487",
+    "typing.h": "3c88d914d37363f2acae41d03e583456ddb88e54e2ea44e174e95d1098dc86d6"
+  }
+}

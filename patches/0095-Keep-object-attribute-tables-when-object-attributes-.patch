@@ -1,0 +1,612 @@
+From 324a699eb0f31dea96140f70f1bfc9c76d7ebfb1 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Mon, 16 Nov 2026 00:12:42 +0000
+Subject: [PATCH 95/96] Keep object attribute tables when object attributes are
+ unchanged
+
+Every geometry update rebuilt the per-object attribute requests and values
+for all objects, rewrote their values into the packed tables and uploaded
+those tables, even when only object transforms changed. With many instances
+carrying object attributes this dominates the attribute stage of a frame
+change.
+
+Object attributes are plain values, not sockets, so no update flag tells
+whether they changed. Instead, before converting them, check that the
+geometry part of every table kept its layout, and that every object would
+produce the requests of the last completed update: the same names, types,
+motion sample counts and bake hold, in the same order. Their table offsets
+are then unchanged, so reuse the previous requests and write the values
+directly at those offsets, in parallel. Where a table kept its allocation,
+only differing values are written and the table is uploaded only if one
+differs. Otherwise convert all objects as before. The attribute map is still
+emitted for all objects and object offsets are still written.
+
+Rationale: Rebuilding and re-uploading unchanged object attributes for every object on every transform-only update costs time linear in the object count.
+Contract: Attribute requests, packed table contents, attribute map entries and object attribute offsets are identical to a full rebuild; any change in object attribute names, types, sample counts or hold, in shader requests or in the geometry table layout takes the full rebuild.
+Tests: tests/houdini_packed_instance_attribute_smoke.py, tests/houdini_sampled_instance_attribute_smoke.py, tests/houdini_packed_cd_smoke.py, tests/houdini_constant_attribute_smoke.py, tests/houdini_named_attribute_smoke.py, tests/houdini_object_properties_smoke.py, tests/houdini_packed_pose_ipr_smoke.py
+---
+ src/scene/geometry.cpp            |   1 +
+ src/scene/geometry.h              |   6 +
+ src/scene/geometry_attributes.cpp | 478 ++++++++++++++++++++++++++----
+ 3 files changed, 423 insertions(+), 62 deletions(-)
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 0b60f9cb4d808283e2c8fa5260e4885871cc9c11..5bb6edc133161f66399bdc573cfc28a20f4ea4e8 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1323,6 +1323,7 @@ void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool forc
+     for (auto &layout : attribute_layout) {
+       layout.clear();
+     }
++    vector<AttributeRequestSet>().swap(object_attribute_requests);
+   }
+   dscene->bvh_nodes.free_if_need_realloc(force_free);
+   dscene->bvh_leaf_nodes.free_if_need_realloc(force_free);
+diff --git a/src/scene/geometry.h b/src/scene/geometry.h
+index a166006537718657a2e2acae5d4ddc74c18d9b53..85605dea8ce176c7b559e6a88736ddf7099d7298 100644
+--- a/src/scene/geometry.h
++++ b/src/scene/geometry.h
+@@ -307,6 +307,12 @@ class GeometryManager {
+   };
+   vector<AttributeLayoutSpan> attribute_layout[int(AttrKernelDataType::NUM) + 3];
+   bool attribute_layout_valid = false;
++  /* Object attribute requests of the last completed attribute update, in scene
++   * object order, with their table offsets after the geometry spans. Reused when
++   * every object would produce the same requests again. */
++  vector<AttributeRequestSet> object_attribute_requests;
++  size_t attribute_layout_geometry_spans[int(AttrKernelDataType::NUM) + 3] = {};
++  size_t object_attribute_reserve[int(AttrKernelDataType::NUM)] = {};
+ 
+   bool displace(Device *device, Scene *scene, Mesh *mesh, Progress &progress);
+ 
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index 8519fff464a44c329af5da14ae641152394e8004..7ac13683edaacc3f7f4b0af27138acdffc84e1a4 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -23,6 +23,8 @@
+ #include "util/set.h"
+ 
+ #include <algorithm>
++#include <atomic>
++#include <cstring>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -593,6 +595,48 @@ class AttributeTableBuilder {
+     table.reserve(total_size);
+   }
+ 
++  /* Visit the shader attribute tables in AttrKernelDataType order. */
++  template<typename F> void foreach_attribute_table(const F &f)
++  {
++    f(int(AttrKernelDataType::FLOAT), attr_float);
++    f(int(AttrKernelDataType::FLOAT2), attr_float2);
++    f(int(AttrKernelDataType::FLOAT3), attr_float3);
++    f(int(AttrKernelDataType::FLOAT4), attr_float4);
++    f(int(AttrKernelDataType::UCHAR4), attr_uchar4);
++    f(int(AttrKernelDataType::NORMAL), attr_normal);
++    f(int(AttrKernelDataType::QUATERNION), attr_quaternion);
++    f(int(AttrKernelDataType::SPHERICAL_HARMONICS_REST), attr_spherical_harmonics_rest);
++  }
++
++  void reserved_sizes(size_t sizes[int(AttrKernelDataType::NUM)])
++  {
++    foreach_attribute_table([&](const int index, auto &table) { sizes[index] = table.size; });
++  }
++
++  /* Whether each table keeps its current allocation, and so its stored host
++   * values, when alloc() is called after reserving the given sizes in addition. */
++  void allocation_kept(const size_t extra[int(AttrKernelDataType::NUM)],
++                       bool kept[int(AttrKernelDataType::NUM)])
++  {
++    foreach_attribute_table([&](const int index, auto &table) {
++      kept[index] = table.data.size() == table.size + extra[index] && !table.data.need_realloc();
++    });
++  }
++
++  void tag_modified(const bool modified[int(AttrKernelDataType::NUM)])
++  {
++    foreach_attribute_table([&](const int index, auto &table) {
++      if (modified[index]) {
++        table.data.tag_modified();
++      }
++    });
++  }
++
++  void reserve_sizes(const size_t extra[int(AttrKernelDataType::NUM)])
++  {
++    foreach_attribute_table([&](const int index, auto &table) { table.reserve(extra[index]); });
++  }
++
+   void alloc()
+   {
+     attr_float.alloc();
+@@ -624,6 +668,233 @@ class AttributeTableBuilder {
+   }
+ };
+ 
++/* Packed table of an object attribute, using the same table choice as
++ * AttributeTableBuilder::add() for object elements. Returns the table index in
++ * AttrKernelDataType order and the size of one step in table elements. */
++static int object_attribute_table(const TypeDesc type, size_t &units_per_step)
++{
++  units_per_step = 1;
++  if (type == TypeFloat) {
++    return int(AttrKernelDataType::FLOAT);
++  }
++  if (type == TypeFloat2) {
++    return int(AttrKernelDataType::FLOAT2);
++  }
++  if (type == TypeMatrix) {
++    units_per_step = 3;
++    return int(AttrKernelDataType::FLOAT4);
++  }
++  if (type == TypeQuaternion) {
++    return int(AttrKernelDataType::QUATERNION);
++  }
++  if (type == TypePackedSphericalHarmonicsRest) {
++    return int(AttrKernelDataType::SPHERICAL_HARMONICS_REST);
++  }
++  if (type == TypeFloat4 || type == TypeRGBA) {
++    return int(AttrKernelDataType::FLOAT4);
++  }
++  return int(AttrKernelDataType::FLOAT3);
++}
++
++static size_t object_attribute_table_unit(const int table)
++{
++  switch (AttrKernelDataType(table)) {
++    case AttrKernelDataType::FLOAT:
++      return sizeof(float);
++    case AttrKernelDataType::FLOAT2:
++      return sizeof(float2);
++    case AttrKernelDataType::FLOAT4:
++      return sizeof(float4);
++    case AttrKernelDataType::QUATERNION:
++      return sizeof(Quaternion);
++    case AttrKernelDataType::SPHERICAL_HARMONICS_REST:
++      return sizeof(PackedSphericalHarmonicsRest);
++    default:
++      return sizeof(packed_float3);
++  }
++}
++
++static char *object_attribute_table_data(DeviceScene *dscene, const int table)
++{
++  switch (AttrKernelDataType(table)) {
++    case AttrKernelDataType::FLOAT:
++      return reinterpret_cast<char *>(dscene->attributes_float.data());
++    case AttrKernelDataType::FLOAT2:
++      return reinterpret_cast<char *>(dscene->attributes_float2.data());
++    case AttrKernelDataType::FLOAT4:
++      return reinterpret_cast<char *>(dscene->attributes_float4.data());
++    case AttrKernelDataType::QUATERNION:
++      return reinterpret_cast<char *>(dscene->attributes_quaternion.data());
++    case AttrKernelDataType::SPHERICAL_HARMONICS_REST:
++      return reinterpret_cast<char *>(dscene->attributes_spherical_harmonics_rest.data());
++    default:
++      return reinterpret_cast<char *>(dscene->attributes_float3.data());
++  }
++}
++
++/* One stored object attribute: where its steps go in the packed tables and
++ * where their source values are. */
++struct ObjectAttributeValues {
++  const ParamValue *param;
++  const ParamValue *sampled;
++  int table;
++  size_t offset_bytes;
++  size_t step_bytes;
++  int steps;
++};
++
++/* Pair the attributes the object would store now with the previous requests.
++ * Returns false unless converting the object again would produce exactly the
++ * previous requests (names, types, motion samples, bake hold and table
++ * extents); values are not compared here. */
++template<typename F>
++static bool match_object_attributes(const Scene *scene,
++                                    const Object &object,
++                                    const vector<vector<ustring>> &object_names,
++                                    const AttributeRequestSet &previous,
++                                    const size_t table_sizes[int(AttrKernelDataType::NUM)],
++                                    const F &visit)
++{
++  const Geometry *geom = object.get_geometry();
++  if (geom == nullptr || geom->index >= scene->geometry.size() ||
++      scene->geometry[geom->index] != geom)
++  {
++    return false;
++  }
++  const vector<ustring> &names = object_names[geom->index];
++
++  size_t k = 0;
++  for (const ParamValue &param : object.attributes) {
++    if (std::find(names.begin(), names.end(), param.name()) == names.end()) {
++      continue;
++    }
++    if (k == previous.requests.size()) {
++      return false;
++    }
++    const AttributeRequest &req = previous.requests[k++];
++    if (req.name != param.name() || req.std != ATTR_STD_NONE || req.type != param.type() ||
++        req.desc.element != ATTR_ELEMENT_OBJECT)
++    {
++      return false;
++    }
++
++    const ParamValue *sampled = nullptr;
++    for (const ParamValue &value : object.attribute_motion) {
++      if (value.name() == param.name()) {
++        sampled = &value;
++        break;
++      }
++    }
++    int steps = 0;
++    uint object_motion = 0;
++    if (sampled) {
++      steps = sampled->nvalues();
++      if (sampled->type() != param.type() || steps < 3 || steps > 129 || (steps & 1) == 0) {
++        return false;
++      }
++      object_motion = uint(steps) >> 1;
++      if (std::find(object.attribute_motion_displacement_hold.begin(),
++                    object.attribute_motion_displacement_hold.end(),
++                    param.name()) != object.attribute_motion_displacement_hold.end())
++      {
++        object_motion |= 128;
++      }
++    }
++    if (req.desc.object_motion != object_motion) {
++      return false;
++    }
++
++    size_t units_per_step = 1;
++    const int table = object_attribute_table(param.type(), units_per_step);
++    const size_t unit = object_attribute_table_unit(table);
++    const size_t step_bytes = unit * units_per_step;
++    if (req.desc.offset < 0 || size_t(param.datasize()) != step_bytes ||
++        size_t(req.desc.offset) + units_per_step * (steps + 1) > table_sizes[table])
++    {
++      return false;
++    }
++    visit(ObjectAttributeValues{
++        &param, sampled, table, size_t(req.desc.offset) * unit, step_bytes, steps});
++  }
++  return k == previous.requests.size();
++}
++
++/* True if every object would produce the requests of the last completed update. */
++static bool object_attribute_requests_unchanged(
++    const Scene *scene,
++    const vector<vector<ustring>> &object_names,
++    const vector<AttributeRequestSet> &previous,
++    const size_t table_sizes[int(AttrKernelDataType::NUM)])
++{
++  if (previous.size() != scene->objects.size()) {
++    return false;
++  }
++  std::atomic<bool> unchanged = true;
++  parallel_for(
++      blocked_range<size_t>(0, scene->objects.size(), 1024), [&](const blocked_range<size_t> &r) {
++        for (size_t i = r.begin(); i != r.end(); i++) {
++          if (!unchanged.load(std::memory_order_relaxed)) {
++            return;
++          }
++          if (!match_object_attributes(scene,
++                                       *scene->objects[i],
++                                       object_names,
++                                       previous[i],
++                                       table_sizes,
++                                       [](const ObjectAttributeValues &) {}))
++          {
++            unchanged = false;
++          }
++        }
++      });
++  return unchanged;
++}
++
++/* Write object attribute values at their previous offsets. Tables that kept
++ * their allocation are only written, and marked modified, where a value differs. */
++static void write_object_attribute_values(DeviceScene *dscene,
++                                          const Scene *scene,
++                                          const vector<vector<ustring>> &object_names,
++                                          const vector<AttributeRequestSet> &previous,
++                                          const size_t table_sizes[int(AttrKernelDataType::NUM)],
++                                          const bool table_kept[int(AttrKernelDataType::NUM)],
++                                          bool table_modified[int(AttrKernelDataType::NUM)])
++{
++  char *tables[int(AttrKernelDataType::NUM)];
++  std::atomic<bool> modified[int(AttrKernelDataType::NUM)];
++  for (int table = 0; table < int(AttrKernelDataType::NUM); table++) {
++    tables[table] = object_attribute_table_data(dscene, table);
++    modified[table] = false;
++  }
++  parallel_for(
++      blocked_range<size_t>(0, scene->objects.size(), 1024), [&](const blocked_range<size_t> &r) {
++        for (size_t i = r.begin(); i != r.end(); i++) {
++          match_object_attributes(
++              scene,
++              *scene->objects[i],
++              object_names,
++              previous[i],
++              table_sizes,
++              [&](const ObjectAttributeValues &values) {
++                char *dst = tables[values.table] + values.offset_bytes;
++                for (int step = 0; step <= values.steps; step++) {
++                  const char *src = step == 0 ? static_cast<const char *>(values.param->data()) :
++                                                static_cast<const char *>(values.sampled->data()) +
++                                                    (step - 1) * values.step_bytes;
++                  char *step_dst = dst + step * values.step_bytes;
++                  if (!table_kept[values.table] || memcmp(step_dst, src, values.step_bytes) != 0) {
++                    memcpy(step_dst, src, values.step_bytes);
++                    modified[values.table] = true;
++                  }
++                }
++              });
++        }
++      });
++  for (int table = 0; table < int(AttrKernelDataType::NUM); table++) {
++    table_modified[table] = modified[table];
++  }
++}
++
+ void GeometryManager::device_update_attributes(Device *device,
+                                                DeviceScene *dscene,
+                                                Scene *scene,
+@@ -678,60 +949,9 @@ void GeometryManager::device_update_attributes(Device *device,
+   }
+ 
+   /* convert object attributes to use the same data structures as geometry ones */
+-  vector<AttributeRequestSet> object_attributes(scene->objects.size());
++  vector<AttributeRequestSet> object_attributes;
+   vector<AttributeSet> object_attribute_values;
+ 
+-  object_attribute_values.reserve(scene->objects.size());
+-
+-  for (size_t i = 0; i < scene->objects.size(); i++) {
+-    Object *object = scene->objects[i];
+-    Geometry *geom = object->geometry;
+-    const size_t geom_idx = geom->index;
+-
+-    assert(geom_idx < scene->geometry.size() && scene->geometry[geom_idx] == geom);
+-
+-    object_attribute_values.push_back(AttributeSet(geom, ATTR_PRIM_GEOMETRY));
+-
+-    AttributeRequestSet &geom_requests = geom_attributes[geom_idx];
+-    AttributeRequestSet &attributes = object_attributes[i];
+-    AttributeSet &values = object_attribute_values[i];
+-
+-    for (size_t j = 0; j < object->attributes.size(); j++) {
+-      const ParamValue &param = object->attributes[j];
+-
+-      /* add attributes that are requested and not already handled by the mesh */
+-      if (geom_requests.find(param.name()) && !geom->attributes.find(param.name())) {
+-        attributes.add(param.name());
+-
+-        Attribute *attr = values.add(param.name(), param.type(), ATTR_ELEMENT_OBJECT);
+-        assert(param.nvalues() == attr->size);
+-        memcpy(attr->data_for_write(), param.data(), param.datasize());
+-        for (const ParamValue &sampled : object->attribute_motion) {
+-          if (sampled.name() != param.name()) {
+-            continue;
+-          }
+-          assert(sampled.type() == param.type());
+-          assert(sampled.nvalues() >= 3 && sampled.nvalues() <= 129 &&
+-                 (sampled.nvalues() & 1));
+-          const int count = sampled.nvalues();
+-          if (std::find(object->attribute_motion_displacement_hold.begin(),
+-                        object->attribute_motion_displacement_hold.end(),
+-                        param.name()) != object->attribute_motion_displacement_hold.end()) {
+-            attr->flags |= ATTR_OBJECT_MOTION_DISPLACEMENT_HOLD;
+-          }
+-          attr->add_motion_steps(count + 1);
+-          const size_t bytes = attr->data_sizeof();
+-          for (int step = 0; step < count; step++) {
+-            memcpy(attr->data_for_write(step + 1),
+-                   static_cast<const char *>(sampled.data()) + step * bytes,
+-                   bytes);
+-          }
+-          break;
+-        }
+-      }
+-    }
+-  }
+-
+   /* mesh attribute are stored in a single array per data type. here we fill
+    * those arrays, and set the offset and element type to create attribute
+    * maps next */
+@@ -794,18 +1014,126 @@ void GeometryManager::device_update_attributes(Device *device,
+     }
+   }
+ 
+-  for (size_t i = 0; i < scene->objects.size(); i++) {
+-    Object *object = scene->objects[i];
++  /* Object attributes follow the geometry attributes in every table. When the
++   * geometry part kept its layout and every object would produce the previous
++   * requests, their offsets are unchanged: reuse the requests and only write the
++   * values, instead of converting and adding every object again. */
++  size_t geometry_spans[int(AttrKernelDataType::NUM) + 3];
++  bool geometry_layout_kept = attribute_layout_valid;
++  for (int index = 0; index < int(AttrKernelDataType::NUM) + 3; ++index) {
++    geometry_spans[index] = next_layout[index].size();
++    geometry_layout_kept = geometry_layout_kept &&
++                           geometry_spans[index] == attribute_layout_geometry_spans[index] &&
++                           attribute_layout[index].size() >= geometry_spans[index] &&
++                           std::equal(next_layout[index].begin(),
++                                      next_layout[index].end(),
++                                      attribute_layout[index].begin());
++  }
++  /* An object attribute is stored when its geometry requests the name and does
++   * not provide an attribute of that name itself. */
++  vector<vector<ustring>> object_names;
++  size_t table_sizes[int(AttrKernelDataType::NUM)] = {};
++  if (geometry_layout_kept) {
++    object_names.resize(scene->geometry.size());
++    for (size_t i = 0; i < scene->geometry.size(); i++) {
++      const Geometry *geom = scene->geometry[i];
++      for (const AttributeRequest &req : geom_attributes[i].requests) {
++        if (!geom->attributes.find(req.name)) {
++          object_names[i].push_back(req.name);
++        }
++      }
++    }
++    builder.reserved_sizes(table_sizes);
++    for (int index = 0; index < int(AttrKernelDataType::NUM); ++index) {
++      table_sizes[index] += object_attribute_reserve[index];
++    }
++  }
++  const bool reuse_object_attributes =
++      geometry_layout_kept && object_attribute_requests_unchanged(
++                                  scene, object_names, object_attribute_requests, table_sizes);
++
++  size_t object_reserve[int(AttrKernelDataType::NUM)] = {};
++  bool object_tables_kept[int(AttrKernelDataType::NUM)] = {};
++  if (reuse_object_attributes) {
++    builder.allocation_kept(object_attribute_reserve, object_tables_kept);
++    builder.reserve_sizes(object_attribute_reserve);
++  }
++  else {
++    object_attributes.resize(scene->objects.size());
++    object_attribute_values.reserve(scene->objects.size());
++
++    for (size_t i = 0; i < scene->objects.size(); i++) {
++      Object *object = scene->objects[i];
++      Geometry *geom = object->geometry;
++      const size_t geom_idx = geom->index;
++
++      assert(geom_idx < scene->geometry.size() && scene->geometry[geom_idx] == geom);
++
++      object_attribute_values.push_back(AttributeSet(geom, ATTR_PRIM_GEOMETRY));
++
++      AttributeRequestSet &geom_requests = geom_attributes[geom_idx];
++      AttributeRequestSet &attributes = object_attributes[i];
++      AttributeSet &values = object_attribute_values[i];
++
++      for (size_t j = 0; j < object->attributes.size(); j++) {
++        const ParamValue &param = object->attributes[j];
++
++        /* add attributes that are requested and not already handled by the mesh */
++        if (geom_requests.find(param.name()) && !geom->attributes.find(param.name())) {
++          attributes.add(param.name());
++
++          Attribute *attr = values.add(param.name(), param.type(), ATTR_ELEMENT_OBJECT);
++          assert(param.nvalues() == attr->size);
++          memcpy(attr->data_for_write(), param.data(), param.datasize());
++          for (const ParamValue &sampled : object->attribute_motion) {
++            if (sampled.name() != param.name()) {
++              continue;
++            }
++            assert(sampled.type() == param.type());
++            assert(sampled.nvalues() >= 3 && sampled.nvalues() <= 129 &&
++                   (sampled.nvalues() & 1));
++            const int count = sampled.nvalues();
++            if (std::find(object->attribute_motion_displacement_hold.begin(),
++                          object->attribute_motion_displacement_hold.end(),
++                          param.name()) != object->attribute_motion_displacement_hold.end()) {
++              attr->flags |= ATTR_OBJECT_MOTION_DISPLACEMENT_HOLD;
++            }
++            attr->add_motion_steps(count + 1);
++            const size_t bytes = attr->data_sizeof();
++            for (int step = 0; step < count; step++) {
++              memcpy(attr->data_for_write(step + 1),
++                     static_cast<const char *>(sampled.data()) + step * bytes,
++                     bytes);
++            }
++            break;
++          }
++        }
++      }
++    }
++
++    size_t geometry_reserve[int(AttrKernelDataType::NUM)];
++    builder.reserved_sizes(geometry_reserve);
++
++    for (size_t i = 0; i < scene->objects.size(); i++) {
++      Object *object = scene->objects[i];
+ 
+-    for (Attribute &attr : object_attribute_values[i].attributes) {
+-      builder.reserve(object->geometry, &attr, ATTR_PRIM_GEOMETRY);
+-      record_layout(object, object->geometry, &attr);
++      for (Attribute &attr : object_attribute_values[i].attributes) {
++        builder.reserve(object->geometry, &attr, ATTR_PRIM_GEOMETRY);
++        record_layout(object, object->geometry, &attr);
++      }
++    }
++
++    builder.reserved_sizes(object_reserve);
++    for (int index = 0; index < int(AttrKernelDataType::NUM); ++index) {
++      object_reserve[index] -= geometry_reserve[index];
+     }
+   }
+ 
+   bool layout_changed[int(AttrKernelDataType::NUM) + 3];
+   for (int index = 0; index < int(AttrKernelDataType::NUM) + 3; ++index) {
+-    layout_changed[index] = !attribute_layout_valid || next_layout[index] != attribute_layout[index];
++    layout_changed[index] = !reuse_object_attributes &&
++                            (!attribute_layout_valid ||
++                             next_layout[index] != attribute_layout[index]);
+   }
+   /* A cancelled upload cannot leave a partially rewritten table certified. */
+   attribute_layout_valid = false;
+@@ -878,7 +1206,7 @@ void GeometryManager::device_update_attributes(Device *device,
+     }
+   }
+ 
+-  for (size_t i = 0; i < scene->objects.size(); i++) {
++  for (size_t i = 0; !reuse_object_attributes && i < scene->objects.size(); i++) {
+     Object *object = scene->objects[i];
+     AttributeRequestSet &attributes = object_attributes[i];
+     AttributeSet &values = object_attribute_values[i];
+@@ -908,12 +1236,31 @@ void GeometryManager::device_update_attributes(Device *device,
+     }
+   }
+ 
++  if (reuse_object_attributes) {
++    bool modified[int(AttrKernelDataType::NUM)];
++    write_object_attribute_values(dscene,
++                                  scene,
++                                  object_names,
++                                  object_attribute_requests,
++                                  table_sizes,
++                                  object_tables_kept,
++                                  modified);
++    builder.tag_modified(modified);
++    if (progress.get_cancel()) {
++      return;
++    }
++  }
++
+   /* create attribute lookup maps */
+   if (scene->shader_manager->use_osl()) {
+     update_osl_globals(device, scene);
+   }
+ 
+-  update_svm_attributes(device, dscene, scene, geom_attributes, object_attributes);
++  update_svm_attributes(device,
++                        dscene,
++                        scene,
++                        geom_attributes,
++                        reuse_object_attributes ? object_attribute_requests : object_attributes);
+ 
+   if (progress.get_cancel()) {
+     return;
+@@ -934,8 +1281,15 @@ void GeometryManager::device_update_attributes(Device *device,
+   if (progress.get_cancel()) {
+     return;
+   }
+-  for (int index = 0; index < int(AttrKernelDataType::NUM) + 3; ++index) {
+-    attribute_layout[index] = std::move(next_layout[index]);
++  if (!reuse_object_attributes) {
++    for (int index = 0; index < int(AttrKernelDataType::NUM) + 3; ++index) {
++      attribute_layout[index] = std::move(next_layout[index]);
++      attribute_layout_geometry_spans[index] = geometry_spans[index];
++    }
++    for (int index = 0; index < int(AttrKernelDataType::NUM); ++index) {
++      object_attribute_reserve[index] = object_reserve[index];
++    }
++    object_attribute_requests = std::move(object_attributes);
+   }
+   attribute_layout_valid = true;
+ }

@@ -1,0 +1,167 @@
+From e1460e18f590ab5f01ecf85b5197d3177e3455e0 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:37 +0100
+Subject: [PATCH] selective shading preparation
+
+Locked-Patch: patches/0051-selective-shading-preparation.patch
+Locked-Patch-SHA256: 0ead75487c1358860738ff61cf5e15298f63f5a6fbd6dbfa5f6bc76ae0fd12de
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_shading_payload_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: e04479c2f94ac8cd1e5d9d36e4bb6866586e5d6f
+Previous-Patch: patches/0051-selective-shading-preparation.patch
+Previous-Patch-SHA256: 0ead75487c1358860738ff61cf5e15298f63f5a6fbd6dbfa5f6bc76ae0fd12de
+Rationale: Selective shading preparation avoids unrelated measures/OSD work only after geometry and displacement reuse are validated.
+Contract: selective shading preparation
+Tests: tests/houdini_shading_payload_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 957c4aae0a7718854cd0f0277c94f9666203517f..30b8c0bb3f59e67a66739f1170bf9a088f1ab01a 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -878,7 +878,7 @@ void GeometryManager::device_update(Device *device,
+               mesh->add_vertex_normals();
+             }
+           }
+-          else {
++          else if (!mesh->can_reuse_displacement()) {
+             mesh->add_vertex_normals();
+           }
+ 
+@@ -1152,6 +1152,14 @@ void GeometryManager::device_update(Device *device,
+     size_t i = 0;
+     size_t num_bvh = 0;
+     for (Geometry *geom : scene->geometry) {
++      if (geom->is_mesh() && !geom->need_update_rebuild &&
++          !geom->need_update_bvh_for_offset &&
++          static_cast<Mesh *>(geom)->can_reuse_displacement())
++      {
++        /* Validated fields/palettes keep the same triangle positions and
++         * correspondence. Shader attributes do not require a BLAS refit. */
++        continue;
++      }
+       if (geom->is_modified() || geom->need_update_bvh_for_offset) {
+         need_update_scene_bvh = true;
+ 
+@@ -1251,7 +1259,10 @@ void GeometryManager::device_update(Device *device,
+     /* Capture edits after tessellation, displacement and static transforms,
+      * before the engine clears their dirty flags. Revisions are unique across
+      * lifetimes, so allocator address reuse cannot resurrect a retired tree. */
+-    if ((geom->is_mesh() || geom->is_volume()) &&
++    const bool retained_measure = geom->is_mesh() &&
++                                  static_cast<Mesh *>(geom)->can_reuse_displacement() &&
++                                  !static_cast<Mesh *>(geom)->shader_is_modified();
++    if (!retained_measure && (geom->is_mesh() || geom->is_volume()) &&
+         (geom->is_modified() || geom->position_is_modified())) {
+       geom->light_tree_revision = next_light_tree_revision();
+     }
+diff --git a/src/scene/mesh_subdivision.cpp b/src/scene/mesh_subdivision.cpp
+index 6d1b99638943356a6a82535b48fbde6b65fdfdc6..6abd2b74647656b17a11b0169ded196e9c55a558 100644
+--- a/src/scene/mesh_subdivision.cpp
++++ b/src/scene/mesh_subdivision.cpp
+@@ -232,10 +232,10 @@ bool Mesh::interpolate_subdivision_shading()
+ #ifdef WITH_OPENSUBDIV
+   OsdMesh osd_mesh(*this);
+   OsdData osd_data;
+-  if (get_subdivision_type() == SUBDIVISION_CATMULL_CLARK) {
++  SubdAttributeInterpolation interpolation(*this, osd_mesh, osd_data);
++  if (interpolation.needs_osd(true)) {
+     osd_data.build(osd_mesh);
+   }
+-  SubdAttributeInterpolation interpolation(*this, osd_mesh, osd_data);
+ #else
+   SubdAttributeInterpolation interpolation(*this);
+ #endif
+diff --git a/src/subd/interpolation.cpp b/src/subd/interpolation.cpp
+index c922dda960d6c41ef1048baf8274eba8ba4bebfb..e44bc99997571d39b90f9da9436c54558fc472ce 100644
+--- a/src/subd/interpolation.cpp
++++ b/src/subd/interpolation.cpp
+@@ -111,20 +111,7 @@ void SubdAttributeInterpolation::setup(const bool shading_only)
+   }
+ 
+   for (const Attribute &subd_attr : mesh.subd_attributes.attributes) {
+-    if (shading_only) {
+-      if (!subd_attr.modified) {
+-        continue;
+-      }
+-      /* Geometric, motion and original/displaced normal buffers must never be
+-       * replaced by this attribute-only path. */
+-      if (subd_attr.std != ATTR_STD_NONE && subd_attr.std != ATTR_STD_UV &&
+-          subd_attr.std != ATTR_STD_GENERATED && subd_attr.std != ATTR_STD_POINTINESS &&
+-          subd_attr.std != ATTR_STD_RANDOM_PER_ISLAND)
+-      {
+-        continue;
+-      }
+-    }
+-    if (!support_interp_attribute(subd_attr)) {
++    if (!use_attribute(subd_attr, shading_only)) {
+       continue;
+     }
+     Attribute &mesh_attr = mesh.attributes.copy(subd_attr);
+@@ -141,6 +128,48 @@ void SubdAttributeInterpolation::setup(const bool shading_only)
+   }
+ }
+ 
++bool SubdAttributeInterpolation::use_attribute(const Attribute &attr,
++                                              const bool shading_only) const
++{
++  if (shading_only &&
++      (!attr.modified ||
++       (attr.std != ATTR_STD_NONE && attr.std != ATTR_STD_UV &&
++        attr.std != ATTR_STD_GENERATED && attr.std != ATTR_STD_POINTINESS &&
++        attr.std != ATTR_STD_RANDOM_PER_ISLAND)))
++  {
++    return false;
++  }
++  return support_interp_attribute(attr);
++}
++
++#ifdef WITH_OPENSUBDIV
++bool SubdAttributeInterpolation::needs_osd(const bool shading_only) const
++{
++  if (mesh.get_subdivision_type() != Mesh::SUBDIVISION_CATMULL_CLARK) {
++    return false;
++  }
++  for (const Attribute &attr : mesh.subd_attributes.attributes) {
++    if (!use_attribute(attr, shading_only)) {
++      continue;
++    }
++    if (attr.element == ATTR_ELEMENT_VERTEX || attr.element == ATTR_ELEMENT_VERTEX_NORMAL) {
++      if (attr.has_motion() || attr.std == ATTR_STD_GENERATED ||
++          attr.std == ATTR_STD_POSITION_UNDEFORMED || attr.std == ATTR_STD_POSITION_UNDISPLACED)
++      {
++        return true;
++      }
++    }
++    else if (osd_mesh.use_smooth_fvar(attr) &&
++             (Attribute::same_storage(attr.type, TypeFloat2) ||
++              Attribute::same_storage(attr.type, TypeVector)))
++    {
++      return true;
++    }
++  }
++  return false;
++}
++#endif
++
+ bool SubdAttributeInterpolation::support_interp_attribute(const Attribute &attr) const
+ {
+   switch (attr.std) {
+diff --git a/src/subd/interpolation.h b/src/subd/interpolation.h
+index b8b9f584b3fad8fcd401bffc04ffc19e55391b55..082e4dfc815786285856c31aa5d2df6c6db8ce46 100644
+--- a/src/subd/interpolation.h
++++ b/src/subd/interpolation.h
+@@ -45,8 +45,12 @@ class SubdAttributeInterpolation {
+ #endif
+ 
+   void setup(bool shading_only = false);
++#ifdef WITH_OPENSUBDIV
++  bool needs_osd(bool shading_only = false) const;
++#endif
+ 
+  protected:
++  bool use_attribute(const Attribute &attr, bool shading_only) const;
+   bool support_interp_attribute(const Attribute &attr) const;
+   void setup_attribute(const Attribute &subd_attr, Attribute &mesh_attr);
+ 

@@ -1,0 +1,486 @@
+From 398d72a4d51bdd5a157ee058d0c0f0213afd0be0 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Mon, 16 Nov 2026 19:10:26 +0000
+Subject: [PATCH] Share the OptiX curve build input between sub-devices
+
+With several GPUs, MultiDevice::build_bvh builds every bottom level
+acceleration structure once per sub-device, and each OptiX sub-device
+computed the same curve build input (ribbon bounds, or thick and linear
+curve vertices and indices) again. The work grew with the number of GPUs.
+
+MultiDevice::build_bvh now owns a BVHSharedBuild for the duration of one
+call and points each sub-device BVH at it only while that sub-device builds
+(reset on every exit path). The first OptiX sub-device computes the input
+into host arrays under the mutex; the others reuse it when geometry, curve
+shape, motion steps, segment and vertex counts match, and otherwise compute
+their own without touching the shared arrays. The arrays are never written
+after they are published, so readers need no lock, and they are released
+when the multi-device build of that geometry returns. Each device uploads
+from the shared arrays into device-only memory that may fall back to
+mapped host memory, like the read-only vectors it replaces. A single
+device, and devices of other types, never see the pointer and build exactly
+as before. The fill itself moved unchanged into fill_curve_build_input.
+
+Rationale: The curve build input was recomputed per GPU although it is identical; computing it once keeps the work independent of the GPU count and guarantees every device builds from the same input.
+Contract: Every OptiX sub-device receives the same AABB, index and vertex arrays as before for ribbon, thick and linear curves and all motion steps; single-device builds are unchanged and no shared data outlives one multi-device build.
+Tests: tests/houdini_curve_subdivisions_smoke.py, tests/houdini_hair_smoke.py, tests/houdini_rls_hair_smoke.py
+---
+ src/bvh/bvh.h                    |  20 ++
+ src/device/multi/device.cpp      |  16 +-
+ src/device/optix/device_impl.cpp | 331 +++++++++++++++++++++----------
+ 3 files changed, 257 insertions(+), 110 deletions(-)
+
+diff --git a/src/bvh/bvh.h b/src/bvh/bvh.h
+index 6ce30c81fdcef1388431507fad2f4e13a0f79a17..60b1d704ab53e3872a753c6f318f364aacc94049 100644
+--- a/src/bvh/bvh.h
++++ b/src/bvh/bvh.h
+@@ -9,6 +9,7 @@
+ 
+ #include "bvh/params.h"
+ #include "util/array.h"
++#include "util/thread.h"
+ #include "util/types.h"
+ #include "util/unique_ptr.h"
+ #include "util/vector.h"
+@@ -64,11 +65,30 @@ struct PackedBVH {
+ 
+ /* BVH */
+ 
++/* Host data that the first sub-device of a multi-device build computes for a BVH and the
++ * other sub-devices reuse, such as the curve build input of OptiX. Devices derive from it. */
++class BVHSharedBuildData {
++ public:
++  virtual ~BVHSharedBuildData() = default;
++};
++
++/* Owned by MultiDevice::build_bvh for the duration of one call, so shared data never outlives
++ * the build of one BVH on all sub-devices. Data is created once under the mutex and only read
++ * afterwards. */
++class BVHSharedBuild {
++ public:
++  thread_mutex mutex;
++  unique_ptr<BVHSharedBuildData> data;
++};
++
+ class BVH {
+  public:
+   BVHParams params;
+   vector<Geometry *> geometry;
+   vector<Object *> objects;
++  /* Non-owning; set only while MultiDevice::build_bvh builds this sub-device BVH. Devices that
++   * do not share build data ignore it. */
++  BVHSharedBuild *shared_build = nullptr;
+ 
+   static unique_ptr<BVH> create(const BVHParams &params,
+                                 const vector<Geometry *> &geometry,
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index 6be15a291e4f74c1c19b150dbd840baa9cb0bcdf..040d5fc1e3ddcc0fc2a96bdcfa8f0f7b3d0f0ee2 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -255,6 +255,9 @@ class MultiDevice : public Device {
+       geom_bvhs.push_back(std::move(geom->bvh));
+     }
+ 
++    /* Host data computed by the first sub-device and reused by the others for this build. */
++    BVHSharedBuild shared_build;
++
+     /* Broadcast acceleration structure build to all render devices */
+     size_t i = 0;
+     for (SubDevice &sub : devices) {
+@@ -308,7 +311,18 @@ class MultiDevice : public Device {
+             params, bvh->geometry, bvh->objects, sub.device.get());
+       }
+ 
+-      sub.device->build_bvh(bvh_multi->sub_bvhs[i].get(), progress, refit);
++      {
++        /* Reset the pointer on every exit path, so it cannot outlive #shared_build. */
++        struct SharedBuildScope {
++          BVH *sub_bvh;
++          ~SharedBuildScope()
++          {
++            sub_bvh->shared_build = nullptr;
++          }
++        } shared_scope{bvh_multi->sub_bvhs[i].get()};
++        shared_scope.sub_bvh->shared_build = &shared_build;
++        sub.device->build_bvh(shared_scope.sub_bvh, progress, refit);
++      }
+       i++;
+     }
+ 
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index eaa5dfba97074f4ab1095446361feffdbfdae87d..2107aae069caf845f608e4e454c5ef4aa6d5c890 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -1467,6 +1467,126 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+   return !have_error();
+ }
+ 
++/* Curve build input computed once on the host and uploaded to every sub-device of a
++ * multi-device build of the same curve geometry. */
++class OptiXCurveBuildInput : public BVHSharedBuildData {
++ public:
++  const Hair *hair = nullptr;
++  CurveShapeType curve_shape = CURVE_RIBBON;
++  size_t num_motion_steps = 0;
++  size_t num_segments = 0;
++  size_t num_vertices = 0;
++  array<OptixAabb> aabb;
++  array<int> index;
++  array<float4> vertex;
++};
++
++/* Fill the OptiX curve build input of all motion steps: a bound per segment for ribbons, or
++ * float4 vertices and an index per segment for thick and linear curves. */
++static void fill_curve_build_input(const Hair *hair,
++                                   const Attribute *attr_P,
++                                   const Attribute *attr_R,
++                                   const size_t num_motion_steps,
++                                   const size_t num_segments,
++                                   const size_t num_vertices,
++                                   OptixAabb *aabb,
++                                   int *index,
++                                   float4 *vertex)
++{
++  /* Position of the first segment of each curve in the serial order. The vertices of a curve
++   * follow the vertices of all previous curves: one more than its segments for linear curves
++   * and three more for Catmull-Rom curves (the duplicated end points). Knowing these, every
++   * curve is written at the same positions as in a serial loop over the curves, so curves
++   * can be filled in parallel and the build input is unchanged. */
++  const size_t num_curves = hair->num_curves();
++  vector<size_t> curve_segment_start(num_curves);
++  {
++    size_t segment_index = 0;
++    for (size_t curve_index = 0; curve_index < num_curves; ++curve_index) {
++      curve_segment_start[curve_index] = segment_index;
++      segment_index += max(hair->get_curve(curve_index).num_segments(), 0);
++    }
++    assert(segment_index == num_segments);
++  }
++  const size_t extra_vertices_per_curve = (hair->curve_shape == CURVE_THICK_LINEAR) ? 1 : 3;
++
++  /* Get AABBs for each motion step. */
++  for (size_t step = 0; step < num_motion_steps; ++step) {
++    const packed_float3 *keys = attr_P->data_at_time_step<packed_float3>(step, num_motion_steps);
++    const float *curve_radius_step = attr_R->data_at_time_step<float>(step, num_motion_steps);
++
++    /* Each curve writes only its own segments and vertices; isolate the loop so a worker
++     * waiting for it does not pick up another geometry's build task. */
++    isolate_task([&]() {
++      parallel_for(
++          blocked_range<size_t>(0, num_curves, 1024), [&](const blocked_range<size_t> &r) {
++            if (hair->curve_shape == CURVE_THICK || hair->curve_shape == CURVE_THICK_LINEAR) {
++              for (size_t curve_index = r.begin(); curve_index != r.end(); ++curve_index) {
++                const Hair::Curve curve = hair->get_curve(curve_index);
++                size_t segment_index = curve_segment_start[curve_index];
++                size_t vertex_index = step * num_vertices + segment_index +
++                                      curve_index * extra_vertices_per_curve;
++
++                if (hair->curve_shape == CURVE_THICK_LINEAR) {
++                  const int first_key_index = curve.first_key;
++
++                  for (int k = 0; k < curve.num_segments(); ++k) {
++                    if (step == 0) {
++                      index[segment_index++] = vertex_index;
++                    }
++                    vertex[vertex_index++] = make_float4(float3(keys[first_key_index + k]),
++                                                         curve_radius_step[first_key_index + k]);
++                  }
++
++                  const int last_key_index = first_key_index + curve.num_keys - 1;
++                  vertex[vertex_index++] = make_float4(float3(keys[last_key_index]),
++                                                       curve_radius_step[last_key_index]);
++                }
++                else {
++                  const int first_key_index = curve.first_key;
++                  vertex[vertex_index++] = make_float4(float3(keys[first_key_index]),
++                                                       curve_radius_step[first_key_index]);
++
++                  for (int k = 0; k < curve.num_segments(); ++k) {
++                    if (step == 0) {
++                      index[segment_index++] = vertex_index - 1;
++                    }
++                    vertex[vertex_index++] = make_float4(float3(keys[first_key_index + k]),
++                                                         curve_radius_step[first_key_index + k]);
++                  }
++
++                  const int last_key_index = first_key_index + curve.num_keys - 1;
++                  vertex[vertex_index++] = make_float4(float3(keys[last_key_index]),
++                                                       curve_radius_step[last_key_index]);
++                  vertex[vertex_index++] = make_float4(float3(keys[last_key_index]),
++                                                       curve_radius_step[last_key_index]);
++                }
++              }
++            }
++            else {
++              for (size_t curve_index = r.begin(); curve_index != r.end(); ++curve_index) {
++                const Hair::Curve curve = hair->get_curve(curve_index);
++                size_t i = curve_segment_start[curve_index];
++
++                for (int segment = 0; segment < curve.num_segments(); ++segment, ++i) {
++                  BoundBox bounds = BoundBox::empty;
++                  curve.bounds_grow(segment, keys, curve_radius_step, bounds);
++
++                  const size_t aabb_index = step * num_segments + i;
++                  aabb[aabb_index].minX = bounds.min.x;
++                  aabb[aabb_index].minY = bounds.min.y;
++                  aabb[aabb_index].minZ = bounds.min.z;
++                  aabb[aabb_index].maxX = bounds.max.x;
++                  aabb[aabb_index].maxY = bounds.max.y;
++                  aabb[aabb_index].maxZ = bounds.max.z;
++                }
++              }
++            }
++          });
++    });
++  }
++}
++
+ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+ {
+   const bool use_fast_trace_bvh = (bvh->params.bvh_type == BVH_TYPE_STATIC);
+@@ -1510,125 +1630,119 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+         num_motion_steps = hair->get_motion_steps();
+       }
+ 
+-      device_vector<OptixAabb> aabb_data(this, "optix temp aabb data", MEM_READ_ONLY);
+-      device_vector<int> index_data(this, "optix temp index data", MEM_READ_ONLY);
+-      device_vector<float4> vertex_data(this, "optix temp vertex data", MEM_READ_ONLY);
+       /* Four control points for each curve segment. */
+       size_t num_vertices = num_segments * 4;
++      size_t num_aabbs = 0;
++      size_t num_indices = 0;
+       if (hair->curve_shape == CURVE_THICK_LINEAR) {
+         num_vertices = hair->num_keys();
+-        index_data.alloc(num_segments);
+-        vertex_data.alloc(num_vertices * num_motion_steps);
++        num_indices = num_segments;
+       }
+       else if (hair->curve_shape == CURVE_THICK) {
+         num_vertices = hair->num_keys() + 2 * hair->num_curves();
+-        index_data.alloc(num_segments);
+-        vertex_data.alloc(num_vertices * num_motion_steps);
++        num_indices = num_segments;
+       }
+       else {
+-        aabb_data.alloc(num_segments * num_motion_steps);
++        num_aabbs = num_segments * num_motion_steps;
+       }
++      const size_t num_vertex_data = (num_indices) ? num_vertices * num_motion_steps : 0;
+ 
+-      /* Position of the first segment of each curve in the serial order. The vertices of a curve
+-       * follow the vertices of all previous curves: one more than its segments for linear curves
+-       * and three more for Catmull-Rom curves (the duplicated end points). Knowing these, every
+-       * curve is written at the same positions as in a serial loop over the curves, so curves
+-       * can be filled in parallel and the build input is unchanged. */
+-      const size_t num_curves = hair->num_curves();
+-      vector<size_t> curve_segment_start(num_curves);
+-      {
+-        size_t segment_index = 0;
+-        for (size_t curve_index = 0; curve_index < num_curves; ++curve_index) {
+-          curve_segment_start[curve_index] = segment_index;
+-          segment_index += max(hair->get_curve(curve_index).num_segments(), 0);
++      device_vector<OptixAabb> aabb_data(this, "optix temp aabb data", MEM_READ_ONLY);
++      device_vector<int> index_data(this, "optix temp index data", MEM_READ_ONLY);
++      device_vector<float4> vertex_data(this, "optix temp vertex data", MEM_READ_ONLY);
++      device_only_memory<OptixAabb> shared_aabb_mem(this, "optix temp aabb data", true);
++      device_only_memory<int> shared_index_mem(this, "optix temp index data", true);
++      device_only_memory<float4> shared_vertex_mem(this, "optix temp vertex data", true);
++      device_ptr aabb_device_ptr = 0;
++      device_ptr index_device_ptr = 0;
++      device_ptr vertex_device_ptr = 0;
++
++      if (bvh->shared_build) {
++        /* Multiple devices: the first sub-device computes the input on the host, the others
++         * reuse it for this build, and every device uploads it from the same arrays. */
++        const OptiXCurveBuildInput *input = nullptr;
++        unique_ptr<OptiXCurveBuildInput> local_input;
++        const auto compute_input = [&]() {
++          unique_ptr<OptiXCurveBuildInput> computed = make_unique<OptiXCurveBuildInput>();
++          computed->hair = hair;
++          computed->curve_shape = hair->curve_shape;
++          computed->num_motion_steps = num_motion_steps;
++          computed->num_segments = num_segments;
++          computed->num_vertices = num_vertices;
++          computed->aabb.resize(num_aabbs);
++          computed->index.resize(num_indices);
++          computed->vertex.resize(num_vertex_data);
++          fill_curve_build_input(hair,
++                                 attr_P,
++                                 attr_R,
++                                 num_motion_steps,
++                                 num_segments,
++                                 num_vertices,
++                                 computed->aabb.data(),
++                                 computed->index.data(),
++                                 computed->vertex.data());
++          return computed;
++        };
++        {
++          thread_scoped_lock lock(bvh->shared_build->mutex);
++          if (!bvh->shared_build->data) {
++            bvh->shared_build->data = compute_input();
++          }
++          const OptiXCurveBuildInput *shared = static_cast<const OptiXCurveBuildInput *>(
++              bvh->shared_build->data.get());
++          if (shared->hair == hair && shared->curve_shape == hair->curve_shape &&
++              shared->num_motion_steps == num_motion_steps &&
++              shared->num_segments == num_segments && shared->num_vertices == num_vertices)
++          {
++            input = shared;
++          }
++        }
++        if (!input) {
++          /* Another sub-device needed a different input (for example without motion steps):
++           * compute this device's own and leave the shared one untouched for its readers. */
++          local_input = compute_input();
++          input = local_input.get();
+         }
+-        assert(segment_index == num_segments);
+-      }
+-      const size_t extra_vertices_per_curve = (hair->curve_shape == CURVE_THICK_LINEAR) ? 1 : 3;
+ 
+-      /* Get AABBs for each motion step. */
+-      for (size_t step = 0; step < num_motion_steps; ++step) {
+-        const packed_float3 *keys = attr_P->data_at_time_step<packed_float3>(step,
+-                                                                             num_motion_steps);
+-        const float *curve_radius_step = attr_R->data_at_time_step<float>(step, num_motion_steps);
+-
+-        /* Each curve writes only its own segments and vertices; isolate the loop so a worker
+-         * waiting for it does not pick up another geometry's build task. */
+-        isolate_task([&]() {
+-          parallel_for(
+-              blocked_range<size_t>(0, num_curves, 1024), [&](const blocked_range<size_t> &r) {
+-                if (hair->curve_shape == CURVE_THICK || hair->curve_shape == CURVE_THICK_LINEAR) {
+-                  for (size_t curve_index = r.begin(); curve_index != r.end(); ++curve_index) {
+-                    const Hair::Curve curve = hair->get_curve(curve_index);
+-                    size_t segment_index = curve_segment_start[curve_index];
+-                    size_t vertex_index = step * num_vertices + segment_index +
+-                                          curve_index * extra_vertices_per_curve;
+-
+-                    if (hair->curve_shape == CURVE_THICK_LINEAR) {
+-                      const int first_key_index = curve.first_key;
+-
+-                      for (int k = 0; k < curve.num_segments(); ++k) {
+-                        if (step == 0) {
+-                          index_data[segment_index++] = vertex_index;
+-                        }
+-                        vertex_data[vertex_index++] = make_float4(
+-                            float3(keys[first_key_index + k]),
+-                            curve_radius_step[first_key_index + k]);
+-                      }
+-
+-                      const int last_key_index = first_key_index + curve.num_keys - 1;
+-                      vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
+-                                                                curve_radius_step[last_key_index]);
+-                    }
+-                    else {
+-                      const int first_key_index = curve.first_key;
+-                      vertex_data[vertex_index++] = make_float4(
+-                          float3(keys[first_key_index]), curve_radius_step[first_key_index]);
+-
+-                      for (int k = 0; k < curve.num_segments(); ++k) {
+-                        if (step == 0) {
+-                          index_data[segment_index++] = vertex_index - 1;
+-                        }
+-                        vertex_data[vertex_index++] = make_float4(
+-                            float3(keys[first_key_index + k]),
+-                            curve_radius_step[first_key_index + k]);
+-                      }
+-
+-                      const int last_key_index = first_key_index + curve.num_keys - 1;
+-                      vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
+-                                                                curve_radius_step[last_key_index]);
+-                      vertex_data[vertex_index++] = make_float4(float3(keys[last_key_index]),
+-                                                                curve_radius_step[last_key_index]);
+-                    }
+-                  }
+-                }
+-                else {
+-                  for (size_t curve_index = r.begin(); curve_index != r.end(); ++curve_index) {
+-                    const Hair::Curve curve = hair->get_curve(curve_index);
+-                    size_t i = curve_segment_start[curve_index];
+-
+-                    for (int segment = 0; segment < curve.num_segments(); ++segment, ++i) {
+-                      BoundBox bounds = BoundBox::empty;
+-                      curve.bounds_grow(segment, keys, curve_radius_step, bounds);
+-
+-                      const size_t index = step * num_segments + i;
+-                      aabb_data[index].minX = bounds.min.x;
+-                      aabb_data[index].minY = bounds.min.y;
+-                      aabb_data[index].minZ = bounds.min.z;
+-                      aabb_data[index].maxX = bounds.max.x;
+-                      aabb_data[index].maxY = bounds.max.y;
+-                      aabb_data[index].maxZ = bounds.max.z;
+-                    }
+-                  }
+-                }
+-              });
+-        });
++        const CUDAContextScope scope(this);
++        const auto upload = [&](auto &mem, const auto &values) -> device_ptr {
++          if (values.size() == 0) {
++            return 0;
++          }
++          mem.alloc_to_device(values.size());
++          if (!mem.device_pointer) {
++            return 0;
++          }
++          cuda_assert(cuMemcpyHtoD(
++              (CUdeviceptr)mem.device_pointer, values.data(), values.size() * sizeof(values[0])));
++          return mem.device_pointer;
++        };
++        aabb_device_ptr = upload(shared_aabb_mem, input->aabb);
++        index_device_ptr = upload(shared_index_mem, input->index);
++        vertex_device_ptr = upload(shared_vertex_mem, input->vertex);
++      }
++      else {
++        aabb_data.alloc(num_aabbs);
++        index_data.alloc(num_indices);
++        vertex_data.alloc(num_vertex_data);
++        fill_curve_build_input(hair,
++                               attr_P,
++                               attr_R,
++                               num_motion_steps,
++                               num_segments,
++                               num_vertices,
++                               aabb_data.data(),
++                               index_data.data(),
++                               vertex_data.data());
++
++        /* Upload AABB data to GPU. */
++        aabb_data.copy_to_device();
++        index_data.copy_to_device();
++        vertex_data.copy_to_device();
++        aabb_device_ptr = aabb_data.device_pointer;
++        index_device_ptr = index_data.device_pointer;
++        vertex_device_ptr = vertex_data.device_pointer;
+       }
+-
+-      /* Upload AABB data to GPU. */
+-      aabb_data.copy_to_device();
+-      index_data.copy_to_device();
+-      vertex_data.copy_to_device();
+ 
+       vector<device_ptr> aabb_ptrs;
+       aabb_ptrs.reserve(num_motion_steps);
+@@ -1637,9 +1751,8 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+       width_ptrs.reserve(num_motion_steps);
+       vertex_ptrs.reserve(num_motion_steps);
+       for (size_t step = 0; step < num_motion_steps; ++step) {
+-        aabb_ptrs.push_back(aabb_data.device_pointer + step * num_segments * sizeof(OptixAabb));
+-        const device_ptr base_ptr = vertex_data.device_pointer +
+-                                    step * num_vertices * sizeof(float4);
++        aabb_ptrs.push_back(aabb_device_ptr + step * num_segments * sizeof(OptixAabb));
++        const device_ptr base_ptr = vertex_device_ptr + step * num_vertices * sizeof(float4);
+         width_ptrs.push_back(base_ptr + 3 * sizeof(float)); /* Offset by vertex size. */
+         vertex_ptrs.push_back(base_ptr);
+       }
+@@ -1661,7 +1774,7 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+         build_input.curveArray.vertexStrideInBytes = sizeof(float4);
+         build_input.curveArray.widthBuffers = (CUdeviceptr *)width_ptrs.data();
+         build_input.curveArray.widthStrideInBytes = sizeof(float4);
+-        build_input.curveArray.indexBuffer = (CUdeviceptr)index_data.device_pointer;
++        build_input.curveArray.indexBuffer = (CUdeviceptr)index_device_ptr;
+         build_input.curveArray.indexStrideInBytes = sizeof(int);
+         build_input.curveArray.flag = build_flags;
+         build_input.curveArray.primitiveIndexOffset = hair->curve_segment_offset;

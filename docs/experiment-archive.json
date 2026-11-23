@@ -1,0 +1,709 @@
+{
+  "schema_version": 1,
+  "recovery_branch": "experiments/archived-20261109",
+  "original_tree": "73600da",
+  "archive_tip": "8e75454",
+  "scope": "Exact removed file paths and bytes. The branch and commits refer to the private development archive and are absent from public clones. Active build, tmp, artifacts and user data were not moved.",
+  "files": [
+    {
+      "path": "docs/bdpt-prototype.md",
+      "sha256": "944afea5192b1d18b33c381cb137cc26059c677f00dbce334201e59619e1ada6",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/bokeh-rls-diagnosis-2026-10-29.md",
+      "sha256": "f1ce712baef8458736cd55a385bc1740b1e5225aa05199c9ad5d174d6e9466c6",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/frozen-path-guiding-investigation-2026-10-29.md",
+      "sha256": "7c272f60a79a3e94c264694daa19e814314726bfd7553d18324275f31bb795a7",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/native-path-recorder-2026-10-29.md",
+      "sha256": "df84e2fa0df6bcb4882624a57644fc9c9c5eb212d93c98f8be41015a8f4e638b",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/neural-guiding-convergence-2026-10-29.md",
+      "sha256": "30b1d4b0b2275c582f9645d2629294b26c4896742905899826cb9c686535f87a",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/neural-guiding-pilot-2026-10-29.md",
+      "sha256": "7be58d7dc8116b682096caee1e28abfd57a5e5ff79859815948f7149bc1505df",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/neural-guiding-pretraining-2026-10-29.md",
+      "sha256": "3c4642dab6af138cd4e70edaf7d55bbf940b2aaee50910e8a8585dad941e692f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/render-speed-algorithm-feasibility-2026-10-29.md",
+      "sha256": "4d80d5c830d130281e8284b379ad03656e2ce208b354100cc395cd046531209a",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/render-speed-audit-response-2026-10-29.md",
+      "sha256": "b1e7ab9ab5883225e41fd86ceef7a0495cb75d512d625f5f1ec4c16df457f6f0",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/render-speed-cpu-feasibility-2026-10-29.md",
+      "sha256": "7e221bd53c452ea86c3a2af7fcb8132c1c4c30150d4885323dafb018258dee97",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/render-speed-exploration-plan-2026-10-29.md",
+      "sha256": "efedc9f03c1d2d97afb2ecdb7d917c1c3630a4de197a525eebd036a4f28b04c6",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/selective-fresnel-depth-2026-10-29.md",
+      "sha256": "6581be3221df7eab9628ad5f36235f4646ae6e42d383455dfd469889c988c9a6",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "docs/selective-fresnel-splitting-2026-10-29.md",
+      "sha256": "f32b631353331e083e78eb279b70b09e1ebc42912700fe86ba62e02b2973930a",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "Measure world volume.cmd",
+      "sha256": "106eabb577894a5ae86cb9bb215e3f767904fb69280b387e8158759eaf88c029",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/build-bdpt-prototype.ps1",
+      "sha256": "ae6ae32581f93b3f50e0eef1d7a63ca8c1b11181c90345a6adcc7857cd14d842",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/build-fresnel-split.ps1",
+      "sha256": "2061f5298acad3e0e6876d0dff4e7b2d333e761879b018a873be16df02507556",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/launch-bdpt-test.ps1",
+      "sha256": "1dcea0c206ca4738f2b9b0244462b46ce79ba91d8561359d6202a7e98732b92d",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/launch-fresnel-split-test.ps1",
+      "sha256": "f85249afd4e1cfc910e47c417bf885595041a6ea32facd73a5797e6dfc7d4649",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/open-bdpt-test.py",
+      "sha256": "7b26e0befb08044120a7d174a86b880c4d0cec23a8139ceee5fbd8645d3dc782",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-bdpt-map-batch.py",
+      "sha256": "34673ff67a9b7a7d74d41454184db8d726d0a3f931c990ea54b4266b2687d676",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-bdpt-prototype.py",
+      "sha256": "a18d6f92e3f772d345100c3fa539a4e850c6f88925b94a059c8ba671d282e899",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-bdpt-pupil-phase.py",
+      "sha256": "69be9bbb09b6a5cdd90c0c2201714008a4bb23820999925dc4f372631975ac9b",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-bdpt-pupil.py",
+      "sha256": "f5d07238bf1837f68d085716a6933ff817ae94f36c404e86e86b2b7e6cd9b83d",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-bdpt-queue-params.py",
+      "sha256": "3c8b99e9f7bcd4b06dd7c82660c3a2e4bae64ef1ff1b28029a98daa105b24610",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-bdpt-tail-diagnostics.py",
+      "sha256": "840821c1c9da7bb87c9c978d5a06f8ba149629f307642b5274db20db59cc2f93",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-bdpt-vm.py",
+      "sha256": "1f15044fc013d5f22179cbc253d5e6fe4864cd386b755a9ce7cad543d4dd39b4",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-fresnel-split.py",
+      "sha256": "0740cd027266527cd194d2852857316acea1b4063c16ee0bef5006d695744dec",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-pt-diagnostics.py",
+      "sha256": "01f19d9d16cb868c98b4e7f6b47e59d18e40f4993d4108eb8b026653cf7c67ea",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-pt-glint.py",
+      "sha256": "d337bd5e2233fa51168f27cf97d6ed8ec749eb6808064e1bcad8705f819dfa3a",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-pt-lobe.py",
+      "sha256": "3222bf847be5d3d9e598e30b83f4651de53f48717d9df130fc6d012ce6392e0f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-pt-ris-nee.py",
+      "sha256": "dbfc61a4d01764fc3d2ebc79035b50ddf6efa7bbdc1b83adec1ca403364fdd90",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/prepare-pt-spread.py",
+      "sha256": "69c10aa376f0630e59895708e83d307b6360f39ab044cfbebdb79fec08fbf7e5",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "scripts/record-attribute-buffer-patch.py",
+      "sha256": "11805f33b8c542aa1e6af44af58a90585ceb51aa973bd90e1b28a9f389536da1",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-attribute-layout-patch.py",
+      "sha256": "1453d585475cbd0e98d45a005b3839b2bd24d6455e097174f677ced3d9dbbf02",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-camera-dof-motion-patch.py",
+      "sha256": "bd5949a22ce82a8abc9b3eb9623cb566353d7055b1988f2ecc3aa0649d5bb062",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-camera-intrinsic-patch.py",
+      "sha256": "cf56eedc052179435c752f488114d331b2b8ef33d5541009bafb321b7a011988",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-camera-shutter-curve-patch.py",
+      "sha256": "9d0c20250b7a1381ba4b1ce58b7f520312f1cc2f9efa6fa112e34ba6aa034f59",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-cancel-diagnostics-patch.py",
+      "sha256": "96ccc068a800cc35def57a411900a625a3f166baf5efa87d2cbf3bcbbda88a22",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-color-epochs-patch.py",
+      "sha256": "e7bbd30a9323e84af98da0d5b512f77e22f8d937b108a0b6291e28f28006fbd3",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-constant-attributes-patch.py",
+      "sha256": "d645615ff0cd63ba95c6e655623200928a7a52341698d28896b134faa2a91e4e",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-displacement-position-patch.py",
+      "sha256": "08b7e8c99ccc3b5098cafcc0e9f761ebbb89dbf528c74c3dd6bb7c18d0f03638",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-flat-light-tree-patch.py",
+      "sha256": "b63dd81b56e735059aa3e7018a00d9609c34a9700f3c248d32c35ff112685ebc",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-instance-motion-patch.py",
+      "sha256": "e983725479262c278f447dcc93b6dd5c864d7b4695890b31a8b7e4f37381c5af",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-latched-cancel-patch.py",
+      "sha256": "dc117b7f4530e127aaaebbd16372f9cc2b6bd33478d9a0d5827c060d959c5a39",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-cache-patch.py",
+      "sha256": "da054dfc50589b98e89e79bf79f904c87bc3f1478c9c1730aa73b96327ec60e4",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-cold-build-patch.py",
+      "sha256": "b8943e9f9a49932ddb98bb6b0e7b63d062fba3c806beb8341d0c7201eb36c3fe",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-compaction-patch.py",
+      "sha256": "c9970e065b4980a13be4a1a66ce3fcd7bdb0fa8036ad8eb9eecdc23453fdcf80",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-emitter-view-patch.py",
+      "sha256": "b9bf0f91b4711e029ea8426d26f71577fb5fc009edb2586b821f47638f6af364",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-energy-patch.py",
+      "sha256": "a78cf7cd5e4d9362fa5710d853b6ff0c3086d738dddd331b686f7fbefc793146",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-flatten-patch.py",
+      "sha256": "aeee81b76d76da9f3a91414bfb8d07be5a172c0d0dc56e397c4b95eedd1fedc6",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-phases-patch.py",
+      "sha256": "a750826a623b577baa8dfeafb81c388fe15056c874c373b38e525f1c2057b2f2",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-range-patch.py",
+      "sha256": "5bd4c39977775f6fba98d9a85146958602764b6a6b7848c92eb67df4b1e843ba",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-reuse-patch.py",
+      "sha256": "3699f0c9e217f77f1b829f91a399e9dfda42c6cfdea955b973390c0791371cd5",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-light-tree-revision-patch.py",
+      "sha256": "7d8b436736c279a7003d8d1bde04e43974b58a8fb760cdafa6dce45b6736ebcf",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-mesh-shading-reuse-patch.py",
+      "sha256": "d3747d583929f6a0d8bc57b47deb533bb93a23fc44ebd997e92bc9ac01be17ed",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-mesh-sharing-patch.py",
+      "sha256": "75a183bbf8342832160b3f6e56212954b8eb5d248302a2a60ee66823d7f2fe37",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-nested-dielectrics-patch.py",
+      "sha256": "df4179802ebb70d46240e8907a1b544d107c8e25b7effeb5e500dc897227b2c5",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-owned-ies-patch.py",
+      "sha256": "89bed174ba724d68343f8e0d9923c76734b09f96885f7c1cb146fb1d02d93643",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-owned-ramp-patch.py",
+      "sha256": "eabd613b7e9cf967d120d3bb7c2abf9bcc34719e977b3e35343046d1f3e485e9",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-panorama-motion-patch.py",
+      "sha256": "07f2377cfd5417f2c37f64b1206f9ce7155514f8849ad5c92e8e301a20debcf2",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-panorama-projection-patch.py",
+      "sha256": "c843140ccbbd8a15af6716eade7b82a2ba39b7604838eff8c5720801f5d59ff9",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-particle-lifetime-patch.py",
+      "sha256": "bab9ed133447df515e2834e6705e26eaf96039cadc097eaf3b3544937516d252",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-persistent-scene-sync-patch.py",
+      "sha256": "690dc87217b3aa60e608158596970b301e367f8cb81d8e7c415283664294c532",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-phase-diagnostics-patch.py",
+      "sha256": "70abb2d5d28165f7446bcf5a6705de5746825564dff56886aeeea87c4c50214b",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-portable-color-patch.py",
+      "sha256": "54fd8adcede6fd1d8cd03e70fa929b1e7fb4a3c6196ff803ead24677b49af158",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-progressive-output-patch.py",
+      "sha256": "1495292626599e1e3463d284fab4e060e704285f3222aeeb45b7b0cfabd6dda0",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-resampled-light-sampling-patch.py",
+      "sha256": "1f1cce640a0c702d96b2c7ff2aa12712113b0069d43a8f01c741c3e14c9f2b8a",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-retained-light-upload-patch.py",
+      "sha256": "c0538ebd763af4ccf863efcfd4d3fa2a83b8696c8323993d587f0b2c3065d3b2",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-sampling-interruption-patch.py",
+      "sha256": "1992c4a7b1210c7144fec776a62fec4767a269b58118f4de132701b56b2e3786",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-shader-buffer-patch.py",
+      "sha256": "7bf96f5385398e5a062ab2c720e17bffc772865f32e372a315195a8f36e3001c",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-shader-curve-patch.py",
+      "sha256": "6a7a241169c1026c1228e8a2085318c6682ed0c5bf2a9437ae64df5b22947543",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-shading-preparation-patch.py",
+      "sha256": "c140858842803a50fb69a01514c5bc616e0b485c3dc456c7f1f1af01a66ad1b7",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-socket-bits-patch.py",
+      "sha256": "51c7135747a45588a624dee96658e9171482af3fb6c89b7841173fe5debae6e7",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-subdivision-color-patch.py",
+      "sha256": "1be46e0644c5eef460490536ccd32d74967737fae936f8e36b47135f99d1e1a6",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-subdivision-interruption-patch.py",
+      "sha256": "092aad8187dffef8c35cc8893f24c7eaef53db3241561319c5671a9d4824e8f3",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-subdivision-patch.py",
+      "sha256": "9801a052e32fb88a71233aea96d2c42d0256dadc2f5925271108c7de1a247dac",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-subdivision-shading-patch.py",
+      "sha256": "099bf3da1b9207879991bae1acd1c1ccf1a72e9716d9ae18935b5b7b9a75c571",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-texture-alpha-patch.py",
+      "sha256": "322caa2ac4c9c8b7fe2d113fcf9eafa564cd9f9acb040b1bd6c2febe269ca12c",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-texture-revisions-patch.py",
+      "sha256": "a9e97bc2e1b7b3fdf9a9bee1ea813673762b627ecfef66474f452f3754d0b8eb",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "scripts/record-uniform-shutter-cdf-patch.py",
+      "sha256": "42493df6372a6e9e5089b34c29346ab22fdca7af7e0be3cabffd5e18578010c1",
+      "disposition": "historical recorder"
+    },
+    {
+      "path": "src/features/bdpt_prototype/area_emission.h",
+      "sha256": "a4ce60c9988cba1dfd429b1bb73435f921d95cd8572a331222ffab451ddcd6c4",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/connection.h",
+      "sha256": "15fa550d7585de4d0bae23c6d63e61cb13abea87c7d9482dfd7f78b44b15ddf2",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/delta_mass.h",
+      "sha256": "a9c89b37d263d41c9e67dfe67870390b45422932c6ec03df24dae2dbf076c1a1",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/emitter.h",
+      "sha256": "0a11d0846abb6de63dd5bf669b07d473491b3772377d91a65d215751cd1b4f6c",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/final_radiance.h",
+      "sha256": "efbab1d9b6f45772573f3bd5beb4b285a516acc173c1f6fec0948b8da0b754d6",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/light_paths.h",
+      "sha256": "ab0abefa2235116a66876821028eda267c9085adeec746aad14b754b3f7571de",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/map_batch_device.h",
+      "sha256": "8af696195fbf63a8863cec7156a7b7cb4b579520800ed9d640ef9389658c2876",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/map_batch_host.cpp.inc",
+      "sha256": "8ffd7905568a579400db9a43a7fbf9cdcbc50ad519ac3fe054605db9d701d853",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/map_batch_types.h",
+      "sha256": "b0ed8e5ea8dcc8325387b84036be5cfe6fc74ddc22820c71a17110ba40dad7a6",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/merging.h",
+      "sha256": "58d7167b32db426f2b47edd08020224c5557e4092c790178804ef56fb1949b80",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/merging_film.h",
+      "sha256": "11899ff93c881d44302bf5f32c9436503d25c49ca75b9cda886269d67fe636dd",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/merging_grid.h",
+      "sha256": "e3f765ab6d39b4ead235db68e09f3ecb9898d82ffcdec8066ac7c2597f52c221",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/merging_grid_kernel.h",
+      "sha256": "91056eae22a7318a1ff051b253ddd0fe099c7f3409d97bca6c4c4468038e24d7",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/merging_math.h",
+      "sha256": "c4096b27c2721e4ef9fd3db7b6d10afa713269d648c2e36d1a12f5abadb63a81",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/merging_native.h",
+      "sha256": "b8af7e85e89d8614bc8c6164db554d4e81ae997382985b596090692f12e0b7d5",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/mis.h",
+      "sha256": "10894a34e2e6daafc1a589a7d26c2546904929a9f55a5aa5236cdfc93cd17d60",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/point_adjoint.h",
+      "sha256": "db2c8742b162cdeeafd4e4a54363c25f98563ab1ea10b97693fc14d0e9f55216",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/point_support.cpp.inc",
+      "sha256": "caf6fc3dfc89954e82b2595047262d3c647c6b4050fbd6e98e783ae822005c1c",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/provenance.json",
+      "sha256": "17fb4ddb8f1df0f6ebb5ab2d9903a6ae9ab7a3af057b58f19c05ce419a578d38",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil.h",
+      "sha256": "05f3646fdc9d47bcac24113eed70f6a69b034c8fb7faa4c1f4f562f611d88025",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil_camera_metadata.h",
+      "sha256": "97c39b962264a1e3a4fcc26e906ecf4c402c5235ca3e28d4f1699447852746dd",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil_interception.h",
+      "sha256": "eb37d4af45280f69413743492504f97eeb30d0a6a11168ca4aac20c96d9b43cc",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil_native.h",
+      "sha256": "1355cfd7c01100aa192b2d79f96ccff6232feecb5085377bc2c2f1adfb4e3f64",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil_partition.h",
+      "sha256": "d29f8f44c4885cd73378cf0e472fe59e0056d09d127f03824dd2bd3321db390d",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil_phase_mis.h",
+      "sha256": "d4fe6cf5a0a173eddf4d9e8a91e8e69bd6a205570ec9f41d9d8bfc522dcb1f92",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil_record.h",
+      "sha256": "6d7ccc08aff1c1e7d54349ed6be758f5f8b5912312d09dfbe26ae0e67b5ecc94",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/pupil_work_gpu.cpp.inc",
+      "sha256": "b9792011359d56d0c509dea411fd74fc51ee239170c6f98d9794358ff5dacf14",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/queue_launch_params.h",
+      "sha256": "0fe723039fc23e0136cb2c53a66ae1c85e0ae6fb2cde57186bb5742340813d8f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/sensor.h",
+      "sha256": "47a180ed1967923a723ea3747041bcccd55d40edc1730c9cdee49747c04e6abe",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/sensor_camera.h",
+      "sha256": "9c647c44bc7f771fa531c07c69d56bb7c296c4a21c39df2f92c32bcb07d20379",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/sss_prefix.h",
+      "sha256": "107ab9989c31a5eff37a0513cac091558cc5439f7c0f629fa992128d84506a8e",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/tail_diagnostics.h",
+      "sha256": "125ffe77f57f031b7b5bc307a3a716a64fb2286034395a784d6200c35f236dd3",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/tail_host.cpp.inc",
+      "sha256": "8cc68c5c479f3fbdb00b768e6e213e0f95a11a93084e4cca615cf88eadd14f1a",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/tail_record.h",
+      "sha256": "915dd2a6c21e38fceb18702734b084cff75559328d0fb12a3435e3133fa75678",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/transport.h",
+      "sha256": "cbc0690583c332b08819a716291e165f6fef07aae2531c2a921ace4edd930eb0",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/vcm_mis.h",
+      "sha256": "94b7ae12b92eecf409a30078e6344ae08d9659116e04c43495f064f2a3b83b7b",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/vcm_native_math.h",
+      "sha256": "ea0ed67bf82c362e09829110e005a8ed1f10c11f4e209dbc2b2032d3dcba1001",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/vm_domain.h",
+      "sha256": "ce915c3f81a7efa79fa7bd79e9e529ed2303edb7b359b2f6d0359a4f9fb4a4ea",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/vm_domains.h",
+      "sha256": "17c05949bbd885dc7c4405c2df24bd14a83e47670e1e89b0f04ce1ae7d6f71f6",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/volume_math.h",
+      "sha256": "b3415271e844f35980554f7091b75b0c05ab0d19e344a493702a8fa7852c83f1",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/bdpt_prototype/work_gpu.cpp.inc",
+      "sha256": "73950e9eb305d356afd99767a282d50233b88872d8103e4b4128809a1ba2910c",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/fresnel_split/primary_split.h",
+      "sha256": "f940345a1a8e7f46bbc265c3b8d606fd2e11e52a4aeb6a47946c3e7f28b7699f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/fresnel_split/README.md",
+      "sha256": "2e868ba8eb5404d26c39e2995e8395e5547b04a13f6301f08e6bda333ab2df9f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/camera_fingerprint.h",
+      "sha256": "418d818b42a4b7bd6916835a82b5abc58cb05eee53930f5a4cd31691b80493df",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/camera_host.cpp.inc",
+      "sha256": "d256cb0cc71bee1378f963c8ae1b83c209c140e2581a172abbb27872205224c5",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/camera_pick.h",
+      "sha256": "27c3a02d53a2a72cc6042ea1aac9f02029a02fe15ce195918bb87ef8b70f9165",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/camera_replicate.h",
+      "sha256": "b14b2cb9d28409bc776b09fa5cbe053b24ca1b05d581fad2d0885af687654120",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/classification.h",
+      "sha256": "f34753cf4a3464c61d8f055f9c975dd66483d48f21f75e3dcf8a0f978573d90f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/conditional_nee.h",
+      "sha256": "c91c3870809e6b76e6bb6483acf7f873f9a785b6b407243d59c4a925ad0ec86d",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/conditional_schema.md",
+      "sha256": "f5fece3d83aa4e569a31456b45f8abcb4b65d17b782d7c5586b9c6c92b9e4baa",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/diagnostics.h",
+      "sha256": "7b85fa66b425ca47090ed134789266a50f5dbb133da0e43732d7b0ccb2313940",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/host.cpp.inc",
+      "sha256": "a34e0db34dd3baceba3d10315874c27d55ca0bee2c5eb3fb962c9fbe305830cf",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_diagnostics/nee_record.h",
+      "sha256": "7819b8bbb8e328be9d9fa6f7e00f7a17bb863641943f962f2ce91495f797ee60",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_lobe/lobe_floor.h",
+      "sha256": "83d1cb5c60fded1395cc57f326a5bd7eba079b8400e6e4d0151bfa7d87327e2f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_lobe/lobe_host.cpp.inc",
+      "sha256": "36e53c6ddf397219c56db4d2f377a6f378a84e12f8376a651575c011136e660f",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "src/features/pt_spread/spread_sampling.inc.h",
+      "sha256": "23c19d8be21aa00f197c0aba3029f6bf25a662bc3552021637193ff44d445657",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "Test experimental sampling.cmd",
+      "sha256": "f0133776b856be0d980e8da693d85798eabdb405fd39cf01fccbc4aacedc001d",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "Test glossy lobe floor.cmd",
+      "sha256": "50b1a6d3a6d0917fa1f12b7f3b488d23a3780e346c85dfa5fb6ab808e7f295d0",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "Test NVIDIA BDPT.cmd",
+      "sha256": "5862dd7b7a12ad6ed1a9281d0cb65fd6407a805939f1f2a1c132908efe3ff6a7",
+      "disposition": "experiment archive"
+    },
+    {
+      "path": "Test ordinary Cycles comparison.cmd",
+      "sha256": "826b2a121b498101eb5d41d4ea4ae2f27834bdd354046cb97ea69b9d852b6e9a",
+      "disposition": "experiment archive"
+    }
+  ]
+}

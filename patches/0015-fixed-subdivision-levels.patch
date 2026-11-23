@@ -1,0 +1,71 @@
+From 718401de2ee4d9a48b20e7ee7524dadff3288d54 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:31 +0100
+Subject: [PATCH] fixed subdivision levels
+
+Locked-Patch: patches/0015-fixed-subdivision-levels.patch
+Locked-Patch-SHA256: 7be3c79392936825ebe40ce1e19148d7077754afac0d7a3baf496c82cb625714
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_subdivision_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 992d92066f8cb004dc597ebf300e424181c4cc76
+Previous-Patch: patches/0015-fixed-subdivision-levels.patch
+Previous-Patch-SHA256: 7be3c79392936825ebe40ce1e19148d7077754afac0d7a3baf496c82cb625714
+Rationale: Fixed subdivision uses uniform parameter-space levels independent of camera distance; it is an authored topology policy added for embedding.
+Contract: fixed subdivision levels
+Tests: tests/houdini_subdivision_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index 71157644e7c96ea97d40e04283a3f276267c1075..3f02b43333843590ba3b0a5c0703c395f1cec336 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -172,6 +172,7 @@ class Mesh : public Geometry {
+    * Allows render-vertex seam preparation without splitting the control mesh. */
+   std::function<void(Mesh &)> subdivision_post_tessellate;
+   uint64_t subdivision_triangle_limit = 0; /* Zero keeps upstream behavior. */
++  bool subdivision_fixed = false; /* Optional integration uniform-level sampling. */
+   void resize_subdivision_vertices(const int count)
+   {
+     const int base_count = get_num_subd_base_verts();
+diff --git a/src/scene/mesh_subdivision.cpp b/src/scene/mesh_subdivision.cpp
+index 730c10e7f76ebf61f8bfab12c50d92daff874a20..02fc5c6d983c73215794f6145de8e1fc05869660 100644
+--- a/src/scene/mesh_subdivision.cpp
++++ b/src/scene/mesh_subdivision.cpp
+@@ -17,6 +17,7 @@ CCL_NAMESPACE_BEGIN
+ 
+ void Mesh::tessellate(SubdParams &params)
+ {
++  params.fixed = subdivision_fixed;
+   const int num_faces = get_num_subd_faces();
+ 
+   /* If there are no faces there is nothing to subdivide, and the required
+diff --git a/src/subd/dice.h b/src/subd/dice.h
+index ca18b173beec9fb51f508e17051bf4b245ec5efe..0911a3641e087466059b3a918148f2e604007a7e 100644
+--- a/src/subd/dice.h
++++ b/src/subd/dice.h
+@@ -35,6 +35,7 @@ struct SubdParams {
+   Transform objecttoworld = transform_identity();
+   Progress *progress = nullptr;
+   uint64_t triangle_limit = 0;
++  bool fixed = false;
+ 
+   SubdParams(Mesh *mesh_, bool ptex_ = false) : mesh(mesh_), ptex(ptex_) {}
+ };
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index 0a5bfd3c477af68fa7f915df374a1eb173861991..0cb4cbb8f8d692914c9c451eb766d833743e737a 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -110,6 +110,12 @@ std::pair<int, float> DiagSplit::T(const Patch *patch,
+                                    const int depth,
+                                    const bool recursive_resolve)
+ {
++  if (params.fixed) {
++    /* Equal parameter-space spacing, independent of camera and edge length.
++     * N-gon first-level splits are accounted for by limit_edge_factor. */
++    return std::make_pair(limit_edge_factor(patch, uv_start, uv_end, 1 << params.max_level),
++                          len(to_world(patch, uv_end) - to_world(patch, uv_start)));
++  }
+   /* May not be necessary, but better to be safe. */
+   if (uv_end.x < uv_start.x || uv_end.y < uv_start.y) {
+     swap(uv_start, uv_end);

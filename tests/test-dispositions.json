@@ -1,0 +1,1885 @@
+{
+  "schema_version": 1,
+  "policy": "TESTING.md",
+  "scope": "What each test script that the runner tables do not list is for and how it is run: category, purpose, reason, and either an automation recipe or what a person must do. Started as a review of 172 such scripts. A disposition is not execution evidence.",
+  "entries": {
+    "native_window_capture.py": {
+      "category": "support",
+      "purpose": "Read this Houdini process's uniquely named native floating panel from composited desktop pixels.",
+      "reason": "Imported by native Render View presentation acceptance and the material-assignment GUI lifecycle; not a standalone test."
+    },
+    "archive_test_manifest_test.ps1": {
+      "category": "automated",
+      "purpose": "# Pure manifest publication races; no Houdini, renderer or native job launch.",
+      "reason": "PowerShell contract with owned payloads and mocked native launches via test_powershell_contracts.py.",
+      "automation": {
+        "executor": "powershell"
+      }
+    },
+    "background_stop_profile_hooks.py": {
+      "category": "support",
+      "purpose": "Embedded in a test HIP's hou.session; records calls without changing their order.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "benchmark_grid_comparison.py": {
+      "category": "benchmark",
+      "purpose": "Opt-in, sequential matched-engine comparison; invoke through run-hython.ps1. The grid is independently authored in C++ and Houdini. Planar equivalence does not imply identical triangulation, BVH layout or pure path-tracing timings.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "benchmark_memory.py": {
+      "category": "support",
+      "purpose": "Opt-in Windows process and NVML sampling; no renderer state changes. Layouts follow the installed Windows SDK psapi.h and CUDA 12.8 nvml.h. Device-wide framebuffer usage is deliberately not attributed to a process.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "benchmark_native_latency.py": {
+      "category": "benchmark",
+      "purpose": "Opt-in native latency benchmark; run exclusively, outside the smoke suite. Measures publication of a full-resolution image, not host UI presentation. Engine phase instrumentation and the matched harness comparison are separate.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "benchmark_packed_capture.py": {
+      "category": "benchmark",
+      "purpose": "Diagnostic phase profile; excludes a render session, GPU work and GUI paint.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "benchmark_packed_deformation_capture.py": {
+      "category": "benchmark",
+      "purpose": "Phase profile for packed prototype deformation; excludes rendering, device work and paint.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "benchmark_packed_deformation_heavy_capture.py": {
+      "category": "benchmark",
+      "purpose": "Capture phases with a 1,036,800-triangle shared native prototype.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "benchmark_packed_velocity_capture.py": {
+      "category": "benchmark",
+      "purpose": "Phase profile for packed velocity; excludes rendering, device work and paint.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "blend_instances_reference.py": {
+      "category": "support",
+      "purpose": "Create an animated .blend fixture and render its native Blender Cycles references.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "blend_material_export_smoke.py": {
+      "category": "manual",
+      "purpose": "Run with Blender --background --python; independent owned material fixture.",
+      "reason": "Blender bpy producer for the owned material fixture; execute before Houdini material import.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "blend_mesh_ingress_contract.cpp": {
+      "category": "manual",
+      "purpose": "// Isolated native ingress contract. Link with blend_mesh.cpp and CPython; it",
+      "reason": "Standalone compiler/configuration regression; explicit MSVC/CMake/Python SDK or historical oracle context required. Retained source is recoverable and runnable in that context.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "blend_worker_progressive_smoke.py": {
+      "category": "manual",
+      "purpose": "Real Blender progressive host consume, budget and error isolation contract.",
+      "reason": "Requires explicit Blender executable and generated asset bundle; producer/transport workflow first.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "blend_worker_smoke.py": {
+      "category": "manual",
+      "purpose": "Host Python integration check for persistent Blender binary transport. python tests/blend_worker_smoke.py --blender <blender.exe> --output <directory>",
+      "reason": "Requires --blender and --output; select Blender installation and prepare transport fixture.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "blender_asset_export_smoke.py": {
+      "category": "manual",
+      "purpose": "Run inside headless Blender: evaluated topology, nested offsets, time and bundle fields. blender --background --factory-startup --python-exit-code 1 --python tests/blender_asset_export_smoke.py -- --output <directory>",
+      "reason": "Run under Blender bpy with --out; not a hython program.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "blender_batch_export_smoke.py": {
+      "category": "manual",
+      "purpose": "Run in Blender: batched RENDER evaluation, selectors and failure cleanup.",
+      "reason": "Run under Blender bpy with --out; not a hython program.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "blender_mesh_shading_reference.py": {
+      "category": "support",
+      "purpose": "Fresh Blender references for flat/smooth nonplanar polygon import. blender -b --factory-startup --python-exit-code 1 --python tests/blender_mesh_shading_reference.py -- --out <directory>",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "blender_subdivision_export_smoke.py": {
+      "category": "manual",
+      "purpose": "Run in Blender: native control topology and conservative evaluated fallbacks.",
+      "reason": "Run under Blender bpy; produces subdivision bundles for Houdini reference comparison.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "camera_coordinate_displacement_viewer_workflow.py": {
+      "category": "gui",
+      "purpose": "One viewer, camera/projection edits and displacement disconnect/repair. The numeric oracle is the height of independent pre-displaced triangles, not another invocation of the displacement shader. HOM edits are event-loop edits; this is not physical mouse or input-latency certification.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "compare_exr_bands_reports.py": {
+      "category": "support",
+      "purpose": "Compare independently verified decoded EXR hashes and encode measurements.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "core_gpu_concurrency_smoke.py": {
+      "category": "automated",
+      "purpose": "Production GPU queue budget calculation, explicit overrides and isolated device policies; no GPU allocation.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "script-declared"
+        ],
+        "arguments": []
+      }
+    },
+    "dlss_cmake_probe.cmake": {
+      "category": "manual",
+      "purpose": "get_filename_component(CH_TEST_ROOT \"${CMAKE_CURRENT_LIST_DIR}/..\" ABSOLUTE)",
+      "reason": "Standalone compiler/configuration regression; explicit MSVC/CMake/Python SDK or historical oracle context required. Retained source is recoverable and runnable in that context.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "dlss_menu_test.py": {
+      "category": "automated",
+      "purpose": "The parameter menu consumes cached worker capabilities and never calls native device probes.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "embree_cmake_probe.cmake": {
+      "category": "manual",
+      "purpose": "cmake_minimum_required(VERSION 3.24)",
+      "reason": "Standalone compiler/configuration regression; explicit MSVC/CMake/Python SDK or historical oracle context required. Retained source is recoverable and runnable in that context.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "embree_startup_imports.py": {
+      "category": "manual",
+      "purpose": "Offline Windows binary regression. Does not import hou or load a target DLL.",
+      "reason": "Offline PE inspection needs the selected binary and dependency closure.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "exchange_watchdog_test.py": {
+      "category": "automated",
+      "purpose": "Completed/rearmed exchanges cannot fire stale timeouts; hung workers stop. Long operations extend only while the worker is observably active, never beyond their ceiling, and a stalled long operation is still killed.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "gaussian_splats_math_test.cpp": {
+      "category": "manual",
+      "purpose": "// Standalone: cl /std:c++20 /EHsc /I include tests/gaussian_splats_math_test.cpp",
+      "reason": "Standalone compiler/configuration regression; explicit MSVC/CMake/Python SDK or historical oracle context required. Retained source is recoverable and runnable in that context.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "gpu_color_reference.py": {
+      "category": "support",
+      "purpose": "Feed independently constructed OCIO shaders into the installed GL executor.",
+      "reason": "Imported GpuColorReference class used by the color interoperability workflow; constructs independent OCIO shaders in the owning OpenGL context, with no standalone acceptance entry point."
+    },
+    "hash_displacement_viewer_workflow.py": {
+      "category": "gui",
+      "purpose": "Actual Houdini attribute/socket edits and repairs with one live viewer. Queued HOM camera/object navigation checks continued delivery and retained geometry. Heartbeats are observations, not physical input-to-paint budgets.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_adaptive_target_smoke.py": {
+      "category": "automated",
+      "purpose": "Finite IPR budgets honor the same convergence target as final rendering.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_artist_blender_frame_gui_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Measure artist-scene frame changes through a Houdini viewport redraw fence.",
+      "reason": "Uses the local Blender_Instancing HIP and a designated display. The redraw timings are workstation measurements.",
+      "requires_human": "Run on the intended display and review the per-frame timings for the selected control and viewport modes."
+    },
+    "houdini_artist_blender_hulls_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Inspect Blender reference hulls in the artist scene across viewport edits.",
+      "reason": "Requires the local Blender_Instancing HIP, a visible Houdini viewport and a visual verdict.",
+      "requires_human": "Review the captured stages and supply the adjacent verdict JSON before the GUI run completes."
+    },
+    "houdini_artist_camera_profile.py": {
+      "category": "benchmark",
+      "purpose": "Profile the reported artist scene in a private GUI process; never save it.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_artist_idle_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Observe automatic capture causes in an unchanged artist scene; never save it.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_background_pin_smoke.py": {
+      "category": "manual",
+      "purpose": "Real child pin with a changed registration and ordinary prefs packages/HDAs.",
+      "reason": "Requires explicit isolated package registration and replacement host.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_background_stop_profile.py": {
+      "category": "benchmark",
+      "purpose": "Profile the unchanged background final lifecycle, including the actual engine cancel boundary.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_background_upgrade_smoke.py": {
+      "category": "manual",
+      "purpose": "Real same-Houdini release activation during accumulating Image Iris output. Run with ordinary Python through the native verification queue. All installations, preferences, scenes, child logs and evidence belong to a new artifact directory. The two archives must be different, valid payloads for the exact same host SDK.",
+      "reason": "Requires two release archives and private install/registration roots; dedicated activation qualification.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_blend_dependency_reload_smoke.py": {
+      "category": "manual",
+      "purpose": "Fresh-process saved-HIP reload, external texture edit and same-session repair. Run through the current runtime's run-hython.ps1. During development the explicit dev_overlay.py launcher can select source Python modules over a staged binary. The input HIP/assets are copied before loading; artist/source files are untouched.",
+      "reason": "Requires generated Blender reference source directory and isolated reload phases.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_blend_frame_cache_smoke.py": {
+      "category": "manual",
+      "purpose": "Profile cold, reassigned and partially new frame sets through the normal scene capture.",
+      "reason": "Requires authored animated Blender source/object selector; cold-cache measurements need exclusive execution.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_blend_material_import_smoke.py": {
+      "category": "manual",
+      "purpose": "Author actual native VOPs from the independent Blender export fixture.",
+      "reason": "Consumes blend_material_export_smoke Blender fixture; run producer in Blender first.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_blend_memory_smoke.py": {
+      "category": "manual",
+      "purpose": "Render an over-budget live Blender asset and verify its visible diagnostic. Run with CYCLES_HOUDINI_BLEND_CACHE_MB=1 and a dense Blender mesh named Dense. Also renders an ordinary Houdini box through the same scene path first.",
+      "reason": "Requires dense Blender asset named Dense and cache-budget environment to exercise over-budget rejection.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_blend_subdivision_smoke.py": {
+      "category": "manual",
+      "purpose": "Render native imported controls against Blender-evaluated geometry bundles.",
+      "reason": "Requires fresh Blender-evaluated --bundle-root and source override.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_blender53_gsplats_grazing_smoke.py": {
+      "category": "manual",
+      "purpose": "Keep exact-grazing evidence separate from general SH rotation acceptance.",
+      "reason": "Exact-grazing numeric qualification edits/dispatches another script; separate edge-case evidence, not general acceptance.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_blender53_gsplats_smoke.py": {
+      "category": "automated",
+      "purpose": "File/Bake GSplats, independent SH camera oracle, SOP/OBJ/packed transforms and IPR edits.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_blender53_utilities_smoke.py": {
+      "category": "automated",
+      "purpose": "Native/portable integer, Boolean and typed selector rendering and HIP wiring persistence.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_blender_mesh_shading_smoke.py": {
+      "category": "manual",
+      "purpose": "Compare Blender flat/smooth warped polygon shading through Houdini worker.",
+      "reason": "Requires fresh flat/smooth Blender reference EXRs/bundles from blender_mesh_shading_reference.py.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_camera_dof_smoke.py": {
+      "category": "gui",
+      "purpose": "Native camera UI, optics, persistent worker, panel and SOHO depth of field.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_camera_feedback_trace.py": {
+      "category": "gui",
+      "purpose": "QA instrumentation around the unchanged real release response GUI fixture. Trace timings include instrumentation overhead and are not comparative results.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_camera_tools_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Native camera tools, real viewport navigation, linked controls and GUI render feedback.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_cop_idle_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "A completed op: render stays idle, while source edits and repairs still update.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_cop_refresh_scope_smoke.py": {
+      "category": "automated",
+      "purpose": "COP demand, observer scope, OBJ context and live image repair regression.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_cop_resolution_navigation_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Live COP Remap resolution edits must not turn camera moves into image cooks.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_device_layout_cache_smoke.py": {
+      "category": "automated",
+      "purpose": "Device layout reuse must not cache choices, expressions or stale HIP nodes.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "OPTIX"
+        ],
+        "arguments": []
+      }
+    },
+    "houdini_devices_ipr_smoke.py": {
+      "category": "gui",
+      "purpose": "Heavy SOP artist workflow: native device checkboxes/backend, one render view.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_diagnostic_emission_smoke.py": {
+      "category": "automated",
+      "purpose": "Diagnostic magenta stays visible to the camera without lighting the scene. 1. A recovered per-geometry binding (missing UV) uses the camera-only marker. Its triangles must not become sampled mesh-light emitters: the light tree matches a control where the same object has a plain magenta diffuse material, and so does the lamp-lit neighbouring card. 2. A missing texture feeding emission inputs is magenta to the camera, while an unlit neighbouring card stays black: with no lights and a black world, any light on the card can only be emission, not reflection. 3. Independent valid emission in the same material still lights the card; repairing the texture restores its emission everywhere.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_diagnostics_scaling_profile.py": {
+      "category": "benchmark",
+      "purpose": "Measure how source diagnostics scale through status, transport and the panel. Each case renders N separate meshes that lack UVs. The \"recovered\" material needs UVs, so every mesh carries a local diagnostic; the \"plain\" control has the same geometry and no diagnostics. After completion, steady-state polls are sampled from the worker controller, plus host status() calls and the panel's per-poll tooltip formatting. Observations only; no pass/fail budget.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_dicing_disk_smoke.py": {
+      "category": "automated",
+      "purpose": "Saved-HIP/SOHO disk renders use final dicing policy and a separate camera.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [],
+        "environment": {
+          "CH_DICING_DISK_REPORT": "{output}/report.json"
+        }
+      }
+    },
+    "houdini_dicing_ipr_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Edit dicing cameras/policy during live GPU accumulation and repair failures.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_dicing_policy_smoke.py": {
+      "category": "automated",
+      "purpose": "Object opt-in, scene multipliers, native offscreen dicing and separate cameras.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_displacement_surface_fields_smoke.py": {
+      "category": "automated",
+      "purpose": "Animated native OBJ material: shutter displacement must retain nominal surface fields.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_display_resolution_profile.py": {
+      "category": "benchmark",
+      "purpose": "Installed display conversion and GUI image assembly at 540p, 1080p and 4K. Owned calibration frames outlive renderer shutdown. Seven warm observations per case; excludes scene cooking, live rendering and compositor presentation.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_dlss_worker_smoke.py": {
+      "category": "automated",
+      "purpose": "Real DLSS worker pixels, temporal edits, finite sample budget and camera latency.",
+      "reason": "Self-contained authored headless native contract; optional verified --native pytest execution retains every original assertion.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--report",
+          "{output}/report.json"
+        ]
+      }
+    },
+    "houdini_temporal_sample_count_smoke.py": {
+      "category": "automated",
+      "purpose": "Raw Sample Count survives temporal buffer resets while frame progress stays cumulative, with ordinary fixed, adaptive and generation reset controls.",
+      "reason": "Self-contained headless native DLSS regression; opt-in verified native pytest execution retains every assertion and requests the selected OptiX device.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--report",
+          "{output}/report.json"
+        ]
+      }
+    },
+    "houdini_environment_orientation_smoke.py": {
+      "category": "automated",
+      "purpose": "Native envlight longitude matches a calibrated Houdini viewport panorama.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_exr_bands_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "4K many-pass EXR encode timing/RSS and independent band-by-band validation. Run against old/new isolated installs with different --report destinations. Hashes describe decoded pixel bits, so codec buffering need not be identical.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_heavy_animation_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Five fully rendered heavy frames in one persistent session and one viewer.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_heavy_dense_packed_preview_smoke.py": {
+      "category": "benchmark",
+      "purpose": "Heavy shared prototype and 100k placements; full Cycles geometry, box viewport.",
+      "reason": "Uses heavy animated/packed GUI benchmark fixture and explicit multi-GPU or dense-scene hardware; exclusive controlled timing/paint workflow, not a portable correctness gate.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_heavy_response_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Actual viewport, panel and native IPR worker workflow on a scaled SOP courtyard. Run in a fresh isolated Houdini process using run-prototype-test.ps1. Exploratory timings include native host cooking. No timing assertions advertise production budgets; correctness/lifecycle conditions are mandatory.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_heavy_viewport_baseline.py": {
+      "category": "benchmark",
+      "purpose": "Separate native SOP cooking from our owned capture, without an engine. Reuse the exact heavy animation fixture. Alternate three five-frame viewport sequences with three capture-only sequences in one isolated GUI instance. Capture-only handles do not construct a Cycles scene/session or upload a GPU buffer. Heartbeats measure event delivery, not GPU presentation latency.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_host_cooking_response_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Heavy IPR edits followed by the same edits with renderer updates stopped.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_image_iris_color_smoke.py": {
+      "category": "gui",
+      "purpose": "Live Viewer RGB iris transmission, neutral exposure, file edits and repairs. Uses actual IPR polling and immutable worker image resources. Parameter changes use HOM; this does not measure physical mouse latency or desktop composition.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_image_iris_smoke.py": {
+      "category": "gui",
+      "purpose": "One live Cycles Viewer: native image iris, exposure, file edits and automatic repairs. Tests actual IPR polling and worker file revision checks. Parameter edits use HOM; this does not certify physical mouse latency or display compositing.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_ipr_response_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "IPR decision evidence: same owned capture/queue, worker versus test-only engine. Run in a fresh Houdini GUI with a single render panel. The in-process reference is confined to this test; no artist control or production backend selects it. Measure first preview separately from full resolution, event-loop gaps while edits are outstanding, and newest-scene recovery after bursts. No final-frame throughput or Blender parity claim is made by this test.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_light_controls_smoke.py": {
+      "category": "automated",
+      "purpose": "Light temperature versus native Blackbody, scalar area sizes and live repairs.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_light_material_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Prepare native light controls; observe real mouse clicks on + and Open.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_light_material_smoke.py": {
+      "category": "automated",
+      "purpose": "Dedicated light graphs, native create/open callbacks, live edits and recovery.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_light_pose_navigation_smoke.py": {
+      "category": "automated",
+      "purpose": "Retained analytic-light transforms match full captures in one live worker.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_local_final_hip_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "A live local final survives HIP replacement; explicit Play transfers and Stop wins.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_local_final_two_viewer_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Real Qt controls and real local jobs: shared IPR leases, Stop and final retention.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_multi_gpu_animation_smoke.py": {
+      "category": "benchmark",
+      "purpose": "Five heavy animated SOP frames, changing image displacement, both checked GPUs.",
+      "reason": "Uses heavy animated/packed GUI benchmark fixture and explicit multi-GPU or dense-scene hardware; exclusive controlled timing/paint workflow, not a portable correctness gate.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_native_graph_roundtrip.py": {
+      "category": "manual",
+      "purpose": "Ordinary HIP save -> plugin-absent edits/two Save As -> genuine native reload. Run each mode in a separate owned hython process. Missing mode requires an empty package directory and isolated preferences, with no Cycles Python path. No recovery API, direct fallback API, review copy or replacement graph is used.",
+      "reason": "Separate prepare/missing/reload contexts; missing mode must have no renderer package or Python path.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_native_persistence_probe.py": {
+      "category": "manual",
+      "purpose": "Probe Houdini's own operator fallback persistence, using only disposable HIPs.",
+      "reason": "Separate prepare/missing/reload contexts; missing mode requires empty package directory.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_nested_dielectrics_ipr_edits_smoke.py": {
+      "category": "automated",
+      "purpose": "Nested dielectrics: edits during active IPR accumulation (review request). glass shell > ice > water (priorities 3, 2, 1) with packed glass beads, Nested Dielectrics on, IPR (worker) session. Edits land while samples accumulate, paced and in bursts: priority, IOR, ice transform, ROP toggle off/on, add/remove a participating object, packed priority attribute. Every edit must restart (render_revision bump, sample count reset, frames never mix revisions), and the settled image after the last edit must equal a fresh render of that final state. --part gpu: toggle off -> on -> off on the GPU, the final off image must equal a fresh feature-off render; device memory is recorded. Generated scene only; no artist HIP is opened or saved.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_nested_dielectrics_plumbing_smoke.py": {
+      "category": "automated",
+      "purpose": "Nested dielectrics plumbing. The ROP toggle, the object Dielectric Priority and the packed cycles_dielectric_priority override must arrive in the Cycles scene (read back from the engine objects in a diagnostic session). IPR priority/IOR/transform edits restart the render, judged by render_revision and a fully re-accumulated frame, and the camera-only reuse guard rejects them. The scene is generated here; no artist HIP file is opened or saved.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_obj_lifecycle_audit.py": {
+      "category": "gui",
+      "purpose": "Live OBJ viewer: equal-area resize, AOV replacement/removal and Stop/restart.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_offline_extended_smoke.py": {
+      "category": "manual",
+      "purpose": "Separate-process extended offline recovery and material-heavy save evidence. All scenes are created here, never taken from an artist path. Run prepare, missing, recover with independent isolated preferences, and performance with the plugin. The saved scene deliberately contains no Viewer or Cycles ROP.",
+      "reason": "Separate plugin-present/missing/recover contexts; performance phase is observational.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_offline_rop_smoke.py": {
+      "category": "manual",
+      "purpose": "Protect a known-good existing HIP's saved ROP layout before offline saves.",
+      "reason": "Prepare/missing/recover contexts and explicit output; optional source is known-good artist fixture.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_offline_scene_smoke.py": {
+      "category": "manual",
+      "purpose": "Disposable three-process production archive round trip, with no ROP/Viewer. Run prepare/recover with the isolated runtime and missing with no package or Python path. Each stage must be a separate hython process using isolated prefs.",
+      "reason": "Three-process plugin-present/absent/recover archive roundtrip requires deliberate package isolation.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_offline_structure_smoke.py": {
+      "category": "automated",
+      "purpose": "Native archive retention for a healthy root with a vanished child on load.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "script-declared"
+        ],
+        "arguments": [
+          "--output",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_output_color_smoke.py": {
+      "category": "automated",
+      "purpose": "EXR color conversion vs independent OCIO, including exact raw pass bits.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_packed_delivery_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Host-clock delivery attribution on the actual heavy packed preview fixture. Metadata-only tracing; no extra frame copies or worker/host clock subtraction. Viewport controls are diagnostic test conditions, never renderer modes.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_packed_preview_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Exploratory edit-to-Qt-paint timings, including navigation during geometry capture. One persistent worker and one viewer; scripted native parameter edits. This is not physical mouse/compositor latency certification or a production timing gate.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_panel_dpi_smoke.py": {
+      "category": "gui",
+      "purpose": "Owned GUI: move the actual floating Python Panel across available screens.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_panel_lifecycle.py": {
+      "category": "gui",
+      "purpose": "Isolate Python Panel creation/destruction without rendering or image transport.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_panel_scene_replacement_smoke.py": {
+      "category": "gui",
+      "purpose": "The viewer survives its ROP disappearing when a scene is cleared or opened. Reproduces the artist report: opening a scene while the Resolution field had focus ran its editingFinished handler against the deleted ROP and raised hou.ObjectWasDeleted twice. Also checks that leaving the field with an unchanged value never restarts rendering, that switching Interactive/Final always starts a fresh render (even when both modes resolve to identical settings), and that the panel renders again after binding a ROP in the new scene.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_panorama_smoke.py": {
+      "category": "automated",
+      "purpose": "Seven real native panoramic camera models against independent colored ray geometry.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_patch_matrix_devices_smoke.py": {
+      "category": "manual",
+      "purpose": "Preflight exact GPU identities and coupled fixtures' explicit default GPU.",
+      "reason": "Consumes selected manifest SHA-256 and exact GPU/default identities from patch-matrix orchestration.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_point_instancing_binding_motion_review4_smoke.py": {
+      "category": "automated",
+      "purpose": "Point-instance shutter displacement vs an independently authored packed twin.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_farm_smoke.py": {
+      "category": "automated",
+      "purpose": "Point instancing in final/farm rendering (validation). Generated scene only. A 5-frame animation whose instance population (count 4..8, a death and a birth of explicit ids), instance paths (rotate through three prototypes, one missing prototype at frame 4), point attributes (Cd), point materials (alternate; a never-before-used material appears at frame 5), a material parameter, a prototype SOP and the instancer transform all change per frame. 1. In-process Render to Disk of frames 1-5 (persistent data on). 2. The scene saved to a HIP in the validation folder, rendered by a FRESH hython through the ROP (scripts/render_hip.py, the farm entry point), frames 1-5. 3. Each frame rendered again by its own fresh hython (single-frame range). Expectations (fixed before rendering): sequence frame f == fresh single frame f (CPU: bit-identical RGBA; GPU: within noise), Render to Disk == farm, per-frame CryptoObject instance count == expected population, the missing-prototype diagnostic only on frame 4 (nothing carries over), and every frame == the Copy-to-Points packed twin rendered as its own farm sequence (within noise).",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_ipr_smoke.py": {
+      "category": "automated",
+      "purpose": "Point instancing during active IPR accumulation, modelled on the nested-dielectrics IPR edits test. Edits land while samples accumulate (engine current_sample asserted 0 < s < target): instancer move, prototype move (no prototype re-conversion), prototype SOP edit, points added and removed, instance path change, prototype deleted (diagnostic, others keep rendering) and recreated (repaired), material edit, point Cd change, then a burst. Frames never go back in revision/samples; the settled image equals a fresh render of the final state (CPU: bit-identical). The scene observer must subscribe to prototypes (including newly referenced and recreated ones) without reading geometry in callbacks. Generated scene only.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_motion_smoke.py": {
+      "category": "automated",
+      "purpose": "Point instancing motion. Per shutter sample, the synthesized instance transforms must equal the oracle evaluated at that time (animated points with id, animated prototype OBJ). Motion-blurred renders must match a Copy-to-Points packed twin built by Houdini itself (same points, prototype merged in world space) for: transform blur, prototype deformation blur together with transform blur, velocity blur, births/deaths with ids. A point that switches prototype inside the shutter is diagnosed and kept at the requested frame. Expectations are fixed before rendering. Generated scene only.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_passes_edgecases_smoke.py": {
+      "category": "automated",
+      "purpose": "Point instancing edge cases (validation). Generated scenes only. Expectations fixed first. Motion (camera shutter 0.5, 5 motion samples), each against BOTH the native Copy-to-Points packed twin (point_instancing_common.build_twin) and a static-time average (24 motion-blur-off renders at uniform shutter times): transform-only, deformation-only, combined (+ animated prototype OBJ), velocity (linear motion, exact v). Identity: duplicate ids (diagnosed, == twin), index identity with a count change inside the shutter (population frozen: == static nominal render, diagnosed, == twin), animated prototype selection across frames (== twin per frame, == fresh session) and inside the shutter (diagnosed, the switching instance renders as its static nominal state, not interpolated). Overrides: point Cd/Alpha/material/dielectric priority added then removed in one session -> bit-identical (CPU) to the never-overridden render.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_passes_smoke.py": {
+      "category": "automated",
+      "purpose": "Point instancing passes vs an independently built packed twin (validation). Generated scene only. One Instance OBJ (offset/rotated/nonuniformly scaled instancer) with 12 points: three mesh prototypes (one with a negatively scaled prototype OBJ, per-face materials and an OBJ material; one without a material; one whose material reads instance Cd and Alpha), the Instance Object fallback (empty s@instance), relative/absolute/op: paths, negative scale and negative pscale, pivot/trans/rot, and a nested Instance OBJ prototype. The twin is built with native SOPs (point_instancing_common.build_twin). Expectations fixed before rendering: * transforms: exporter table == prototype.world . (Houdini packedfulltransform of the twin) (rel 1e-5); * combined RGB/alpha, normal, depth, position, diffuse colour: twin-equal within noise; * object index: exactly the INSTANCER's pass index (7) on every instance pixel (not the prototype 5 / nested instancer 3), identical to the twin; * Cryptomatte material: same names and mattes as the twin; Cryptomatte object: one name per instance, same per-instance suffix set as the twin, per-name mattes equal to the twin; * identity across frames: frame 2 reverses point order (same ids, same placement): every per-instance name and matte equals frame 1; frame 3 moves all points: same names, mattes follow (== twin at frame 3).",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_perf_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Point instancing performance vs an equivalent Copy-to-Points packed twin (validation). Generated scene only. For N in --counts: an Instance OBJ with N points over 3 prototypes (box, ~1k-tri sphere, ~1k-tri torus), and an artist-style twin (Blast by s@instance, Pack, Copy to Points 2.0, Merge), same transforms. Per mode and N, in a fresh session: SOP cook time (excluded from capture), capture time, apply (host-blocking) time, render-start latency (apply start -> first frame of that generation), total time to a complete low-sample frame, geometry conversions (must equal 3 for both and not scale with N), geometry/object resources, owned geometry bytes, device allocation (current/peak), process memory, point-instance synthesis counters; then an unchanged re-capture (cache path). At --ipr-count (100k): IPR accumulating, 5 transform-only edits of the instancer (authoritative capture path), timing edit -> first frame of the new revision, conversions unchanged. Expectations: conversions == 3 for every N and mode; instanced memory and times within a small factor of the twin; no per-instance mesh duplication (owned geometry bytes ~constant in N apart from per-instance transforms).",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_point_instancing_render_smoke.py": {
+      "category": "automated",
+      "purpose": "Point instancing end to end. An Instance OBJ scene must render like a reference scene made of ordinary objects placed at the oracle's transforms (prototype.world . point . instancer.world) with the materials Houdini's precedence predicts (point > prototype OBJ > instancer OBJ), the instance Cd read by an Attribute node, ptinstance=off, an object with s@instance, and per-point Dielectric Priority (engine read-back). Expectations come from the oracle before rendering. Generated scene only.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_review4_smoke.py": {
+      "category": "automated",
+      "purpose": "Targeted review-4 regressions: effective attribute names, imports and staged repair.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_point_instancing_transforms_smoke.py": {
+      "category": "automated",
+      "purpose": "Point instancing transforms. For every attribute combination of SideFX's precedence table, the exporter's synthetic packed transforms must equal (a) an independent pure-Python implementation of the documented formula composed in the Mantra-verified order and (b) Houdini's own Copy to Points. Also: Instance OBJ path resolution, empty-value fallback, ptinstance=off, missing and cyclic references, and that objects without an instance attribute are untouched. Expectations come from the oracles before anything is rendered. Generated scene only.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "script-declared"
+        ],
+        "arguments": [
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_render_ownership_smoke.py": {
+      "category": "automated",
+      "purpose": "One native IPR path, independent ordered final ownership and HIP cleanup.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_rls_hair_smoke.py": {
+      "category": "manual",
+      "purpose": "RLS Huang fallback, mixed closures, live edits and unchanged non-Huang transport. Run once against the previous package with --baseline, then against the repaired package. compare-rls-hair.py checks the saved linear planes between builds.",
+      "reason": "Previous-package --baseline then repaired-package comparison; preserve same fixture and explicit label/output.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_rop_help_smoke.py": {
+      "category": "automated",
+      "purpose": "Check ROP F1 help, tooltip coverage and saved per-node About migration. Run with the staged Houdini runtime. Does not cook geometry or render images.",
+      "reason": "Self-contained authored headless native contract; optional verified --native pytest execution retains every original assertion.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "script-declared"
+        ],
+        "arguments": []
+      }
+    },
+    "houdini_rop_layout_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Inspect the native parameter pane and resolve every Cycles shelf icon.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_selective_rls_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Immutable-host, warmed equal-time comparison on the artist's two RLS scenes.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_selective_rls_ipr_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Artist scene: event-loop latency, shader strategy edits and Stop/restart in IPR.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_session_soak.py": {
+      "category": "gui",
+      "purpose": "Bounded owned-process IPR soak; no artist scene or preference writes. Run through run-prototype-test.ps1 with CPU or an explicit device ID. The large profile adds dense geometry, packed instances, file/COP raster replacement and analytic settled-frame checks. This is a bounded retention/lifecycle workload, not indefinite or out-of-memory certification. Qt runs in isolated hython.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_showcase_displacement_smoke.py": {
+      "category": "manual",
+      "purpose": "Actual showcase ground: position pass proves true displacement and animation.",
+      "reason": "Requires generated current/adaptive courtyard; needs explicit producer dependency before standalone acceptance.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_showcase_light_shadow_smoke.py": {
+      "category": "gui",
+      "purpose": "Separate sky-sun shadows from the movable showcase area light.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_sky_ipr_smoke.py": {
+      "category": "gui",
+      "purpose": "Artist sky workflow on the million-triangle SOP fixture, one render viewer.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_solver_idle_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Fast Pyro/POP idle, public-parameter, frame-change and Refresh IPR checks.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_spectral_nested_smoke.py": {
+      "category": "automated",
+      "purpose": "Blender 5.3 spectral/nested interface renders, live edits and zero-dispersion controls. Runs real CPU/GPU kernels through the isolated verified runtime. Captures two different Abbe media, camera-inside probes, procedural IOR, buried priority crossings and MNEE fallback controls. This fixture supplements the independent --dispersion-contracts spectroscopic/Snell oracle; finite images alone do not certify transport accuracy.",
+      "reason": "Self-contained authored headless native contract; optional verified --native pytest execution retains every original assertion.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--output",
+          "{output}/spectral"
+        ]
+      }
+    },
+    "houdini_subnet_dielectric_priority_smoke.py": {
+      "category": "automated",
+      "purpose": "A subnet instance keeps member priorities, packed overrides and live edits. The reference is the same three independent OBJ nodes rendered directly. The bubble is itself a packed primitive. No artist scene is modified by this test.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_subnet_filter_ipr_smoke.py": {
+      "category": "gui",
+      "purpose": "Geometry OBJ subnet filtering, hidden prototypes and automatic live repairs.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_transform_response_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Measure continuous OBJ edits in the artist scene without saving the scene.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_ui_exit_smoke.py": {
+      "category": "gui",
+      "purpose": "Isolate the GUI harness shutdown from renderer and native image connections.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_vectors_output_smoke.py": {
+      "category": "gui",
+      "purpose": "Analytic pixel motion, independent guides, real EXR encoding and viewer controls.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewer_channels_shortcuts_smoke.py": {
+      "category": "gui",
+      "purpose": "Real GUI focus routing and CPU/GPU coverage display, without renderer updates.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewer_fullscreen_edges_smoke.py": {
+      "category": "gui",
+      "purpose": "Real native panel fullscreen exits and live edge-overlay controls.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewer_icon_theme_smoke.py": {
+      "category": "gui",
+      "purpose": "Supplied SVG geometry, aspect ratio and real Houdini light/dark themes.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewer_linked_resolution_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Live GPU viewer: linked zoom/Fit/resize, controls and bounded event-loop work.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewer_linked_resolution_smoke.py": {
+      "category": "gui",
+      "purpose": "Linked display footprint, fractional buffers, stable Fit and HIP-local controls.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewer_start_smoke.py": {
+      "category": "gui",
+      "purpose": "import hou, os, time, json, traceback",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewer_state_hip_smoke.py": {
+      "category": "gui",
+      "purpose": "Viewer state round-trip through HIP files using current source and staged native module.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewport_edit_baseline.py": {
+      "category": "benchmark",
+      "purpose": "Measure the same native viewport geometry edits without a renderer.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewport_mouse_probe.py": {
+      "category": "gui",
+      "purpose": "Manual/OS-pointer measurement fixture: never synthesizes transform edits.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_viewport_transform_profile.py": {
+      "category": "benchmark",
+      "purpose": "Profile real viewport redraw/handles with saved render settings and IPR off/on.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_worker_ownership_ipr_smoke.py": {
+      "category": "gui",
+      "purpose": "One worker/viewer: live edits, native ROP settings and Stop/Render intent.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_worker_ownership_native_ipr_smoke.py": {
+      "category": "gui",
+      "purpose": "One native IPR worker and persistent host pipe through native settings edits.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_world_batch_smoke.py": {
+      "category": "automated",
+      "purpose": "Five actual ROP frames: animated HDRI, moving geometry and retained resources.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_world_ipr_smoke.py": {
+      "category": "gui",
+      "purpose": "Artist world workflow: shelf, native tabs, HDRI updates and heavy SOP IPR.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "houdini_world_sampling_smoke.py": {
+      "category": "automated",
+      "purpose": "World importance-map dimensions, independent lighting and retained meshes. Copy counters describe logical device requests, not physical PCIe transfers. Timing is diagnostic; this small fixture is not an IPR performance benchmark.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_world_smoke.py": {
+      "category": "automated",
+      "purpose": "Independent world radiance, direction, input color and resource contracts.",
+      "reason": "Self-contained authored headless native contract; optional verified --native pytest execution retains every original assertion.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_world_volume_response_probe.py": {
+      "category": "gui",
+      "purpose": "Measure world-volume IPR cost and GUI responsiveness in the artist scene. Read-only diagnostic: loads the artist scene (never saves it), renders the Cycles viewer panel with the scene's own Test_2 settings, then repeats with a default Principled Volume plugged into the world and with one setting changed at a time. Each configuration renders for a fixed window and records: - sample rate and time to the first image, - GUI event-loop latency (an 8 ms heartbeat; gaps are UI stalls), - time spent in the panel's own poll/present code on the GUI thread, - CPU use of the render worker and of Houdini, GPU utilization (nvidia-smi).",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "image_iris_controls_source_test.py": {
+      "category": "automated",
+      "purpose": "Nominal-frame aperture policy, unsupported builds and no host-thread image I/O.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "ipr_update_checks.py": {
+      "category": "support",
+      "purpose": "Check the two explicit failed-edit outcomes without confusing requested and accepted scenes.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "local_final_lifecycle_test.py": {
+      "category": "automated",
+      "purpose": "Exercise actual final ROP lifecycle hooks, including exception and headless farm paths.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "local_final_suspension_test.py": {
+      "category": "automated",
+      "purpose": "No Houdini/GPU required: exercise real suspension ownership and Stop precedence.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "material_authoring_test.py": {
+      "category": "automated",
+      "purpose": "Pure boundaries for native group authoring, identity, palette and foreign networks.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "native_external_binding_contract.cpp": {
+      "category": "manual",
+      "purpose": "// Host evaluation is deterministic here; runtime style tests cover real HDK nodes.",
+      "reason": "Standalone compiler/configuration regression; explicit MSVC/CMake/Python SDK or historical oracle context required. Retained source is recoverable and runnable in that context.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "native_external_binding_contract.py": {
+      "category": "manual",
+      "purpose": "Compile shared-buffer/material-variant contracts against the compact old oracle.",
+      "reason": "Standalone compiler/configuration regression; explicit MSVC/CMake/Python SDK or historical oracle context required. Retained source is recoverable and runnable in that context.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "native_scene_definition_test.py": {
+      "category": "automated",
+      "purpose": "Pure contracts for native HIP definitions and retained graph wire metadata.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "native_test_context_test.ps1": {
+      "category": "automated",
+      "purpose": "# Pure qualification of target selection and relocated payload checks.",
+      "reason": "PowerShell contract with owned payloads and mocked native launches via test_powershell_contracts.py.",
+      "automation": {
+        "executor": "powershell"
+      }
+    },
+    "offline_archive_test.py": {
+      "category": "automated",
+      "purpose": "Conservative archive ownership, validation and recovery failure contracts.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "offline_scripts_test.py": {
+      "category": "automated",
+      "purpose": "Saved callback/menu guards stay usable with the entire integration absent.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "panel_navigation_checks.py": {
+      "category": "support",
+      "purpose": "Real widget input checks, shared by headless and Houdini GUI workflows.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "parameter_template_checks.py": {
+      "category": "support",
+      "purpose": "Compare native layouts independently of Houdini's generated folder names.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "patch_test_matrix_test.py": {
+      "category": "automated",
+      "purpose": "Pure recipe qualification: explicit scopes, concrete required args and bounded defaults.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "point_instance_oracle.py": {
+      "category": "support",
+      "purpose": "Independent oracle for Houdini point-instance transforms. Pure Python, no Houdini: implements SideFX's documented composition (\"Copying and instancing point attributes\") and the Mantra-verified Instance OBJ order. Row-vector 4x4 matrices (Houdini convention): p_world = p_local * M. transform present: X * M * T orient present: X * S * (O*R) * T otherwise: X * S * L * R * T X = translate(-pivot), S = scale(scale*pscale), T = translate(P + trans), L = lookat(N or v, up) / dihedral(+Z, N or v), R = rot. Instance OBJ world = prototype.world * point * instancer.world (Mantra probe 3)",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "progressive_buffer_probe.py": {
+      "category": "benchmark",
+      "purpose": "Measure active buffer growth without any viewer; allocation control probe.",
+      "reason": "Timing/memory or system-input comparison requires exclusive controlled hardware and original protocol; no portable pass is inferred.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "python_status_conversion_contract.cpp": {
+      "category": "support",
+      "purpose": "// Standalone baseline/new CPython runners; no renderer, HDK or artist runtime.",
+      "reason": "Independent retained C++ status oracle compiled by python_status_conversion_contract.py, which is invoked by native_review_contracts.py; not a standalone hython test."
+    },
+    "python_status_conversion_contract.py": {
+      "category": "automated",
+      "purpose": "Compile and compare isolated legacy/new CPython conversion runners.",
+      "reason": "Existing native_review_contracts.py explicitly compiles and runs this frozen legacy status-parity oracle in the verified SDK/toolset context.",
+      "automation": {
+        "executor": "native-review",
+        "owner": "native_review_contracts.py"
+      }
+    },
+    "run_harness_context_test.ps1": {
+      "category": "automated",
+      "purpose": "# Exercise the actual harness runner's guard without launching Python/Houdini.",
+      "reason": "PowerShell contract with owned payloads and mocked native launches via test_powershell_contracts.py.",
+      "automation": {
+        "executor": "powershell"
+      }
+    },
+    "run_tests_selection_test.ps1": {
+      "category": "automated",
+      "purpose": "# Exercise the actual broad runner with a fake context and mocked native launch.",
+      "reason": "PowerShell contract with owned payloads and mocked native launches via test_powershell_contracts.py.",
+      "automation": {
+        "executor": "powershell"
+      }
+    },
+    "scene_query_displacement_viewer_workflow.py": {
+      "category": "gui",
+      "purpose": "One viewer: query faults, independent height and live graph repairs.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "shader_switches_test.cpp": {
+      "category": "manual",
+      "purpose": "#include \"../src/core/shader_switches.h\"",
+      "reason": "Standalone compiler/configuration regression; explicit MSVC/CMake/Python SDK or historical oracle context required. Retained source is recoverable and runnable in that context.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "sky_source_viewer_workflow.py": {
+      "category": "gui",
+      "purpose": "One viewer at a time: numeric sky faults, independent edits and live repair.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "subdivision_count_wrapper_test.py": {
+      "category": "automated",
+      "purpose": "The host boundary wrapper supplies the harness's mandatory launch context.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "system_input_evidence.py": {
+      "category": "support",
+      "purpose": "Qualify observed system-mouse bursts and matching painted render generations.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "system_input_evidence_test.py": {
+      "category": "automated",
+      "purpose": "import copy",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "system_input_mouse_observer.py": {
+      "category": "support",
+      "purpose": "Passive Windows mouse observation in a process independent of Houdini/Qt. Reads GetAsyncKeyState/GetCursorPos only. It never injects input, imports Houdini, opens a renderer or edits scene state. The parent owns all output/stop files.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "tapered_volume_reference.py": {
+      "category": "support",
+      "purpose": "Independent finite-frustum support, centre interpolation and optical integrals.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "tapered_volume_source.py": {
+      "category": "support",
+      "purpose": "Stock-Houdini tapered fields; this module deliberately imports no renderer.",
+      "reason": "Imported helper or producer/consumer utility; run with owning workflow, not independent acceptance."
+    },
+    "test_rop_help_source.py": {
+      "category": "automated",
+      "purpose": "Source-level coverage and installation-link checks without a Houdini license.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "transaction_viewer_workflow.py": {
+      "category": "gui",
+      "purpose": "One viewer: local fallback, file repair, paused edits, Stop and Render.",
+      "reason": "Houdini/Qt event loop, viewport, widget focus or OS input is part of the contract; owned GUI process and report/screenshot review required.",
+      "requires_human": "Select stated host, fixtures and hardware; run original script and review fresh evidence. This disposition review records no pass."
+    },
+    "viewer_priority_delivery_test.py": {
+      "category": "automated",
+      "purpose": "Priority upgrades are bounded, current and use latest converted pixels.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "worker_scheduling_test.py": {
+      "category": "automated",
+      "purpose": "Unsupported scheduling is optional; successful requests affect only our child.",
+      "reason": "SDK-free assert/unittest contract; isolated Python subprocess via test_legacy_contracts.py.",
+      "automation": {
+        "executor": "pure"
+      }
+    },
+    "worker_stdout_transport_test.py": {
+      "category": "automated",
+      "purpose": "Real executable keeps CRT/Win32 library noise out of the binary control pipe.",
+      "reason": "Self-contained authored native contract; optional verified --native pytest, fresh process per backend; original assertions retained.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "script-declared"
+        ],
+        "arguments": []
+      }
+    },
+    "houdini_ramp_curve_blender_smoke.py": {
+      "category": "automated",
+      "purpose": "Import saved pinned Blender material exports and compare 15 actual Cycles EXR cases at 3e-8 on CPU/OptiX.",
+      "reason": "Focused K33 acceptance; run scripts/run-k33-gates.ps1 against a verified build.",
+      "automation": {
+        "executor": "scripts/run-k33-gates.ps1"
+      }
+    },
+    "houdini_ramp_shutter_parity.py": {
+      "category": "automated",
+      "purpose": "Compare animated ramp true displacement with an animated scalar and a frozen negative control.",
+      "reason": "Focused K33 acceptance; run scripts/run-k33-gates.ps1 against a verified build.",
+      "automation": {
+        "executor": "scripts/run-k33-gates.ps1"
+      }
+    },
+    "ramp_table_reference.py": {
+      "category": "support",
+      "purpose": "Independent 257-entry stock lookup references for host-authored ramp tests.",
+      "reason": "Imported by ramp/curve acceptance tests."
+    },
+    "houdini_blend_resident_reuse_smoke.py": {
+      "category": "automated",
+      "purpose": "Absolute source samples reuse geometry across timeline, point, SOP, ROP and renderer changes; an unseen fractional frame evaluates once.",
+      "reason": "Self-contained focused Houdini contract; native runner preserves script assertions and process boundaries. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--out",
+          "{output}/report.json"
+        ]
+      }
+    },
+    "houdini_blender_reference_ui.py": {
+      "category": "automated",
+      "purpose": "Actual Houdini reference target menus, expression migration, enabled named pieces and cached HIP reopening.",
+      "reason": "Self-contained focused Houdini contract; native runner preserves script assertions and process boundaries. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_reference_bounds_persistence_smoke.py": {
+      "category": "automated",
+      "purpose": "Fresh-process procedural HIP bounds restoration, relocation invalidation and missing dependency handling without Blender evaluation.",
+      "reason": "Self-contained focused Houdini contract; native runner preserves script assertions and process boundaries. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_reference_edit_transform_smoke.py": {
+      "category": "automated",
+      "purpose": "Edit and Transform SOP whole-packed parity, negative nonuniform scale, pivots, undo/redo and HIP reopening.",
+      "reason": "Self-contained focused Houdini contract; native runner preserves script assertions and process boundaries. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_blender_reference_pieces.py": {
+      "category": "automated",
+      "purpose": "Named packed pieces and attribute paths retain smooth subdivision/materials, persistent rendering and explicit source deformation samples, with topology fallback.",
+      "reason": "Focused self-contained Blender fixture and real CPU/OptiX comparisons; no full nightly implied.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--out",
+          "{output}",
+          "--device",
+          "{device}",
+          "--source-shutter",
+          "--repeat-piece",
+          "--no-point-id"
+        ]
+      }
+    },
+    "blend_reference_pieces_fixture.py": {
+      "category": "support",
+      "purpose": "Creates tiny smooth animated subdivision and topology-change Blender assets for the named-piece rendering gate.",
+      "reason": "Fixture authoring helper dispatched by houdini_blender_reference_pieces.py, not an independent test."
+    },
+    "houdini_timeline_update_controls_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Real Auto Update timeline coalescing and queued-before-Stop/Pause/Auto/local-final controls on a small CPU scene.",
+      "reason": "Requires an actual foreground Houdini RenderPanel and host event queue; remains outside headless/nightly automation. Registration records no execution result.",
+      "requires_human": "Select the verified host and main 4K display; run scripts/run-gui-test.ps1 -Test houdini_timeline_update_controls_gui_smoke.py -Device CPU and inspect the fresh GUI report."
+    },
+    "houdini_blend_timeline_ipr_benchmark.py": {
+      "category": "benchmark",
+      "purpose": "Foreground Auto Update timeline-to-Qt-paint attribution for dense resident Blender references, with renderer acknowledgment and host capture stages separated.",
+      "reason": "Uses artist fixture copies and controlled hardware/window conditions. Paired pinned-host measurements require an exclusive authorized timing window; no nightly or portable latency pass is inferred.",
+      "requires_human": "Select fixtures, exact GPU, pinned host and main 4K display; run through scripts/run-gui-test.ps1 with the benchmark configuration and review fresh paint, ACK and observer traces."
+    },
+    "houdini_packed_blender_population_reuse_smoke.py": {
+      "category": "automated",
+      "purpose": "Capture-only CPU packed Blender population reuse, current source/material/field/pose invalidation and transactional discard/deletion recovery.",
+      "reason": "Uses the real Blender Reference SOP and Copy to Points with immutable authored native mesh capsules; no Blender or renderer process. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_direct_instance_render_reuse_smoke.py": {
+      "category": "automated",
+      "purpose": "Public two-root resident instancing retains nonblank rendered images and exact fresh-capture parity through no-op and camera updates.",
+      "reason": "Small native CPU/OptiX correctness diagnostic with immutable native mesh fixtures, physical render revision checks and no Blender process. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--out",
+          "{output}",
+          "--device",
+          "{device}"
+        ]
+      }
+    },
+    "houdini_direct_instance_preparation_smoke.py": {
+      "category": "automated",
+      "purpose": "Capture-only native CPU direct-member preparation checks, with optional dense phase profiling and no renderer or Blender process.",
+      "reason": "Self-contained immutable native mesh fixture verifies retained preparation, unused-prototype invalidation and independent owner binding semantics. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "houdini_final_tiling_smoke.py": {
+      "category": "automated",
+      "purpose": "Tiled and whole-frame final rendering preserve AOVs, denoising, cropped EXRs and worker delivery while IPR remains unchanged.",
+      "reason": "Self-contained CPU/OptiX native regression exercises six/four genuine tiles and cancellation cleanup. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU",
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--report",
+          "{output}/report.json"
+        ]
+      }
+    },
+    "houdini_texture_cache_actions_smoke.py": {
+      "category": "automated",
+      "purpose": "Native and portable file/UDIM cache actions preserve original images, create renderer provenance and safely clear only owned derivatives.",
+      "reason": "Self-contained CPU native regression includes capture-only manual generation and automatic render generation. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--report",
+          "{output}/report.json"
+        ]
+      }
+    },
+    "houdini_blender_reference_hulls_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Native Scene Viewer hull drawing remains visible after async validation, adding a separate object row, and collection whole/member transitions.",
+      "reason": "Captures only owned viewport/parameter windows on the requested main 4K monitor. Requires inspection of actual shaded hull drawing; intrinsic counts alone do not pass the gate.",
+      "requires_human": "Run scripts/run-gui-test.ps1 -Test houdini_blender_reference_hulls_gui_smoke.py -TimeoutSeconds 240 on a verified host; inspect six stage captures and write its adjacent visual verdict JSON."
+    },
+    "houdini_blender_reference_timeline_gui_smoke.py": {
+      "category": "gui",
+      "purpose": "Frozen Shape Frame previews survive constant and animated Source Frame changes, timeline scrubbing and shared Copy to Points; independent Shape Frame changes and wireframe/shaded controls remain visible.",
+      "reason": "Captures nine stages on the requested main DELL UP2720Q 3840x2160 display. Actual hull visibility and wireframe/shaded drawing require visual review; geometry counts alone do not pass the gate.",
+      "requires_human": "Run scripts/run-gui-test.ps1 -Test houdini_blender_reference_timeline_gui_smoke.py -TimeoutSeconds 300 on a verified host; inspect the stage captures and write the adjacent visual verdict JSON."
+    },
+    "blend_reference_timeline_fixture.py": {
+      "category": "support",
+      "purpose": "Create an owned animated Blender hull fixture for independent Shape Frame and Source Frame viewport checks.",
+      "reason": "Fixture helper launched by houdini_blender_reference_timeline_gui_smoke.py; never modifies artist assets and is not an independent acceptance test."
+    },
+    "houdini_blender_preview_isolation_smoke.py": {
+      "category": "automated",
+      "purpose": "Node-local Shape Frame and hull detail coexist across shared assets, preserve fractional render-source samples and cached copies, reject stale dependencies, and reopen without Blender evaluation.",
+      "reason": "Self-contained owned Blender fixture and CPU native geometry preflight; checks independent preview and authoritative render bounds, async validation and a fresh HIP reopen. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": [
+          "--out",
+          "{output}"
+        ]
+      }
+    },
+    "blend_reference_hulls_fixture.py": {
+      "category": "support",
+      "purpose": "Create two owned, separated dense Blender meshes and one collection for the native hull drawing GUI gate.",
+      "reason": "Fixture helper launched by houdini_blender_reference_hulls_gui_smoke.py; never modifies artist assets and is not an independent acceptance test."
+    },
+    "blend_viewport_budget_smoke.py": {
+      "category": "manual",
+      "purpose": "Real Blender bmesh hull generation applies equal per-object/member limits at 32/64/128/256 vertices and preserves all 128 dense members at the default 64 within the saved metadata budget.",
+      "reason": "Requires the Blender Python runtime and bmesh; outside the Houdini headless renderer runner. Registration is not execution evidence.",
+      "requires_human": "Run Blender --background --factory-startup --python tests/blend_viewport_budget_smoke.py and inspect its passed JSON checks."
+    },
+    "houdini_dlss_sample_count_smoke.py": {
+      "category": "automated",
+      "purpose": "Upscaled DLSS alpha and energy with explicit low-resolution Sample Count.",
+      "reason": "Self-contained native regression for full-frame output normalization.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "OPTIX"
+        ],
+        "arguments": [
+          "--device",
+          "{device}",
+          "--report",
+          "{output}/report.json"
+        ]
+      }
+    },
+    "core_attribute_eligibility_smoke.py": {
+      "category": "automated",
+      "purpose": "Actual RenderSession attribute-eligibility reference/candidate CPU pixels, deterministic rejection ordering, fallback and real TBB branch checks using the matching ch_harness.exe.",
+      "reason": "Self-contained CPU runtime contract discovered by test_reviewed_native.py through the existing native recipe adapter; requires a verified matching runtime and isolated child process. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": []
+      }
+    },
+    "houdini_packed_named_index_smoke.py": {
+      "category": "automated",
+      "purpose": "Nominal packed name-index omission preserves CPU pixels, complete payloads and snapshot digests through roots, nesting, holes, reorder, prototypes and duplicate-name recovery.",
+      "reason": "Self-contained CPU runtime contract discovered by test_reviewed_native.py through the existing native recipe adapter; requires a verified matching runtime and isolated child process. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": []
+      }
+    },
+    "houdini_packed_named_shutter_smoke.py": {
+      "category": "automated",
+      "purpose": "Named packed shutter-field sampling preserves CPU pixels, payloads and digests through off-frame permutation, including a stable 900-row nominal population.",
+      "reason": "Self-contained CPU runtime contract discovered by test_reviewed_native.py through the existing native recipe adapter; requires a verified matching runtime and isolated child process. Registration is not execution evidence.",
+      "automation": {
+        "executor": "native",
+        "backends": [
+          "CPU"
+        ],
+        "arguments": []
+      }
+    },
+    "wire_instances20_fixture.cpp": {
+      "category": "support",
+      "purpose": "C++ cases included after the complete production snapshot_wire.cpp by wire_instances20_test.py; byte preservation, current protocol fields, TBB determinism, source lifetime, bounds and malformed-reader contracts.",
+      "reason": "Compiled support fixture, not a standalone executable or pytest entry. Its owner is wire_instances20_test.py."
+    },
+    "wire_instances20_test.py": {
+      "category": "manual",
+      "purpose": "Compile and execute the complete production wire codec against a matching configured Windows MSVC/Houdini dependency build, with real TBB and transitive DLL preflight; no renderer or GPU session.",
+      "reason": "Requires build.ninja, matching static/import libraries and generated runtime package dependency paths; an installed or frozen runtime-only context is insufficient. The existing reviewed-native recipe adapter cannot supply the required real build path. This is explicit build qualification, not an artist approval requirement.",
+      "requires_human": "A developer or CI job supplies a compatible configured CMake build with Image Iris enabled, matching public headers and locked engine, installed Houdini SDK/DLLs, MSVC compiler/linker/dumpbin, and a new writable output directory. No GUI or artist interaction is needed.",
+      "invocation": [
+        "python",
+        "tests/wire_instances20_test.py",
+        "--build",
+        "<matching-configured-CMake-build>",
+        "--destination",
+        "<new-owned-output-directory>"
+      ]
+    }
+  },
+  "legacy_without_disposition": [
+    "blend_asset_scan_smoke.py",
+    "blend_digest_blender_smoke.py",
+    "blend_list_contents_smoke.py",
+    "core_volume_wire_smoke.py",
+    "display_stalled_peer/bootstrap.py",
+    "display_stalled_peer/gui_child.py",
+    "display_stalled_peer/run_trial.ps1",
+    "display_stalled_peer/run_trial.py",
+    "heavy_renderer_suites.py",
+    "houdini_asset_browser_smoke.py",
+    "houdini_attribute_tables_kept_smoke.py",
+    "houdini_blend_assets_plan_smoke.py",
+    "houdini_blend_converted_attributes_smoke.py",
+    "houdini_blend_file_node_smoke.py",
+    "houdini_blend_integration_smoke.py",
+    "houdini_blend_material_settings_parity_smoke.py",
+    "houdini_blend_node_coverage_smoke.py",
+    "houdini_blend_node_settings_parity_smoke.py",
+    "houdini_blend_sync_parity_smoke.py",
+    "houdini_blend_world_orientation_smoke.py",
+    "houdini_blender_reference_layout_check.py",
+    "houdini_blender_viewport_gt_smoke.py",
+    "houdini_collapsed_instance_warning_smoke.py",
+    "houdini_color_latency_benchmark.py",
+    "houdini_convert_material_smoke.py",
+    "houdini_cpu_guiding_probe.py",
+    "houdini_curve_accel_reuse_smoke.py",
+    "houdini_curve_parallel_conversion_smoke.py",
+    "houdini_curve_subdivisions_smoke.py",
+    "houdini_device_update_memory_smoke.py",
+    "houdini_displayed_frame_gui_benchmark.py",
+    "houdini_ipr_feedback_gate_smoke.py",
+    "houdini_ipr_gesture_capture_smoke.py",
+    "houdini_ipr_handle_drag_smoke.py",
+    "houdini_ipr_light_edit_tagging_smoke.py",
+    "houdini_ipr_light_parameters_smoke.py",
+    "houdini_ipr_light_value_read_smoke.py",
+    "houdini_ipr_many_instance_pose_smoke.py",
+    "houdini_ipr_material_edit_smoke.py",
+    "houdini_ipr_object_edit_smoke.py",
+    "houdini_ipr_root_pose_smoke.py",
+    "houdini_light_list_smoke.py",
+    "houdini_light_portal_smoke.py",
+    "houdini_material_motion_child_reuse_smoke.py",
+    "houdini_material_settings_smoke.py",
+    "houdini_mesh_parallel_conversion_smoke.py",
+    "houdini_mesh_refit_smoke.py",
+    "houdini_mplay_chain_gui_smoke.py",
+    "houdini_mplay_ipr_actions_gui_smoke.py",
+    "houdini_object_flags_partial_smoke.py",
+    "houdini_object_table_partial_smoke.py",
+    "houdini_offline_copies_gui_smoke.py",
+    "houdini_offline_copies_smoke.py",
+    "houdini_output_formats_smoke.py",
+    "houdini_packed_blender_adapter_smoke.py",
+    "houdini_packed_blender_serialization.py",
+    "houdini_packed_fragment_smoke.py",
+    "houdini_packed_parallel_conversion_smoke.py",
+    "houdini_packed_recycled_conversion_smoke.py",
+    "houdini_panel_light_drag_gui_benchmark.py",
+    "houdini_portable_texture_benchmark.py",
+    "houdini_render_view_active_quit_gui_smoke.py",
+    "houdini_render_view_controls_gui_smoke.py",
+    "houdini_render_view_presented_gui_smoke.py",
+    "houdini_rop_hooks_smoke.py",
+    "houdini_top_level_incremental_smoke.py",
+    "houdini_validation_parallel_smoke.py",
+    "houdini_velocity_motion_smoke.py",
+    "houdini_viewer_background_composites_smoke.py",
+    "houdini_viewer_chrome_scale_gui_smoke.py",
+    "houdini_viewer_display_modes_smoke.py",
+    "houdini_viewer_dock_latency_gui_benchmark.py",
+    "houdini_viewer_fullscreen_gui_smoke.py",
+    "houdini_viewer_lifetime_gui_smoke.py",
+    "houdini_viewer_linear_background_smoke.py",
+    "houdini_viewer_native_geometry_gui_smoke.py",
+    "houdini_viewer_pick_tools_gui_smoke.py",
+    "houdini_viewer_reopen_gui_smoke.py",
+    "houdini_viewer_toolbar_layout_gui_smoke.py",
+    "houdini_viewer_update_time_gui_smoke.py",
+    "houdini_volume_wire_smoke.py",
+    "houdini_warning_console_smoke.py",
+    "houdini_wire_gather_smoke.py",
+    "light_tree_edit_benchmark.py",
+    "light_tree_first_frame_benchmark.cpp",
+    "light_tree_first_frame_benchmark.py",
+    "ramp_curve_parity_gate.py",
+    "scoped_startup_integration_test.py",
+    "upstream/point_nonuniform_normal.cpp"
+  ]
+}

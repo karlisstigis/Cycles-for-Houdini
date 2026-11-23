@@ -1,0 +1,258 @@
+From 1d506d2bd168496cf968e444dfbf47d11b740b0e Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:30 +0100
+Subject: [PATCH] Include owned resource revisions in image identity and
+ numeric internal sockets in shader/displacement identity; isolate derived
+ cache lookup by revision/configuration; propagate image-load failures to
+ render progress. Unconfigured upstream resources retain the default cache
+ lookup.
+
+Locked-Patch: patches/0010-texture-resource-revisions.patch
+Locked-Patch-SHA256: 3a19b25f869977726b33e0c01d2b8c5e972d891a16ffa56dc7d78e5ec5a3c313
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_texture_cache_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 1afcc15aa9aebd2a7d803fbf45da2ea805ebbf0d
+Previous-Patch: patches/0010-texture-resource-revisions.patch
+Previous-Patch-SHA256: 3a19b25f869977726b33e0c01d2b8c5e972d891a16ffa56dc7d78e5ec5a3c313
+Rationale: Owned resource revision tokens and cache identities let an embedding replace bytes without changing filenames; upstream callers do not yet publish that identity.
+Contract: Include owned resource revisions in image identity and numeric internal sockets in shader/displacement identity; isolate derived cache lookup by revision/configuration; propagate image-load failures to render progress. Unconfigured upstream resources retain the default cache lookup.
+Tests: tests/houdini_texture_cache_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/image.cpp b/src/scene/image.cpp
+index dad2a41d2f4fb23f9a0e7c1da850acb8d14cf9e6..ede6b6a56513b3607a0c84309dbe11c5119accaf 100644
+--- a/src/scene/image.cpp
++++ b/src/scene/image.cpp
+@@ -16,6 +16,7 @@
+ #include "util/colorspace.h"
+ #include "util/debug.h"
+ #include "util/log.h"
++#include "util/path.h"
+ #include "util/progress.h"
+ #include "util/task.h"
+ #include "util/types_image.h"
+@@ -263,7 +264,10 @@ void ImageManager::load_image_metadata(ImageSingle *img, Progress &progress)
+     /* Change image to use tx file if supported. */
+     const ImageLoaderParams params = {.use_texture_cache = use_texture_cache,
+                                       .auto_texture_cache = auto_texture_cache,
+-                                      .texture_cache_path = texture_cache_path,
++                                      .texture_cache_path = img->params.cache_namespace.empty() ?
++                                                                texture_cache_path :
++                                                                path_join(texture_cache_path, img->params.cache_namespace),
++                                      .texture_cache_namespace_only = !img->params.cache_namespace.empty(),
+                                       .colorspace = img->params.colorspace,
+                                       .alpha_type = img->params.alpha_type,
+                                       .load_failure_num = load_failure_num,
+@@ -670,7 +674,7 @@ void ImageManager::device_update(Device *device, Scene *scene, Progress &progres
+ 
+   pool.wait_work();
+   device_load_tiled_descriptors(scene);
+-  report_failures();
++  report_failures(progress);
+ 
+   /* Copy device arrays. */
+   device_copy_image_textures(device, scene);
+@@ -710,7 +714,7 @@ void ImageManager::device_load_images(Device *device,
+   }
+   pool.wait_work();
+   device_load_tiled_descriptors(scene);
+-  report_failures();
++  report_failures(progress);
+ 
+   /* Copy device arrays. */
+   device_copy_image_textures(device, scene);
+@@ -737,7 +741,7 @@ void ImageManager::device_load_builtin(Device *device, Scene *scene, Progress &p
+ 
+   pool.wait_work();
+   device_load_tiled_descriptors(scene);
+-  report_failures();
++  report_failures(progress);
+ }
+ 
+ void ImageManager::device_free_builtin(Scene *scene)
+@@ -854,7 +858,7 @@ bool ImageManager::get_auto_texture_cache() const
+   return auto_texture_cache;
+ }
+ 
+-void ImageManager::report_failures()
++void ImageManager::report_failures(Progress &progress)
+ {
+   /* Report failure once after the full update. If we report an error immediately then
+    * exit-on-error will abort the process without waiting for other threads to cleanly finish
+@@ -862,6 +866,7 @@ void ImageManager::report_failures()
+   const int load_num = load_failure_num.exchange(0);
+   if (load_num > 0) {
+     LOG_ERROR << "Failed to load " << load_num << " image files";
++    progress.set_error("Failed to load " + std::to_string(load_num) + " image files");
+   }
+ 
+   const int tx_num = tx_failure_num.exchange(0);
+diff --git a/src/scene/image.h b/src/scene/image.h
+index 0b2e8fb149fa12cf28e83484c1a97af13b936518..0bf6b9aca63ad1831a086c508f1dc1f5db8f9166 100644
+--- a/src/scene/image.h
++++ b/src/scene/image.h
+@@ -43,6 +43,9 @@ class ImageParams {
+   ImageAlphaType alpha_type = IMAGE_ALPHA_AUTO;
+   ustring colorspace;
+   float frame = 0.0f;
++  /* Host-provided resource revision. Empty retains upstream file identity. */
++  string resource_revision;
++  string cache_namespace;
+ 
+   ImageParams() : colorspace(u_colorspace_scene_linear) {}
+ 
+@@ -50,7 +53,8 @@ class ImageParams {
+   {
+     return (animated == other.animated && interpolation == other.interpolation &&
+             extension == other.extension && alpha_type == other.alpha_type &&
+-            colorspace == other.colorspace && frame == other.frame);
++            colorspace == other.colorspace && frame == other.frame &&
++            resource_revision == other.resource_revision && cache_namespace == other.cache_namespace);
+   }
+ };
+ 
+@@ -232,7 +236,7 @@ class ImageManager {
+   void device_resize_image_textures(Scene *scene);
+   void device_copy_image_textures(Device *device, Scene *scene);
+ 
+-  void report_failures();
++  void report_failures(Progress &progress);
+ 
+   friend class ImageHandle;
+ };
+diff --git a/src/scene/image_loader.h b/src/scene/image_loader.h
+index 7ebf7b320480095b39009415d231c18ed3c3829e..6bb02a7b5145dec078f9da86906bf5bb60f1205a 100644
+--- a/src/scene/image_loader.h
++++ b/src/scene/image_loader.h
+@@ -20,6 +20,7 @@ struct ImageLoaderParams {
+   bool use_texture_cache = true;
+   bool auto_texture_cache = true;
+   string texture_cache_path;
++  bool texture_cache_namespace_only = false;
+   ustring colorspace;
+   ImageAlphaType alpha_type;
+ 
+diff --git a/src/scene/image_oiio.cpp b/src/scene/image_oiio.cpp
+index 12643efc07780aa1dd212b75d6e604b4c883d600..73f5566236a07251bcabd9c45b542cb2007355aa 100644
+--- a/src/scene/image_oiio.cpp
++++ b/src/scene/image_oiio.cpp
+@@ -44,7 +44,8 @@ bool OIIOImageLoader::load_metadata(ImageMetaData &metadata,
+                                   params.alpha_type,
+                                   IMAGE_FORMAT_PLAIN,
+                                   texture_cache_filepath_,
+-                                  metadata);
++                                  metadata,
++                                  !params.texture_cache_namespace_only);
+ 
+     if (found) {
+       return true;
+diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
+index 5a73284c573dad479b4eb631ea2fa76df4921f9a..0040e4705e8a305ccb07d5c2e17478ebf995d14a 100644
+--- a/src/scene/shader_nodes.cpp
++++ b/src/scene/shader_nodes.cpp
+@@ -251,6 +251,8 @@ NODE_DEFINE(ImageTextureNode)
+ 
+   SOCKET_STRING(filename, "Filename", ustring());
+   SOCKET_STRING(colorspace, "Colorspace", u_colorspace_auto);
++  SOCKET_UINT64(resource_revision_high, "Resource Revision High", 0, SocketType::INTERNAL);
++  SOCKET_UINT64(resource_revision_low, "Resource Revision Low", 0, SocketType::INTERNAL);
+ 
+   static NodeEnum alpha_type_enum;
+   alpha_type_enum.insert("auto", IMAGE_ALPHA_AUTO);
+@@ -312,6 +314,12 @@ ShaderNode *ImageTextureNode::clone(ShaderGraph *graph) const
+ ImageParams ImageTextureNode::image_params() const
+ {
+   ImageParams params;
++  if (resource_revision_high || resource_revision_low) {
++    params.resource_revision = string_printf("%016llX%016llX",
++                                             static_cast<unsigned long long>(resource_revision_high),
++                                             static_cast<unsigned long long>(resource_revision_low));
++  }
++  params.cache_namespace = cache_namespace;
+   params.animated = animated;
+   params.interpolation = interpolation;
+   params.extension = extension;
+@@ -548,6 +556,8 @@ NODE_DEFINE(EnvironmentTextureNode)
+ 
+   SOCKET_STRING(filename, "Filename", ustring());
+   SOCKET_STRING(colorspace, "Colorspace", u_colorspace_auto);
++  SOCKET_UINT64(resource_revision_high, "Resource Revision High", 0, SocketType::INTERNAL);
++  SOCKET_UINT64(resource_revision_low, "Resource Revision Low", 0, SocketType::INTERNAL);
+ 
+   static NodeEnum alpha_type_enum;
+   alpha_type_enum.insert("auto", IMAGE_ALPHA_AUTO);
+@@ -597,6 +607,12 @@ ShaderNode *EnvironmentTextureNode::clone(ShaderGraph *graph) const
+ ImageParams EnvironmentTextureNode::image_params() const
+ {
+   ImageParams params;
++  if (resource_revision_high || resource_revision_low) {
++    params.resource_revision = string_printf("%016llX%016llX",
++                                             static_cast<unsigned long long>(resource_revision_high),
++                                             static_cast<unsigned long long>(resource_revision_low));
++  }
++  params.cache_namespace = cache_namespace;
+   params.animated = animated;
+   params.interpolation = interpolation;
+   params.extension = EXTENSION_REPEAT;
+diff --git a/src/scene/shader_nodes.h b/src/scene/shader_nodes.h
+index 7fc2f140118fd59e9c8600567308805345819020..aff086c2029cc039ade6e0df6bcf187233acc94c 100644
+--- a/src/scene/shader_nodes.h
++++ b/src/scene/shader_nodes.h
+@@ -119,6 +119,9 @@ class ImageTextureNode : public ImageSlotTextureNode {
+   }
+ 
+   ImageParams image_params() const;
++  NODE_SOCKET_API(uint64_t, resource_revision_high)
++  NODE_SOCKET_API(uint64_t, resource_revision_low)
++  string cache_namespace;
+ 
+   void update_images(const SVMCompiler &compiler) override;
+ 
+@@ -159,6 +162,9 @@ class EnvironmentTextureNode : public ImageSlotTextureNode {
+   }
+ 
+   ImageParams image_params() const;
++  NODE_SOCKET_API(uint64_t, resource_revision_high)
++  NODE_SOCKET_API(uint64_t, resource_revision_low)
++  string cache_namespace;
+ 
+   void update_images(const SVMCompiler &compiler) override;
+ 
+diff --git a/src/util/image_maketx.cpp b/src/util/image_maketx.cpp
+index d974214c6df85dc06037ea5e3849a6b1512e8991..bf0d7edfca032590c98da54e1da68a85cc5f9836 100644
+--- a/src/util/image_maketx.cpp
++++ b/src/util/image_maketx.cpp
+@@ -404,7 +404,8 @@ bool resolve_tx(const string &filepath,
+                 const ImageAlphaType alpha_type,
+                 const ImageFormatType format_type,
+                 string &out_filepath,
+-                ImageMetaData &out_metadata)
++                ImageMetaData &out_metadata,
++                const bool lookup_default_cache)
+ {
+ 
+   /* Nothing to do if file doesn't even exist. */
+@@ -434,7 +435,7 @@ bool resolve_tx(const string &filepath,
+ 
+   /* Check in the default location. */
+   const char *default_texture_cache_dir = "blender_tx";
+-  if (texture_cache_path != default_texture_cache_dir) {
++  if (lookup_default_cache && texture_cache_path != default_texture_cache_dir) {
+     const string tx_filename = unique_filename_tx(
+         filepath, texture_cache_path, colorspace, alpha_type, format_type, false);
+     const string tx_default_filepath = path_join(path_join(filedir, default_texture_cache_dir),
+diff --git a/src/util/image_maketx.h b/src/util/image_maketx.h
+index d7ea270e44acb6f20579f95e7a352c0a7c73ba0c..9d85223257e2c4e5d07143972d93864ca129c82c 100644
+--- a/src/util/image_maketx.h
++++ b/src/util/image_maketx.h
+@@ -26,7 +26,8 @@ bool resolve_tx(const string &filepath,
+                 const ImageAlphaType alpha_type,
+                 const ImageFormatType format_type,
+                 std::string &out_filepath,
+-                ImageMetaData &out_metadata);
++                ImageMetaData &out_metadata,
++                bool lookup_default_cache = true);
+ 
+ bool make_tx(const string &filepath,
+              const string &out_filepath,

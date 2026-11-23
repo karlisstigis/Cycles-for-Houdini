@@ -1,0 +1,103 @@
+From 679743f917e9b07bd4cd4b938b49b04ae55156e1 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:37 +0100
+Subject: [PATCH] retained mesh shading
+
+Locked-Patch: patches/0050-retained-mesh-shading.patch
+Locked-Patch-SHA256: 56601d5c314ae1027fe459739626cb9e04c6e6823244c185bcefcc72b24cd4e1
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_shading_payload_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 973ef783e52b65283f525d9bb5da45ef33ac5d86
+Previous-Patch: patches/0050-retained-mesh-shading.patch
+Previous-Patch-SHA256: 56601d5c314ae1027fe459739626cb9e04c6e6823244c185bcefcc72b24cd4e1
+Rationale: Unsubdivided mesh shading can retain undisplaced positions/normals and a validated basis rather than recomputing true displacement on every field edit.
+Contract: retained mesh shading
+Tests: tests/houdini_shading_payload_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index ea2f8e8468f60d8adab5fea220ab5a3c2ec2787a..957c4aae0a7718854cd0f0277c94f9666203517f 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -990,7 +990,7 @@ void GeometryManager::device_update(Device *device,
+ 
+     /* Apply tangents for generated and UVs (if any need them) or remove if not needed */
+     mesh->update_tangents(scene, true, &progress);
+-    if (!mesh->has_true_displacement()) {
++    if (!mesh->has_true_displacement() || mesh->can_reuse_displacement()) {
+       mesh->update_tangents(scene, false, &progress);
+     }
+   });
+@@ -1261,6 +1261,9 @@ void GeometryManager::device_update(Device *device,
+     if (geom->is_mesh()) {
+       Mesh *mesh = static_cast<Mesh *>(geom);
+       mesh->subd_attributes.clear_modified();
++      if (mesh->geometry_update_completed) {
++        mesh->geometry_update_completed(*mesh);
++      }
+     }
+   }
+ 
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index 991bf5d356180cb1a423d6dd8ef5184906ffbb19..efe0c51db52989e505c877f39543aa238dfd6ff3 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -151,6 +151,15 @@ static void mikk_compute_tangents(Attribute *attr_uv,
+   }
+ 
+   Attribute *attr_P = attributes.find(ATTR_STD_POSITION);
++  if (tangent_std == ATTR_STD_UV_TANGENT_UNDISPLACED && mesh->can_reuse_displacement()) {
++    if (Attribute *original = attributes.find(ATTR_STD_POSITION_UNDISPLACED)) {
++      attr_P = original;
++    }
++    if (Attribute *original = attributes.find(ATTR_STD_NORMAL_UNDISPLACED)) {
++      attr_cN = (original->element == ATTR_ELEMENT_CORNER_NORMAL) ? original : nullptr;
++      attr_vN = attr_cN ? nullptr : original;
++    }
++  }
+   const bool sampled = mesh->has_motion_blur() &&
+                        ((attr_P && attr_P->has_motion()) ||
+                         (attr_vN && attr_vN->has_motion()) ||
+@@ -428,6 +437,8 @@ void Mesh::clear_non_sockets()
+ {
+   subdivision_shading_samples.reset();
+   validated_displacement_reuse = false;
++  retain_shading_basis = false;
++  geometry_update_completed = {};
+   Geometry::clear(true);
+ 
+   num_subd_added_verts = 0;
+@@ -808,7 +819,7 @@ void Mesh::add_vertex_normals()
+ 
+ void Mesh::add_undisplaced(Scene *scene)
+ {
+-  if (need_attribute(scene, ATTR_STD_POSITION_UNDISPLACED) &&
++  if ((retain_shading_basis || need_attribute(scene, ATTR_STD_POSITION_UNDISPLACED)) &&
+       !attributes.find(ATTR_STD_POSITION_UNDISPLACED))
+   {
+     /* Copy position to attribute. */
+@@ -825,7 +836,7 @@ void Mesh::add_undisplaced(Scene *scene)
+     }
+   }
+ 
+-  if (need_attribute(scene, ATTR_STD_NORMAL_UNDISPLACED) &&
++  if ((retain_shading_basis || need_attribute(scene, ATTR_STD_NORMAL_UNDISPLACED)) &&
+       !attributes.find(ATTR_STD_NORMAL_UNDISPLACED))
+   {
+     /* Copy corner or vertex normal to attribute, using the matching element type
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index 4f81a3690ea17289fa147deab2a776a7ba849896..b2c2c70f309b4a7e401f70ce321985995e043746 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -181,6 +181,10 @@ class Mesh : public Geometry {
+   /* Set only after comparing effective displacement dependencies. A source
+    * position/topology edit still invalidates this guard automatically. */
+   bool validated_displacement_reuse = false;
++  /* Native retained shading can regenerate original-basis tangents after a UV
++   * edit. Keep those owned inputs before the first displacement evaluation. */
++  bool retain_shading_basis = false;
++  std::function<void(Mesh &)> geometry_update_completed;
+   bool can_reuse_displacement()
+   {
+     return validated_displacement_reuse && !position_is_modified() &&

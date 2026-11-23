@@ -1,0 +1,62 @@
+From d3073e0ecab36c683d34cc298bbff6ac84de53b1 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:42 +0100
+Subject: [PATCH] interactive adaptive target
+
+Locked-Patch: patches/0072-interactive-adaptive-target.patch
+Locked-Patch-SHA256: 2deb22f9f09488e01c995a82539f0fa179d0c322f36da2f6af0a75ecb63806e6
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_adaptive_target_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 20eaa7afaa5062c3926ff6a2dcf236a0ef86b07f
+Previous-Patch: patches/0072-interactive-adaptive-target.patch
+Previous-Patch-SHA256: 2deb22f9f09488e01c995a82539f0fa179d0c322f36da2f6af0a75ecb63806e6
+Rationale: Disabling the progressive noise floor lets the host own the interactive adaptive target without temporarily overriding its intended quality policy.
+Contract: interactive adaptive target
+Tests: tests/houdini_adaptive_target_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/integrator/render_scheduler.cpp b/src/integrator/render_scheduler.cpp
+index 8085ea9f6491019f73165cd89933cbdb248729f6..12bf64220ed6ff4064e141db523c5427efe0312e 100644
+--- a/src/integrator/render_scheduler.cpp
++++ b/src/integrator/render_scheduler.cpp
+@@ -25,7 +25,7 @@ RenderScheduler::RenderScheduler(TileManager &tile_manager, const SessionParams
+       tile_manager_(tile_manager),
+       default_start_resolution_divider_(params.use_resolution_divider ? pixel_size_ * 8 : 0)
+ {
+-  use_progressive_noise_floor_ = !background_;
++  use_progressive_noise_floor_ = !background_ && params.use_progressive_noise_floor;
+ }
+ 
+ void RenderScheduler::set_need_schedule_cryptomatte(bool need_schedule_cryptomatte)
+diff --git a/src/session/session.h b/src/session/session.h
+index dd14083da044e665257772aaf9dd0b3a23376d91..2cf3c6a305926ca7c9dc290b933ecd40ba4a6cdd 100644
+--- a/src/session/session.h
++++ b/src/session/session.h
+@@ -65,6 +65,10 @@ class SessionParams {
+ 
+   bool use_resolution_divider;
+ 
++  /* Interactive integrations may keep progressive display without temporarily
++   * relaxing the authored adaptive threshold. */
++  bool use_progressive_noise_floor;
++
+   ShadingSystem shadingsystem;
+ 
+   /* Session-specific temporary directory to store in-progress EXR files in. */
+@@ -89,6 +93,7 @@ class SessionParams {
+     tile_size = 2048;
+ 
+     use_resolution_divider = true;
++    use_progressive_noise_floor = true;
+ 
+     shadingsystem = SHADINGSYSTEM_SVM;
+   }
+@@ -102,6 +107,7 @@ class SessionParams {
+              threads == params.threads && use_profiling == params.use_profiling &&
+              use_auto_tile == params.use_auto_tile && tile_size == params.tile_size &&
+              use_resolution_divider == params.use_resolution_divider &&
++             use_progressive_noise_floor == params.use_progressive_noise_floor &&
+              shadingsystem == params.shadingsystem);
+   }
+ };

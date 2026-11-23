@@ -1,0 +1,44 @@
+From 4f143cce27053161c809461bcabe7e1255acd5bf Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 03:16:08 +0000
+Subject: [PATCH 107/107] Build combined curve and point positions only when
+ they are copied
+
+The attribute update packed position and radius of every curve and point geometry into a new array on every update, also when the values were unchanged and the table did not copy them: about 35 ms per light or object edit with 1M curves. The array is now built only when its values are copied. CYCLES_ALWAYS_PACK_POSITION_RADIUS builds it on every update as before, as a reference.
+
+Rationale: With 1M static curves every light or object edit spent about 35 ms packing 12M curve keys that were then not copied.
+Contract: The tables receive the same values at the same offsets; only the unused host copy of unmodified curve and point positions is no longer built; CYCLES_ALWAYS_PACK_POSITION_RADIUS restores the previous packing.
+Tests: tests/houdini_curve_subdivisions_smoke.py
+---
+ src/scene/geometry_attributes.cpp | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index a2b9eeebabb0c5711d38c0dbe4a40088ed43665e..ce6ab107cfa59dc26af4e24d9ba4ec16609c51ba 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -601,9 +601,14 @@ class AttributeTableBuilder {
+     const size_t base_size = attr_P->size;
+     const int steps = attr_P->has_motion() ? geom->get_motion_steps() : 1;
+     const size_t total_size = base_size * steps;
++    const bool modified = attr_P->modified || attr_R->modified || force_copy;
+ 
+-    vector<float4> combined(total_size);
+-    for (int step = 0; step < steps; step++) {
++    /* The table copies the values only when they are modified: build the combined values only
++     * then. CYCLES_ALWAYS_PACK_POSITION_RADIUS builds them on every update as before, as a
++     * reference. */
++    static const bool always_pack = getenv("CYCLES_ALWAYS_PACK_POSITION_RADIUS") != nullptr;
++    vector<float4> combined((modified || always_pack) ? total_size : 0);
++    for (int step = 0; step < steps && !combined.empty(); step++) {
+       const packed_float3 *P = attr_P->data<packed_float3>(step);
+       const float *R = attr_R->data<float>(step);
+       const size_t dst_offset = size_t(step) * base_size;
+@@ -616,7 +621,6 @@ class AttributeTableBuilder {
+     type = TypeFloat4;
+ 
+     int &offset = desc.offset;
+-    const bool modified = attr_P->modified || attr_R->modified || force_copy;
+     AttributeTableEntry<float4> &table = geom->is_hair() ? curve_keys : points;
+     offset = table.add(combined.data(), total_size, modified);
+ 

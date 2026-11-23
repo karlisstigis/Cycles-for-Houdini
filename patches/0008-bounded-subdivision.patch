@@ -1,0 +1,195 @@
+From 42f7f29d02f33b86e18a72ff9740b0efd28eb2f5 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:30 +0100
+Subject: [PATCH] Add optional post-tessellation seam/metric publication,
+ per-mesh triangle guards and cancellation checks in
+ splitting/dicing/interpolation. Upstream consumers retain unlimited budgets
+ unless explicitly configured.
+
+Locked-Patch: patches/0008-bounded-subdivision.patch
+Locked-Patch-SHA256: fa432f1042293c745b05e0dae58a7a9dc36c3bc0f3911d52af53ec2c55b120fc
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_subdivision_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 6dbc90bfd742d937d5e966b9dcec8fe55ef5b72f
+Previous-Patch: patches/0008-bounded-subdivision.patch
+Previous-Patch-SHA256: fa432f1042293c745b05e0dae58a7a9dc36c3bc0f3911d52af53ec2c55b120fc
+Rationale: Subdivision budgets, seam/metric publication and bounded cancellation add host admission policy to tessellation; unlimited upstream behavior remains the default.
+Contract: Add optional post-tessellation seam/metric publication, per-mesh triangle guards and cancellation checks in splitting/dicing/interpolation. Upstream consumers retain unlimited budgets unless explicitly configured.
+Tests: tests/houdini_subdivision_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 5f5a06adf9202fc3a087b4ff0328a4b26521a273..7f8fc7e8ed73fceda2283b3a5e172215cbf49763 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -958,6 +958,8 @@ void GeometryManager::device_update(Device *device,
+       SubdParams subd_params(mesh);
+       subd_params.dicing_rate = mesh->get_subd_dicing_rate();
+       subd_params.max_level = mesh->get_subd_max_level();
++      subd_params.progress = &progress;
++      subd_params.triangle_limit = mesh->subdivision_triangle_limit;
+       if (mesh->get_subd_adaptive_space() == Mesh::SUBDIVISION_ADAPTIVE_SPACE_PIXEL) {
+         subd_params.objecttoworld = mesh->get_subd_objecttoworld();
+         subd_params.camera = dicing_camera;
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index 3af56904968d7fe1d52317d7918f18ebc65183aa..71157644e7c96ea97d40e04283a3f276267c1075 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -18,6 +18,7 @@
+ #include "util/set.h"
+ #include "util/types.h"
+ #include "util/unique_ptr.h"
++#include <functional>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -167,6 +168,16 @@ class Mesh : public Geometry {
+   NODE_SOCKET_API(Transform, subd_objecttoworld)
+ 
+   AttributeSet subd_attributes;
++  /* Optional integration hook, run after interpolation on the update thread.
++   * Allows render-vertex seam preparation without splitting the control mesh. */
++  std::function<void(Mesh &)> subdivision_post_tessellate;
++  uint64_t subdivision_triangle_limit = 0; /* Zero keeps upstream behavior. */
++  void resize_subdivision_vertices(const int count)
++  {
++    const int base_count = get_num_subd_base_verts();
++    num_subd_added_verts = count - base_count;
++    resize_mesh(count, num_triangles());
++  }
+ 
+   /* BVH */
+   size_t face_offset;
+diff --git a/src/scene/mesh_subdivision.cpp b/src/scene/mesh_subdivision.cpp
+index 46e02cf9c9ee55a3a599a327b2a491d65436c38b..730c10e7f76ebf61f8bfab12c50d92daff874a20 100644
+--- a/src/scene/mesh_subdivision.cpp
++++ b/src/scene/mesh_subdivision.cpp
+@@ -86,6 +86,9 @@ void Mesh::tessellate(SubdParams &params)
+     /* Split patches. */
+     DiagSplit split(params);
+     split.split_patches(osd_patches.data(), sizeof(OsdPatch));
++    if (params.progress && params.progress->get_cancel()) {
++      return;
++    }
+ 
+     /* Setup interpolation. */
+     SubdAttributeInterpolation interpolation(*this, osd_mesh, osd_data);
+@@ -157,6 +160,9 @@ void Mesh::tessellate(SubdParams &params)
+     /* Split patches. */
+     DiagSplit split(params);
+     split.split_patches(linear_patches.data(), sizeof(LinearQuadPatch));
++    if (params.progress && params.progress->get_cancel()) {
++      return;
++    }
+ 
+     /* Setup interpolation. */
+ #ifdef WITH_OPENSUBDIV
+@@ -170,6 +176,10 @@ void Mesh::tessellate(SubdParams &params)
+     dice.dice(split);
+   }
+ 
++  if ((!params.progress || !params.progress->get_cancel()) && subdivision_post_tessellate) {
++    subdivision_post_tessellate(*this);
++  }
++
+   // TODO: Free subd base data? Or will this break interactive updates?
+ }
+ 
+diff --git a/src/subd/dice.cpp b/src/subd/dice.cpp
+index 7e3a992bba7c91459b8433f72fc2162466055000..30e33bbd7a6bb7843fd4209a4ad4994179bf66a6 100644
+--- a/src/subd/dice.cpp
++++ b/src/subd/dice.cpp
+@@ -672,6 +672,9 @@ void EdgeDice::dice(const DiagSplit &split)
+    * on these coordinates and they are unique assigned to a subpatch for determinism. */
+   parallel_for(blocked_range<size_t>(0, num_subpatches, 8), [&](const blocked_range<size_t> &r) {
+     for (size_t i = r.begin(); i != r.end(); i++) {
++      if (params.progress && params.progress->get_cancel()) {
++        return;
++      }
+       const SubPatch &subpatch = split.get_subpatch(i);
+       if (subpatch.shape == SubPatch::TRIANGLE) {
+         tri_set_sides(subpatch);
+@@ -685,6 +688,9 @@ void EdgeDice::dice(const DiagSplit &split)
+   /* Inner vertex coordinates and triangles. */
+   parallel_for(blocked_range<size_t>(0, num_subpatches, 8), [&](const blocked_range<size_t> &r) {
+     for (size_t i = r.begin(); i != r.end(); i++) {
++      if (params.progress && params.progress->get_cancel()) {
++        return;
++      }
+       const SubPatch &subpatch = split.get_subpatch(i);
+       if (subpatch.shape == SubPatch::TRIANGLE) {
+         tri_dice(subpatch);
+diff --git a/src/subd/dice.h b/src/subd/dice.h
+index 1d3dda9623678afa9a2c62839311b3ca344a4352..ca18b173beec9fb51f508e17051bf4b245ec5efe 100644
+--- a/src/subd/dice.h
++++ b/src/subd/dice.h
+@@ -10,6 +10,7 @@
+  * ARB_tessellation_shader OpenGL extension, Section 2.X.2. */
+ 
+ #include "util/transform.h"
++#include "util/progress.h"
+ #include "util/types.h"
+ 
+ #include "subd/subpatch.h"
+@@ -32,6 +33,8 @@ struct SubdParams {
+   int max_level = 12;
+   Camera *camera = nullptr;
+   Transform objecttoworld = transform_identity();
++  Progress *progress = nullptr;
++  uint64_t triangle_limit = 0;
+ 
+   SubdParams(Mesh *mesh_, bool ptex_ = false) : mesh(mesh_), ptex(ptex_) {}
+ };
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index 421f72304d988052d1bf89fc09b13fa65be37fb9..0a5bfd3c477af68fa7f915df374a1eb173861991 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -67,6 +67,17 @@ void DiagSplit::alloc_edge(SubPatch::Edge *sub_edge,
+ 
+ void DiagSplit::alloc_subpatch(SubPatch &&sub)
+ {
++  if (params.progress && params.progress->get_cancel()) {
++    return;
++  }
++  if (params.triangle_limit &&
++      uint64_t(num_triangles) + sub.calc_num_triangles() > params.triangle_limit) {
++    if (params.progress) {
++      params.progress->set_error("Subdivision triangle budget exceeded for " +
++                                 params.mesh->name.string());
++    }
++    return;
++  }
+   assert(sub.edges[0].edge->T >= 1);
+   assert(sub.edges[1].edge->T >= 1);
+   assert(sub.edges[2].edge->T >= 1);
+@@ -336,6 +347,9 @@ float2 DiagSplit::split_edge(const Patch *patch,
+ 
+ void DiagSplit::split_quad(SubPatch &&sub)
+ {
++  if (params.progress && params.progress->get_cancel()) {
++    return;
++  }
+   /* Set edge factors if we haven't already. */
+   resolve_edge_factors(sub);
+ 
+@@ -576,6 +590,9 @@ void DiagSplit::split_quad_into_triangles(SubPatch &&sub)
+ 
+ void DiagSplit::split_triangle(SubPatch &&sub)
+ {
++  if (params.progress && params.progress->get_cancel()) {
++    return;
++  }
+   assert(sub.shape == SubPatch::TRIANGLE);
+ 
+   /* Set edge factors if we haven't already. */
+@@ -767,6 +784,9 @@ void DiagSplit::split_patches(const Patch *patches, const size_t patches_byte_st
+ 
+   /* Split all faces in the mesh. */
+   for (int f = 0; f < params.mesh->get_num_subd_faces(); f++) {
++    if (params.progress && params.progress->get_cancel()) {
++      return;
++    }
+     Mesh::SubdFace face = params.mesh->get_subd_face(f);
+     const Patch *patch = (const Patch *)(((char *)patches) +
+                                          (face.ptex_offset * patches_byte_stride));

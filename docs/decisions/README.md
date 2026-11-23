@@ -1,0 +1,15 @@
+# Renderer decisions
+
+- [Persistent worker for interactive rendering](0001-interactive-worker.md)
+- [Nested dielectrics require scene opt-in](0002-nested-dielectrics.md)
+- [Ship the RIS direct-light sampler](0003-direct-light-sampling.md)
+- [Keep upstream proposals local](0004-local-upstream-proposals.md)
+- [Maintain a two-tier Cycles fork](0005-cycles-fork-policy.md)
+- [Target Windows SOP artists for the first public release](0006-first-release-platform.md)
+- [Keep OBJ/SOP primary and preserve a reusable scene boundary for Solaris](0007-defer-solaris.md)
+- [Qualify Houdini builds by major/minor version, HDK ABI and dependencies](0008-houdini-build-compatibility.md)
+- [Integrator session and output grants](0009-integrator-session-output-grants.md)
+- [Keep RIS opt-in and retain interactive light-tree updates](0010-phase2-renderer-measurements.md)
+- [Review the Blender 5.3 stable rebase and renew scoped integrator grants](0011-blender53-rebase-review.md)
+- [Browse Blender asset libraries in an optional, worker-indexed panel](0012-asset-browser.md)
+- [Blender assets: folder layout, Blender File node and Blender Hierarchy object](0013-blender-assets-layout-and-nodes.md)

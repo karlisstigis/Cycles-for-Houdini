@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "assessed_at_utc": "2026-11-10",
+  "official_blender_release": "02f0899d78e374b63e7181d9061e1f7ab03419cc",
+  "official_standalone_branch": "release/5.3",
+  "official_standalone_commit": "77edc33168528e06b35540452bce5cce6068c3aa",
+  "repository_root_tree": "f015ba184e47bb2adc7ae3dc11d759b216334205",
+  "standalone_src_tree": "cbbe64d2d23f7cfdb20a2f6e7729557cdebcff4b",
+  "old_base": "74e9d9e48f86330987d7392166a51b3652d7c557",
+  "private_tip_preserved": "bff76ec5f4b10e6dda35f053454f06ba7d420a5f",
+  "upstream_commits_after_base": 30,
+  "mapping": [
+    {
+      "path": "CMakeLists.txt",
+      "blender_sha": "2ee8f7a6495d92325c69919cde62e659857c6c77",
+      "standalone_sha": "422aed75b24a2672c5067e22da66bf725288b345",
+      "equal": false
+    },
+    {
+      "path": "app",
+      "blender_sha": "c2d5cf17bac6abfcd12fec33b3c3082354c7fcb9",
+      "standalone_sha": "dd2da66c68bb98f4578f8bbd566380ce32764005",
+      "equal": false
+    },
+    {
+      "path": "blender",
+      "blender_sha": "e33c3f6ad03d92288267e1384d0c7aa9e2691a18",
+      "standalone_sha": null,
+      "equal": false
+    },
+    {
+      "path": "bvh",
+      "blender_sha": "b530915ea30d46eb2cd017f6d7f0393b6f59595b",
+      "standalone_sha": "b530915ea30d46eb2cd017f6d7f0393b6f59595b",
+      "equal": true
+    },
+    {
+      "path": "cmake",
+      "blender_sha": "a8196b4126ddaac4deaf2a69981ebc612a4d69ff",
+      "standalone_sha": "8c56d100cdb9c0d650f8e2c85b87718746462acd",
+      "equal": false
+    },
+    {
+      "path": "device",
+      "blender_sha": "5de8c3d43d0d709f57abd86f909deeb461f13630",
+      "standalone_sha": "5de8c3d43d0d709f57abd86f909deeb461f13630",
+      "equal": true
+    },
+    {
+      "path": "doc",
+      "blender_sha": "535ae461d130d4770c5915341315440ee073a951",
+      "standalone_sha": "535ae461d130d4770c5915341315440ee073a951",
+      "equal": true
+    },
+    {
+      "path": "graph",
+      "blender_sha": "845d84bd3ae961e00a85780b06332afc23a6c968",
+      "standalone_sha": "845d84bd3ae961e00a85780b06332afc23a6c968",
+      "equal": true
+    },
+    {
+      "path": "hydra",
+      "blender_sha": "3c1600fb60ab37392c4a347107b260fa6c05f147",
+      "standalone_sha": "259470b054c06db8039b4d70b628e19e7d6faa7e",
+      "equal": false
+    },
+    {
+      "path": "integrator",
+      "blender_sha": "40e369660c783f26064c77fb23996c2251879542",
+      "standalone_sha": "40e369660c783f26064c77fb23996c2251879542",
+      "equal": true
+    },
+    {
+      "path": "kernel",
+      "blender_sha": "794688241ee934367bb01e9c750c0d99084f4f6c",
+      "standalone_sha": "794688241ee934367bb01e9c750c0d99084f4f6c",
+      "equal": true
+    },
+    {
+      "path": "scene",
+      "blender_sha": "a9dbac9cf9b3246d53fb4934eea9726bb00997c2",
+      "standalone_sha": "a9dbac9cf9b3246d53fb4934eea9726bb00997c2",
+      "equal": true
+    },
+    {
+      "path": "session",
+      "blender_sha": "16e0b9a34a6122ef61f81b7da5fb9617dce61a32",
+      "standalone_sha": "16e0b9a34a6122ef61f81b7da5fb9617dce61a32",
+      "equal": true
+    },
+    {
+      "path": "subd",
+      "blender_sha": "aafd5a918ffdf26ec0ff7230e8c03546947d3beb",
+      "standalone_sha": "aafd5a918ffdf26ec0ff7230e8c03546947d3beb",
+      "equal": true
+    },
+    {
+      "path": "test",
+      "blender_sha": "62dd680e9218f3b3cf6211cdaaa350bafe036261",
+      "standalone_sha": "62dd680e9218f3b3cf6211cdaaa350bafe036261",
+      "equal": true
+    },
+    {
+      "path": "util",
+      "blender_sha": "12da2b7ce7a8b79d9557dbc265d8953dec2fec2e",
+      "standalone_sha": "12da2b7ce7a8b79d9557dbc265d8953dec2fec2e",
+      "equal": true
+    }
+  ],
+  "nonmatching_file_inventory": [
+    {
+      "path": "app/CMakeLists.txt",
+      "standalone": "a04fd600941a4a5e89258f6e9e5419ceb359eb9d",
+      "blender": "4c6d733e1be26e39dac7727bb77eb334f5ca46bc"
+    },
+    {
+      "path": "cmake/Modules/FindAlembic.cmake",
+      "standalone": "9dfea57ae5b30a9c4b2df22a5115447f176eff58"
+    },
+    {
+      "path": "cmake/Modules/FindBlosc.cmake",
+      "standalone": "0258a4cd9d8a2c25dde167bb9918cb6d1c8de96b"
+    },
+    {
+      "path": "cmake/Modules/FindClang.cmake",
+      "standalone": "4578fb3728cb737d865bf3358c4b17fbe3b4ace4"
+    },
+    {
+      "path": "cmake/Modules/FindEmbree.cmake",
+      "standalone": "9359b7236a5701210b476b092eecb3a32763d36e"
+    },
+    {
+      "path": "cmake/Modules/FindEpoxy.cmake",
+      "standalone": "f154b6136c07d733fa0475010ee1554ef4bf8b5b"
+    },
+    {
+      "path": "cmake/Modules/FindGLEW.cmake",
+      "standalone": "33b989ec49e4aed0b8d6dc5e53f72f5242c95a77"
+    },
+    {
+      "path": "cmake/Modules/FindGflags.cmake",
+      "standalone": "646cf36b4a0019802bad445a96377c976559986b"
+    },
+    {
+      "path": "cmake/Modules/FindGlog.cmake",
+      "standalone": "bc140027559183ef15149d92ea1ad313c20fc932"
+    },
+    {
+      "path": "cmake/Modules/FindHIP.cmake",
+      "standalone": "9c45309ceae6ff0b5c833e01db71248567f173c6"
+    },
+    {
+      "path": "cmake/Modules/FindHIPRT.cmake",
+      "standalone": "341f4e5b654a47bd9fdfdfc1aff0cdf1ef136ab0"
+    },
+    {
+      "path": "cmake/Modules/FindLLVM.cmake",
+      "standalone": "6bb61f11730b013eada1bc3aff819e09efdbed40"
+    },
+    {
+      "path": "cmake/Modules/FindLevelZero.cmake",
+      "standalone": "d5a764f5867c01aadce24adf5e5c0c6d0e1528e5"
+    },
+    {
+      "path": "cmake/Modules/FindLibEpoxy.cmake",
+      "standalone": "9f752f7d8cf04cbb9420b798f8ea57ca1e0489cf"
+    },
+    {
+      "path": "cmake/Modules/FindNanoVDB.cmake",
+      "standalone": "5ad876e36e1f9120ef70830717f94dd15630b65a"
+    },
+    {
+      "path": "cmake/Modules/FindOpenImageDenoise.cmake",
+      "standalone": "5e3424fb4224db7544de709fee0c3143a4f4f558"
+    },
+    {
+      "path": "cmake/Modules/FindOpenSubdiv.cmake",
+      "standalone": "c9c408370bfa29e68a515f6cf8fc8a3679ed0771"
+    },
+    {
+      "path": "cmake/Modules/FindOpenVDB.cmake",
+      "standalone": "a5f79c3f5e20166ca9476f86f06df17f397fedaa"
+    },
+    {
+      "path": "cmake/Modules/FindOptiX.cmake",
+      "standalone": "9216046352a2d8705d71751affeb41e6345578b6"
+    },
+    {
+      "path": "cmake/Modules/FindPugiXML.cmake",
+      "standalone": "928c47d7bf4ee4147351df899f1630937c19f5ec"
+    },
+    {
+      "path": "cmake/Modules/FindPythonLibsUnix.cmake",
+      "standalone": "3c01d256c0901faffa0333642c69c4097541190f"
+    },
+    {
+      "path": "cmake/Modules/FindSDL2.cmake",
+      "standalone": "fcb1157686f20415f82e808fd50cefe827c9c1f6"
+    },
+    {
+      "path": "cmake/Modules/FindSYCL.cmake",
+      "standalone": "9ac6d1d6b95a74a2c68a3657149a93683b00a151"
+    },
+    {
+      "path": "cmake/Modules/FindTBB.cmake",
+      "standalone": "d4d43ad28ae172bc8ab5df6776e5cd60be8bba9d"
+    },
+    {
+      "path": "cmake/Modules/FindUSD.cmake",
+      "standalone": "e46b9e915d7701e6c226e19dec8b79ae099c0342"
+    },
+    {
+      "path": "cmake/Modules/FindUSDHoudini.cmake",
+      "standalone": "7c50030ae48b8c943cfa7811e311d10ee774a15a"
+    },
+    {
+      "path": "cmake/Modules/FindUSDPixar.cmake",
+      "standalone": "ebe8a6f58116fa6be05b1ab0876649b2b220b688"
+    },
+    {
+      "path": "cmake/Modules/FindVulkan.cmake",
+      "standalone": "26ef6d5001adb80fc6419f6659126ed940917470"
+    },
+    {
+      "path": "cmake/Modules/FindZstd.cmake",
+      "standalone": "0da9da9106280669509018306c62892ed05406c8"
+    },
+    {
+      "path": "cmake/Modules/Findsse2neon.cmake",
+      "standalone": "5872d040eab6c8111755243eb4ddc539022a73e5"
+    },
+    {
+      "path": "cmake/compiler_utils.cmake",
+      "standalone": "343619c1cc82f7a50064edd93b719c66b8a05212"
+    },
+    {
+      "path": "cmake/configure_build.cmake",
+      "standalone": "3ee1f8b76139ac22ba889e93bc8d74a72bb74d63"
+    },
+    {
+      "path": "cmake/dependency_targets.cmake",
+      "standalone": "c9275ec3d0130dab15d97afa61e5c87dff589a33"
+    },
+    {
+      "path": "cmake/detect_platform.cmake",
+      "standalone": "1021b3518a3b5bc8c74d6b42f7bf701c95f2d476"
+    },
+    {
+      "path": "cmake/external_libs.cmake",
+      "standalone": "684cbf5e83d851f9bcc1710c680ce3e216b910ac",
+      "blender": "990d301e1ca06e6d18d26ce1ffa963bef7e3bc18"
+    },
+    {
+      "path": "cmake/macros.cmake",
+      "standalone": "ecd07f580f80039ef8912188e7561af6345acd32",
+      "blender": "08a0bc35fa634adec396230f28c1e0054d038cc6"
+    },
+    {
+      "path": "cmake/make_format.py",
+      "standalone": "45bfde02dcb4a78349a2cdba11a988a02bd2685e"
+    },
+    {
+      "path": "cmake/make_update.py",
+      "standalone": "fe02c3ecdd11c28545c6184b0a15482fd55d12ef"
+    },
+    {
+      "path": "cmake/make_utils.py",
+      "standalone": "07ae490f65dcb42948a0f1e3fe323d6b3f655adc"
+    },
+    {
+      "path": "hydra/CMakeLists.txt",
+      "standalone": "f1af78c92c473ffb2a4c2e18000c2b70b18fce5a",
+      "blender": "a964ec0f247089bbd231f88ec765a1fd2878baac"
+    },
+    {
+      "path": "hydra/plugin.cpp",
+      "standalone": "c9bef4809b7b76c5bddcc99414c2b8692c763e9a",
+      "blender": "2935d34c8e3dce2ec31206567f11cccfc13b7be1"
+    },
+    {
+      "path": "hydra/plugin.h",
+      "standalone": "5ca651f06f63c32adbb24c8c6a51f067115728f7",
+      "blender": "f714964e66dd7051d249a52d367d64ca97491c9c"
+    },
+    {
+      "path": "hydra/resources/cycles.json.in",
+      "standalone": "5e1636df866fcdf4e02d6bfc039b500cea3c4aee"
+    }
+  ],
+  "blender_top_cmake_sha": "2ee8f7a6495d92325c69919cde62e659857c6c77",
+  "standalone_top_cmake_sha": "422aed75b24a2672c5067e22da66bf725288b345",
+  "atomic": {
+    "blender_atomic_ops": "fc0db070d701c3172dbfb3612b83c944cf27c288",
+    "standalone_atomic_ops": "fc0db070d701c3172dbfb3612b83c944cf27c288",
+    "blender_intern_tree": "e30d774c37de32d62c679ae3953d00bd9c6b3607",
+    "standalone_intern_tree": "e30d774c37de32d62c679ae3953d00bd9c6b3607",
+    "equal": true
+  },
+  "windows_dependencies": {
+    "preserved": true,
+    "commit": "aa0c5db72fa9488bb685bdddbede780d19f483f5"
+  },
+  "source_urls": [
+    "https://github.com/blender/cycles/tree/77edc33168528e06b35540452bce5cce6068c3aa",
+    "https://github.com/blender/blender/tree/02f0899d78e374b63e7181d9061e1f7ab03419cc/intern/cycles",
+    "https://github.com/blender/blender/tree/02f0899d78e374b63e7181d9061e1f7ab03419cc/intern/atomic"
+  ],
+  "scope": "Isolated official standalone stable base only. Production refs, source.lock, build/install untouched. No feature qualification implied."
+}

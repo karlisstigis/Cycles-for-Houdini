@@ -1,0 +1,170 @@
+From 15b9f75dd4aadf98d2596c8908b8399ef90acd72 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:36 +0100
+Subject: [PATCH] panorama projection inverses
+
+Locked-Patch: patches/0043-panorama-projection-inverses.patch
+Locked-Patch-SHA256: 7881178f7f278d199568ef49896284349c88b742a006d13ddd96568fcd3adb3f
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_panorama_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 279758a8356c662c359bebbc3fcdc06051caedd4
+Previous-Patch: patches/0043-panorama-projection-inverses.patch
+Previous-Patch-SHA256: 7881178f7f278d199568ef49896284349c88b742a006d13ddd96568fcd3adb3f
+Rationale: Panorama inverse projections must choose the angular branch centered on the configured image and retain derivatives; partial/offset panoramas otherwise invert incorrectly.
+Contract: panorama projection inverses
+Tests: tests/houdini_panorama_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/camera/camera.h b/src/kernel/camera/camera.h
+index dd9ece69341d996563b61f87a62492a154bee137..db7fe0b16e228673f6c6fb03947ce4ac3c5e9a6f 100644
+--- a/src/kernel/camera/camera.h
++++ b/src/kernel/camera/camera.h
+@@ -417,7 +417,11 @@ ccl_device_inline Spectrum camera_sample_panorama(ccl_constant KernelCamera *cam
+     const float3 Pfocus = Dfocus * cam->focaldistance;
+ 
+     /* Calculate orthonormal coordinate system perpendicular to Dfocus. */
+-    const float3 U = normalize(make_float3(1.0f, 0.0f, 0.0f) - Dfocus.x * Dfocus);
++    float3 U = make_float3(1.0f, 0.0f, 0.0f) - Dfocus.x * Dfocus;
++    if (len_squared(U) < 1e-12f) {
++      U = make_float3(0.0f, 1.0f, 0.0f) - Dfocus.y * Dfocus;
++    }
++    U = normalize(U);
+     const float3 V = normalize(cross(Dfocus, U));
+ 
+     /* Compute new ray by shifting its origin (to account for aperture position) and
+diff --git a/src/kernel/camera/projection.h b/src/kernel/camera/projection.h
+index 7fc769c7b9eb45a1abed441c43b51eb767171e64..c3dbf38fe54fb948cb8925e2790630773893234a 100644
+--- a/src/kernel/camera/projection.h
++++ b/src/kernel/camera/projection.h
+@@ -14,6 +14,13 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++/* Select the angular branch nearest the centre of the configured image.
++ * atan2 alone loses the branch for longitude windows such as 0..360 degrees. */
++ccl_device_inline float panorama_unwrap_angle(const float angle, const float centre)
++{
++  return angle + roundf((centre - angle) / M_2PI_F) * M_2PI_F;
++}
++
+ /* Equirectangular coordinates <-> Cartesian direction */
+ 
+ ccl_device float2 direction_to_equirectangular_range(const float3 dir, const float4 range)
+@@ -22,7 +29,8 @@ ccl_device float2 direction_to_equirectangular_range(const float3 dir, const flo
+     return zero_float2();
+   }
+ 
+-  const float u = (atan2f(dir.y, dir.x) - range.y) / range.x;
++  const float phi = panorama_unwrap_angle(atan2f(dir.y, dir.x), range.y + 0.5f * range.x);
++  const float u = (phi - range.y) / range.x;
+   const float v = (acosf(dir.z / len(dir)) - range.w) / range.z;
+ 
+   return make_float2(u, v);
+@@ -34,7 +42,10 @@ ccl_device dual2 direction_to_equirectangular_range(const dual3 dir, const float
+     return make_zero<dual2>();
+   }
+ 
+-  const dual1 u = (atan2(dir.y(), dir.x()) - range.y) / range.x;
++  dual1 phi = atan2(dir.y(), dir.x());
++  /* Unwrapping adds a constant; retain the direction derivatives. */
++  phi.val = panorama_unwrap_angle(phi.val, range.y + 0.5f * range.x);
++  const dual1 u = (phi - range.y) / range.x;
+   const dual1 v = (acos(dir.z() / len(dir)) - range.w) / range.z;
+ 
+   return make_float2(u, v);
+@@ -67,7 +78,8 @@ ccl_device float3 equirectangular_to_direction(const float u, const float v)
+ ccl_device float2 direction_to_central_cylindrical(const float3 dir, const float4 range)
+ {
+   const float z = dir.z / len(make_float2(dir.x, dir.y));
+-  const float theta = atan2f(dir.y, dir.x);
++  const float theta = panorama_unwrap_angle(atan2f(dir.y, dir.x),
++                                           range.x + 0.5f * (range.y - range.x));
+   const float u = inverse_lerp(range.x, range.y, theta);
+   const float v = inverse_lerp(range.z, range.w, z);
+   return make_float2(u, v);
+@@ -125,7 +137,7 @@ ccl_device float2 direction_to_fisheye_equisolid(const float3 dir,
+                                                  const float width,
+                                                  const float height)
+ {
+-  const float theta = safe_acosf(dir.x);
++  const float theta = atan2f(len(make_float2(dir.y, dir.z)), dir.x);
+   const float r = 2.0f * lens * sinf(theta * 0.5f);
+ 
+   const float2 uv = r * safe_normalize(make_float2(dir.y, dir.z));
+@@ -176,37 +188,45 @@ ccl_device_inline float3 fisheye_lens_polynomial_to_direction(float u,
+ ccl_device float2 direction_to_fisheye_lens_polynomial(
+     float3 dir, const float coeff0, const float4 coeffs, const float width, const float height)
+ {
+-  const float theta = -safe_acosf(dir.x);
+-
+-  /* Initialize r with the closed-form solution for the special case
+-   * coeffs.y = coeffs.z = coeffs.w = 0 */
+-  float r = (theta - coeff0) / coeffs.x;
+-
+-  const float4 diff_coeffs = make_float4(1.0f, 2.0f, 3.0f, 4.0f) * coeffs;
+-
+-  for (int i = 0; i < 20; i++) {
+-    /** \name Newton's Method for Finding Roots
+-     *
+-     * Given is the result theta = distortion_model(r),
+-     * we need to find r.
+-     * Let F(r) := theta - distortion_model(r).
+-     * Then F(r) = 0 <=> distortion_model(r) = theta
+-     * Therefore we apply Newton's method for finding a root of F(r).
+-     * Newton step for the function F:
+-     * r_n+1 = r_n - F(r_n) / F'(r_n)
+-     * The addition in the implementation is due to canceling of signs.
+-     * \{ */
+-    const float old_r = r;
+-    const float r2 = r * r;
+-    const float F_r = theta - (coeff0 + dot(coeffs, make_float4(r, r2, r2 * r, r2 * r2)));
+-    const float dF_r = dot(diff_coeffs, make_float4(1.0f, r, r2, r2 * r));
+-    r += F_r / dF_r;
+-
+-    /* Early termination if the change is below the threshold */
+-    if (fabsf(r - old_r) < 1e-6f) {
+-      break;
++  const float theta = -atan2f(len(make_float2(dir.y, dir.z)), dir.x);
++
++  /* Safeguarded Newton iteration on the positive radial branch. A valid
++   * calibration may have no linear term, so dividing by coeffs.x is unsafe.
++   * Bracket in sensor units and expand for directions just outside the image. */
++  float lo = 0.0f;
++  float hi = max(0.5f * len(make_float2(width, height)), 1e-6f);
++  const float flo = coeff0 - theta;
++  float fhi = coeff0 + hi * (coeffs.x + hi * (coeffs.y + hi * (coeffs.z + hi * coeffs.w))) - theta;
++  for (int i = 0; i < 8 && (flo < 0.0f) == (fhi < 0.0f); i++) {
++    hi *= 2.0f;
++    fhi = coeff0 + hi * (coeffs.x + hi * (coeffs.y + hi * (coeffs.z + hi * coeffs.w))) - theta;
++  }
++  float r = coeffs.x != 0.0f ? (theta - coeff0) / coeffs.x : 0.5f * hi;
++  if (!isfinite_safe(r) || r < lo || r > hi) {
++    r = 0.5f * hi;
++  }
++  if (flo == 0.0f || (flo < 0.0f) == (fhi < 0.0f)) {
++    /* Some directions lie outside the calibrated radial branch (including
++     * its nonzero axial bias). Use the nearest endpoint, never a negative
++     * radius or an unbounded Newton step. */
++    r = fabsf(flo) <= fabsf(fhi) ? 0.0f : hi;
++  }
++  else {
++    for (int i = 0; i < 48; i++) {
++      const float f = coeff0 + r * (coeffs.x + r * (coeffs.y + r * (coeffs.z + r * coeffs.w))) - theta;
++      if (f == 0.0f || hi - lo < 1e-7f * max(width, height)) {
++        break;
++      }
++      if ((f < 0.0f) == (flo < 0.0f)) {
++        lo = r;
++      }
++      else {
++        hi = r;
++      }
++      const float derivative = coeffs.x + r * (2.0f * coeffs.y + r * (3.0f * coeffs.z + 4.0f * r * coeffs.w));
++      const float candidate = r - f / derivative;
++      r = isfinite_safe(candidate) && candidate > lo && candidate < hi ? candidate : 0.5f * (lo + hi);
+     }
+-    /** \} */
+   }
+ 
+   const float2 uv = r * safe_normalize(make_float2(dir.y, dir.z));

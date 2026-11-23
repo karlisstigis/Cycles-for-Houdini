@@ -1,0 +1,177 @@
+From 3920883af62f99c3cc60363f35d9f1a760175254 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Tue, 17 Nov 2026 06:50:01 +0000
+Subject: [PATCH] Reuse one temporary OptiX build buffer per device during an
+ update
+
+Every OptiX acceleration structure build allocated its temporary build
+memory and freed it again, two driver calls per build. With 20,000 small
+objects that is 40,000 allocations and frees per device and update.
+
+Each OptiX device now keeps one temporary buffer that grows when a build
+needs more and is reused by the next build on that device. Builds on one
+device run under its build lock and synchronize before returning, so a
+build never overwrites memory a previous build still uses. Builds that
+compact their result still free the temporary memory before compaction,
+as before. The geometry update releases the buffer through the new
+Device::release_bvh_build_memory once its object and scene structures are
+built, also when the update is cancelled or fails. The environment variable
+CYCLES_OPTIX_BVH_TEMP_PER_BUILD restores one allocation per build as a
+reference.
+
+Rationale: Per-build allocation and release of temporary build memory cost two driver calls per acceleration structure, which dominates many small builds.
+Contract: Build inputs, build calls and results are unchanged; the temporary buffer is only reused under the device build lock after the previous build synchronized, and is released at the end of the geometry update.
+Tests: tests/houdini_curve_subdivisions_smoke.py
+---
+ src/device/device.h              |  3 +++
+ src/device/multi/device.cpp      |  7 ++++++
+ src/device/optix/device_impl.cpp | 37 +++++++++++++++++++++++++++++---
+ src/device/optix/device_impl.h   |  4 ++++
+ src/scene/geometry.cpp           |  9 ++++++++
+ 5 files changed, 57 insertions(+), 3 deletions(-)
+
+diff --git a/src/device/device.h b/src/device/device.h
+index f017d088bf655a09dba056358482ec9949dc50b1..af7a03adaecccb01a2df129b16b825091ab888c9 100644
+--- a/src/device/device.h
++++ b/src/device/device.h
+@@ -256,6 +256,9 @@ class Device {
+   virtual void build_bvh(BVH *bvh, Progress &progress, bool refit);
+   /* Used by Metal and OptiX. */
+   virtual void release_bvh(BVH * /*bvh*/) {}
++  /* Free memory kept between acceleration structure builds of one update, such as a reused
++   * temporary build buffer. Called when the geometry update no longer builds structures. */
++  virtual void release_bvh_build_memory() {}
+ 
+   /* Inform of BVH limits, return true to force-rebuild all BVHs and kernels. */
+   virtual bool set_bvh_limits(size_t /*instance_count*/, size_t /*max_prim_count*/)
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index 040d5fc1e3ddcc0fc2a96bdcfa8f0f7b3d0f0ee2..5a2af273d498095ceb278ca0efea4db775373b24 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -227,6 +227,13 @@ class MultiDevice : public Device {
+     return true;
+   }
+ 
++  void release_bvh_build_memory() override
++  {
++    for (SubDevice &sub : devices) {
++      sub.device->release_bvh_build_memory();
++    }
++  }
++
+   void build_bvh(BVH *bvh, Progress &progress, bool refit) override
+   {
+     /* Try to build and share a single acceleration structure, if possible */
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 496b41e875cedd39231f3a43cec834090763a916..dfcf88b7f4895ae362016ee6b5c7278c0c5511e9 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -112,6 +112,7 @@ OptiXDevice::~OptiXDevice()
+   /* Make CUDA context current. */
+   const CUDAContextScope scope(this);
+ 
++  bvh_build_temp_mem.reset();
+   free_bvh_memory_delayed();
+ 
+   sbt_data.free();
+@@ -1386,11 +1387,32 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+ 
+   optix_assert(optixAccelComputeMemoryUsage(context, &options, &build_input, 1, &sizes));
+ 
+-  /* Allocate required output buffers. */
+-  device_only_memory<char> temp_mem(this, "optix temp as build mem", true);
+-  temp_mem.alloc_to_device(align_up(sizes.tempSizeInBytes, 8) + 8);
++  /* Allocate required output buffers. The temporary memory is reused by the following builds
++   * of this update unless CYCLES_OPTIX_BVH_TEMP_PER_BUILD asks for one allocation per build as
++   * a reference. Every build below synchronizes before returning, so a later build never
++   * overwrites temporary memory that a previous build still uses. */
++  static const bool temp_per_build = getenv("CYCLES_OPTIX_BVH_TEMP_PER_BUILD") != nullptr;
++  const size_t temp_size = align_up(sizes.tempSizeInBytes, 8) + 8;
++  device_only_memory<char> local_temp_mem(this, "optix temp as build mem", true);
++  device_only_memory<char> *temp_mem_ptr = &local_temp_mem;
++  if (temp_per_build) {
++    local_temp_mem.alloc_to_device(temp_size);
++  }
++  else {
++    if (!bvh_build_temp_mem) {
++      bvh_build_temp_mem = make_unique<device_only_memory<char>>(
++          this, "optix temp as build mem", true);
++    }
++    /* Grow only. */
++    bvh_build_temp_mem->alloc_to_device(temp_size, false);
++    temp_mem_ptr = bvh_build_temp_mem.get();
++  }
++  device_only_memory<char> &temp_mem = *temp_mem_ptr;
+   if (!temp_mem.device_pointer) {
+     /* Make sure temporary memory allocation succeeded. */
++    if (!temp_per_build) {
++      bvh_build_temp_mem.reset();
++    }
+     return false;
+   }
+ 
+@@ -1440,6 +1462,9 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
+ 
+     /* Temporary memory is no longer needed, so free it now to make space. */
+     temp_mem.free();
++    if (!temp_per_build) {
++      bvh_build_temp_mem.reset();
++    }
+ 
+     /* There is no point compacting if the size does not change. */
+     if (compacted_size < sizes.outputSizeInBytes) {
+@@ -2191,6 +2216,12 @@ void OptiXDevice::release_bvh(BVH *bvh)
+   bvh_optix->traversable_handle = 0;
+ }
+ 
++void OptiXDevice::release_bvh_build_memory()
++{
++  thread_scoped_lock lock(bvh_build_mutex);
++  bvh_build_temp_mem.reset();
++}
++
+ void OptiXDevice::free_bvh_memory_delayed()
+ {
+   thread_scoped_lock lock(delayed_free_bvh_mutex);
+diff --git a/src/device/optix/device_impl.h b/src/device/optix/device_impl.h
+index 0a8f1ba29079d9badb1f43be02b7163e71567be2..6ce3e11e98f1ae0c7a5bdef836f2304e1dea8e6b 100644
+--- a/src/device/optix/device_impl.h
++++ b/src/device/optix/device_impl.h
+@@ -125,6 +125,9 @@ class OptiXDevice : public CUDADevice {
+   thread_mutex delayed_free_bvh_mutex;
+   /* Serialises acceleration structure builds on this device, see build_optix_bvh. */
+   thread_mutex bvh_build_mutex;
++  /* Temporary build memory reused by the builds of one update, grown when a build needs more
++   * and freed by release_bvh_build_memory(). Only used under bvh_build_mutex. */
++  unique_ptr<device_only_memory<char>> bvh_build_temp_mem;
+ 
+  public:
+   OptiXDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
+@@ -152,6 +155,7 @@ class OptiXDevice : public CUDADevice {
+   void build_bvh(BVH *bvh, Progress &progress, bool refit) override;
+ 
+   void release_bvh(BVH *bvh) override;
++  void release_bvh_build_memory() override;
+   void free_bvh_memory_delayed();
+ 
+   void const_copy_to(const char *name, void *host, const size_t size) override;
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 5bb6edc133161f66399bdc573cfc28a20f4ea4e8..0780ed83a1052d1d88e86774584888ae91c2b350 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1144,6 +1144,15 @@ void GeometryManager::device_update(Device *device,
+    * change. */
+   bool need_update_scene_bvh = (scene->bvh == nullptr ||
+                                 (update_flags & (TRANSFORM_MODIFIED | VISIBILITY_MODIFIED)) != 0);
++  /* Memory the device keeps between the builds below is released once the object and scene
++   * structures are built, also when this update is cancelled or fails on the way. */
++  struct BVHBuildMemoryRelease {
++    Device *device;
++    ~BVHBuildMemoryRelease()
++    {
++      device->release_bvh_build_memory();
++    }
++  } bvh_build_memory_release{device};
+   {
+     const scoped_callback_timer timer([scene](double time) {
+       if (scene->update_stats) {

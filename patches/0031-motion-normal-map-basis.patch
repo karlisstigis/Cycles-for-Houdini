@@ -1,0 +1,45 @@
+From 2ed66f65f2a05ace90ad015f9e7a13e30d0843c3 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:34 +0100
+Subject: [PATCH] motion normal map basis
+
+Locked-Patch: patches/0031-motion-normal-map-basis.patch
+Locked-Patch-SHA256: e776da510a4ab309316d633d9b3a377845f5929c45736ddaca5cb2d812d5808c
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_velocity_normal_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 848e86d44a4f3ed5fee23592bcd553ea8e523641
+Previous-Patch: patches/0031-motion-normal-map-basis.patch
+Previous-Patch-SHA256: e776da510a4ab309316d633d9b3a377845f5929c45736ddaca5cb2d812d5808c
+Rationale: Normal mapping must use the tangent basis at the same shutter time as geometry; otherwise animated UV/tangent inputs yield inconsistent shading.
+Contract: motion normal map basis
+Tests: tests/houdini_velocity_normal_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/svm/tex_coord.h b/src/kernel/svm/tex_coord.h
+index 073b658a03b10d731b408fd0007e2f048eb56738..c6a697fe2a5b4805106d5b1f06844988cd3315b8 100644
+--- a/src/kernel/svm/tex_coord.h
++++ b/src/kernel/svm/tex_coord.h
+@@ -278,7 +278,21 @@ ccl_device_noinline void svm_node_normal_map(KernelGlobals kg,
+         linear_interpolate_strength = true;
+       }
+       else {
+-        normal = triangle_smooth_normal_unnormalized_object_space(kg, sd);
++#ifdef __OBJECT_MOTION__
++        if (sd->type & PRIMITIVE_MOTION_TRIANGLE) {
++          /* Match the displaced surface at ray time, rather than mixing its
++           * sampled tangent with a centre-frame normal. Avoid fetching positions. */
++          normal = motion_triangle_smooth_normal(
++              kg, sd->Ng, sd->object, sd->prim, sd->u, sd->v, sd->time);
++          if (sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED) {
++            object_inverse_normal_transform(kg, sd, &normal);
++          }
++        }
++        else
++#endif
++        {
++          normal = triangle_smooth_normal_unnormalized_object_space(kg, sd);
++        }
+       }
+     }
+     else {

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Host package (blend-import.md: Host menus): the node right-click "Cycles" submenu for Cycles
+     materials, World Materials, texture nodes, Environment Lights and linked asset
+     materials (see docs/user/asset-browser.md). Shown only when the Blender bridge
+     component is enabled and the clicked or selected nodes give it something to act
+     on, or when the clicked material waits for review by the saved-scene protection
+     (Keep Current Graph, docs/dev/offline-scene-protection.md), or when the clicked or
+     selected nodes are Houdini materials that Convert to Cycles Material accepts
+     (docs/user/convert-materials.md; shown without the bridge). Expressions stay
+     one-line Python expressions (no `return`) calling cycles_houdini.assets.menus,
+     cycles_houdini.convert or cycles_houdini_offline, which guard every HOM call. -->
+<menuDocument>
+  <menu>
+    <subMenu id="cycles_asset_link_menu">
+      <label>Cycles</label>
+      <context>
+        <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).node_menu(kwargs) or __import__("cycles_houdini_offline").needs_review(kwargs) or __import__("cycles_houdini.convert", fromlist=["convert"]).menu_visible(kwargs)]]></expression>
+      </context>
+      <scriptItem id="cycles_convert_material">
+        <label>Convert to Cycles Material</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.convert", fromlist=["convert"]).menu_visible(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini import convert
+convert.convert_selected(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_node_keep_current_graph">
+        <label>Keep Current Graph</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini_offline").needs_review(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[import cycles_houdini_offline
+cycles_houdini_offline.keep_current(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_node_collect_textures">
+        <label>Collect Textures</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).node_can_collect(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.collect_selected(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_asset_append_linked">
+        <label>Make Editable</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).has_linked(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.append_selected(kwargs)]]></scriptCode>
+      </scriptItem>
+      <scriptItem id="cycles_asset_reload_linked">
+        <label>Reload from Library</label>
+        <context>
+          <expression><![CDATA[__import__("cycles_houdini.assets.menus", fromlist=["menus"]).has_linked(kwargs)]]></expression>
+        </context>
+        <scriptCode><![CDATA[from cycles_houdini.assets import menus
+menus.reload_selected(kwargs)]]></scriptCode>
+      </scriptItem>
+    </subMenu>
+  </menu>
+</menuDocument>

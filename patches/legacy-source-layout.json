@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "upstream": "74e9d9e48f86330987d7392166a51b3652d7c557",
+  "fork_tip": "ff2a727c576357140473bc9f46a88826a328287f",
+  "baseline_manifest_sha256": "4639d505a887a9806c407235b8d81d80e5180958ca1f51f4093ef362a488d516",
+  "baseline_fingerprint": {
+    "dirty": true,
+    "status_sha256": "38fc636b2e91f18e2c26afc1724d284af8df162b3cc80b8156acbee3b8557f40",
+    "tracked_diff_sha256": "870c423ab977db455e306149135ef51b10404cbdae496d3826e7bc370dd699a7",
+    "untracked_files": [
+      {
+        "bytes": 3381,
+        "path": "src/device/memory_range.h",
+        "sha256": "6cd4d62fe0baf86a3b8a8de858cb7ce4956c3a357a9d985e00103d1aac292858"
+      },
+      {
+        "bytes": 5621,
+        "path": "src/kernel/camera/image_iris.h",
+        "sha256": "e7c5cd94d9b15e2f20653019512e20631adca1860b9ce186e070d13fce1a3ab0"
+      },
+      {
+        "bytes": 925,
+        "path": "src/kernel/geom/point_lifetime.h",
+        "sha256": "d5905a0c2dac3001871bae11ee998a6555e376ccd12569c7503fdbacf17b5792"
+      },
+      {
+        "bytes": 855,
+        "path": "src/kernel/geom/shader_palette.h",
+        "sha256": "b228557b953580edc2aefa97a93e7311c9c06b5ecdfdd96e7d1c34f9d5fbca77"
+      },
+      {
+        "bytes": 14586,
+        "path": "src/kernel/integrator/pt_ris_nee.h",
+        "sha256": "018b9677d25ae3800f43acbd7fa85c5feb8a85cecb2466525065e68f2b211585"
+      },
+      {
+        "bytes": 5860,
+        "path": "src/kernel/integrator/pt_ris_nee_common.h",
+        "sha256": "772e9b1b9689b189a162b68ce17a1dceaa400fbdcd8030457cbb2e1a2690f3d3"
+      },
+      {
+        "bytes": 4090,
+        "path": "src/scene/light_tree_build_profile.h",
+        "sha256": "19bef62f44eece8ff867116f4d03f0cd43d83703e3d090fd2a8de961a8dec020"
+      },
+      {
+        "bytes": 27106,
+        "path": "src/scene/light_tree_cache.cpp",
+        "sha256": "6725bf9f017c6552a34531bced4c7a73440dd7411eeaa70cab9ba308137b699e"
+      },
+      {
+        "bytes": 3579,
+        "path": "src/scene/light_tree_cache.h",
+        "sha256": "c36fd85f2115af82d148f0194df5f7aea8901a0ccd6fc9b5ed97fefdc2cdcaa7"
+      },
+      {
+        "bytes": 1336,
+        "path": "src/scene/light_tree_emission.h",
+        "sha256": "e82d5b4e029bf6eeb601c448031cefa2ed4a094fcea0db4136dce794d0ac3829"
+      },
+      {
+        "bytes": 1002,
+        "path": "src/scene/light_tree_reuse.h",
+        "sha256": "c8c98062111ab7fc95a7d49d88be579761162f501124593a10fe1a00f1150f99"
+      },
+      {
+        "bytes": 4290,
+        "path": "src/subd/shading.h",
+        "sha256": "52787d662139df7f781cf4beb18d3982605066859482808f3090b9dedb641a9a"
+      }
+    ]
+  },
+  "crlf_files": [
+    {
+      "path": "src/kernel/geom/gsplat_intersect.h",
+      "fork_sha256": "d61d2eeba825b271d4cd64ce2b98743a3c66b46a6cc85be7d025cdf4f064f3fc",
+      "legacy_sha256": "e0f76f7a01f8432d63e4f8036d8e9380e950d02667a87fdf2a3222fa9b69cf2b"
+    },
+    {
+      "path": "src/scene/geometry_attributes.cpp",
+      "fork_sha256": "8bfc8c65fab93c7415b570ec81ac69f9d1cf99e87a130424a0d2e7555dd3bf4f",
+      "legacy_sha256": "cf537ef866583b2fb9dc5e8b29899f2b5a7993035ce0a1697518566635047a12"
+    },
+    {
+      "path": "src/scene/object.cpp",
+      "fork_sha256": "1fe7988a701ea4395e46f31b8d2c096f13d15696ad3ce9b5ae9f77cc53990959",
+      "legacy_sha256": "781511a197c35e4d88d6d5f55251519d7c1f820fd64e86c8b4f0e33624529c77"
+    }
+  ],
+  "scope": "Exact pre-fork source byte layout, captured read-only before any migration. Reconstruct this layout only in a disposable tree and require the unchanged historical fingerprint. This is source identity evidence, not runtime qualification."
+}

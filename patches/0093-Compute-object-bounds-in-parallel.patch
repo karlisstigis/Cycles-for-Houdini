@@ -1,0 +1,44 @@
+From f019edfff46c649838878c9ca06d144060cdbedd Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Sun, 15 Nov 2026 22:04:35 +0000
+Subject: [PATCH 93/93] Compute object bounds in parallel
+
+With motion blur, Object::compute_bounds decomposes each moving object's
+motion and evaluates its transform at 128 shutter times. The scene update
+ran this serially for all objects, which takes seconds for large numbers
+of moving instances.
+
+Each call only writes the bounds of its own object and reads that object's
+transforms and the previously computed bounds of its geometry, so run the
+loop with parallel_for. The computed bounds are unchanged.
+
+Rationale: Serial per-object motion bounds evaluation scaled linearly with moving instance count on one core.
+Contract: Object bounds are bit-identical to the serial loop; only the evaluation is distributed across threads.
+Tests: tests/houdini_packed_velocity_smoke.py, tests/houdini_motion_smoke.py, tests/houdini_velocity_motion_smoke.py, tests/houdini_packed_deformation_smoke.py, tests/houdini_sampled_instance_attribute_smoke.py
+---
+ src/scene/geometry.cpp | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index fb65c9b1592e1ad5379bf928637b280b760702f1..0b60f9cb4d808283e2c8fa5260e4885871cc9c11 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -1200,9 +1200,15 @@ void GeometryManager::device_update(Device *device,
+         scene->update_stats->geometry.times.add_entry({"device_update (compute bounds)", time});
+       }
+     });
+-    for (Object *object : scene->objects) {
+-      object->compute_bounds(motion_blur);
+-    }
++    /* Each object only writes its own bounds and reads its own transforms and the bounds of
++     * its geometry, which were computed before. With motion blur every moving object samples
++     * its transform many times, so compute them in parallel. */
++    parallel_for(blocked_range<size_t>(0, scene->objects.size(), 32),
++                 [&](const blocked_range<size_t> &r) {
++                   for (size_t i = r.begin(); i != r.end(); i++) {
++                     scene->objects[i]->compute_bounds(motion_blur);
++                   }
++                 });
+   }
+ 
+   if (progress.get_cancel()) {

@@ -1,0 +1,271 @@
+From cf41cd14ca246689230806d9ec97f70138f1af27 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 11:13:36 +0000
+Subject: [PATCH 113/113] Update the flags of only the written objects when no
+ volume exists
+
+The object flags pass walked every object, recomputed its volume, shadow
+catcher, nested dielectric, corner normal and volume intersection bits and
+copied the whole flag array on every object or light edit. When the
+transforms step of the update wrote only a few objects (the partial object
+table, which rewrites their base flags), the last full pass found no
+volume object, no flags update was requested (nested dielectrics,
+displacement, full rewrite) and no shader changed in this update, the
+flags of every other object are those of the previous pass: only the
+written objects are updated and their entries copied. A flags pass that
+did not complete after an object update leaves a hand-shake flag set, and
+the next pass updates every object.
+
+CYCLES_FULL_OBJECT_FLAGS updates every object as before, as a reference.
+CYCLES_VERIFY_OBJECT_FLAGS compares a partial result, on the host and on
+every device, with updating every object, and reports a difference as an
+error.
+
+Rationale: Each single object or light edit on a scene with 380k instances spent 21-33 ms in the object flags pass walking and copying every object.
+Contract: Object flags and volume intersection state equal those of updating every object (checked by CYCLES_VERIFY_OBJECT_FLAGS); any volume object, flags request, shader change or full object table write takes the full pass.
+Tests: tests/houdini_object_flags_partial_smoke.py
+---
+ src/scene/object.cpp | 144 ++++++++++++++++++++++++++++++++++++-------
+ src/scene/object.h   |   8 +++
+ src/scene/scene.cpp  |   1 +
+ src/scene/scene.h    |   2 +
+ 4 files changed, 132 insertions(+), 23 deletions(-)
+
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index f3249021f6cbe4c953d9e9e3305322d72d0b410b..c5f6e3567a6bcc29ca372a199cbcfa44bf3dfd7c 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1371,6 +1371,13 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+   dscene->object_motion_pass.clear_modified();
+   dscene->object_motion.clear_modified();
+ 
++  /* The objects whose base flags were rewritten here; the flags pass of this update may update only
++   * them (see device_update_flags). */
++  flags_partial_valid = partial && !flags_pending_before;
++  flags_partial_objects.clear();
++  if (flags_partial_valid) {
++    flags_partial_objects = partial_objects;
++  }
+   if (partial) {
+     object_table_partial_updates++;
+     if (scene->update_stats) {
+@@ -1414,6 +1421,8 @@ void ObjectManager::device_update(Device *device,
+    * this update would not cover them. */
+   top_level_pending_before = top_level_pending;
+   top_level_pending = true;
++  flags_pending_before = flags_pending;
++  flags_pending = true;
+ 
+   if (update_flags & (OBJECT_ADDED | OBJECT_REMOVED)) {
+     dscene->objects.tag_realloc();
+@@ -1514,10 +1523,10 @@ void ObjectManager::device_update(Device *device,
+   }
+ }
+ 
+-void ObjectManager::device_update_flags(Device * /*unused*/,
++void ObjectManager::device_update_flags(Device *device,
+                                         DeviceScene *dscene,
+                                         Scene *scene,
+-                                        Progress & /*progress*/,
++                                        Progress &progress,
+                                         bool bounds_valid)
+ {
+   if (!need_update() && !need_flags_update) {
+@@ -1530,6 +1539,9 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
+     }
+   });
+ 
++  /* A flags update requested by the scene (nested dielectrics, displacement, a full rewrite)
++   * covers every object. */
++  const bool flags_full_requested = need_flags_update;
+   if (bounds_valid) {
+     /* Object flags and calculations related to volume depend on proper bounds calculated, which
+      * might not be available yet when object flags are updated for displacement or hair
+@@ -1547,24 +1559,24 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
+   /* Object info flag. */
+   uint *object_flag = dscene->object_flag.data();
+ 
+-  /* Object volume intersection. */
+-  vector<BoundBoxOverlapIndex::Entry> volume_bounds;
+-  bool has_volume_objects = false;
+-  for (Object *object : scene->objects) {
+-    if (object->geometry->has_volume) {
+-      /* If the bounds are not valid it is not always possible to calculate the volume step, and
+-       * the step size is not needed for the displacement. So, delay calculation of the volume
+-       * step size until the final bounds are known. */
+-      if (bounds_valid) {
+-        volume_bounds.push_back({&object->bounds, object});
+-      }
+-      has_volume_objects = true;
+-    }
+-  }
+-
+-  const BoundBoxOverlapIndex volume_objects(std::move(volume_bounds));
+-
+-  for (Object *object : scene->objects) {
++  /* When only a few objects were written by the transforms step of this update (the partial object
++   * table, which rewrites their base flags), no volume object exists, no flags update was
++   * requested (nested dielectrics, displacement) and no shader changed, the flags of every other
++   * object are those of the previous pass: update only the written objects. A flags pass that did
++   * not complete after an object update (cancel or error in between) leaves flags_pending set and
++   * the next pass updates every object. CYCLES_FULL_OBJECT_FLAGS updates every object as before,
++   * as a reference; CYCLES_VERIFY_OBJECT_FLAGS compares a partial result, on the host and on every
++   * device, with updating every object. */
++  static const bool full_flags = getenv("CYCLES_FULL_OBJECT_FLAGS") != nullptr;
++  static const bool verify_flags = getenv("CYCLES_VERIFY_OBJECT_FLAGS") != nullptr;
++  const bool partial = !full_flags && bounds_valid && flags_partial_valid && !flags_full_requested &&
++                       !flags_have_volume && !scene->shaders_updated_this_update &&
++                       dscene->object_flag.size() == scene->objects.size() &&
++                       dscene->object_flag.device_pointer != 0 && !dscene->object_flag.need_realloc();
++
++  auto update_object = [&](Object *object,
++                           const BoundBoxOverlapIndex &volume_objects,
++                           const bool has_volume_objects) {
+     if (object->geometry->has_volume) {
+       object_flag[object->index] |= SD_OBJECT_HAS_VOLUME;
+       object_flag[object->index] &= ~SD_OBJECT_HAS_VOLUME_ATTRIBUTES;
+@@ -1615,11 +1627,97 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
+        */
+       object_flag[object->index] |= SD_OBJECT_INTERSECTS_VOLUME;
+     }
++  };
++
++  if (partial) {
++    const BoundBoxOverlapIndex no_volume_objects(vector<BoundBoxOverlapIndex::Entry>{});
++    vector<DeviceMemoryRange> ranges;
++    for (Object *object : flags_partial_objects) {
++      update_object(object, no_volume_objects, false);
++      const size_t offset = size_t(object->index) * sizeof(uint);
++      if (!ranges.empty() && ranges.back().offset + ranges.back().size == offset) {
++        ranges.back().size += sizeof(uint);
++      }
++      else {
++        ranges.push_back({offset, sizeof(uint)});
++      }
++    }
++    if (!ranges.empty() && !dscene->object_flag.copy_to_device_ranges(ranges)) {
++      dscene->object_flag.copy_to_device();
++    }
++    dscene->object_flag.clear_modified();
++    if (scene->update_stats) {
++      /* Counts, not times. */
++      scene->update_stats->object.times.add_entry({"partial object flags updates", 1.0});
++      scene->update_stats->object.times.add_entry(
++          {"partial object flags objects", double(flags_partial_objects.size())});
++    }
++    if (verify_flags) {
++      string difference;
++      const size_t n = scene->objects.size();
++      const vector<uint> kept(object_flag, object_flag + n);
++      vector<uint8_t> intersects(n);
++      for (size_t i = 0; i < n; i++) {
++        intersects[i] = scene->objects[i]->intersects_volume;
++      }
++      if (!device->verify_device_copy(dscene->object_flag, difference)) {
++        progress.set_error("Object flags verification failed: " + difference);
++      }
++      else {
++        const BoundBoxOverlapIndex no_volume_objects(vector<BoundBoxOverlapIndex::Entry>{});
++        for (Object *object : scene->objects) {
++          if (object->geometry->has_volume) {
++            progress.set_error("Object flags verification failed: volume object " +
++                               object->name.string() + " on the partial path");
++            break;
++          }
++          update_object(object, no_volume_objects, false);
++        }
++        for (size_t i = 0; i < n && !progress.get_error(); i++) {
++          if (kept[i] != object_flag[i] || bool(intersects[i]) != scene->objects[i]->intersects_volume) {
++            progress.set_error(string_printf(
++                "Object flags verification failed: object %zu (%s) flags %x, all objects give %x", i,
++                scene->objects[i]->name.c_str(), kept[i], object_flag[i]));
++          }
++        }
++      }
++      if (scene->update_stats) {
++        scene->update_stats->object.times.add_entry({"object flags verifications", 1.0});
++      }
++    }
+   }
++  else {
++    /* Object volume intersection. */
++    vector<BoundBoxOverlapIndex::Entry> volume_bounds;
++    bool has_volume_objects = false;
++    for (Object *object : scene->objects) {
++      if (object->geometry->has_volume) {
++        /* If the bounds are not valid it is not always possible to calculate the volume step, and
++         * the step size is not needed for the displacement. So, delay calculation of the volume
++         * step size until the final bounds are known. */
++        if (bounds_valid) {
++          volume_bounds.push_back({&object->bounds, object});
++        }
++        has_volume_objects = true;
++      }
++    }
++
++    const BoundBoxOverlapIndex volume_objects(std::move(volume_bounds));
++
++    for (Object *object : scene->objects) {
++      update_object(object, volume_objects, has_volume_objects);
++    }
++    flags_have_volume = has_volume_objects;
+ 
+-  /* Copy object flag. */
+-  dscene->object_flag.copy_to_device();
+-  dscene->object_flag.clear_modified();
++    /* Copy object flag. */
++    dscene->object_flag.copy_to_device();
++    dscene->object_flag.clear_modified();
++  }
++  if (bounds_valid) {
++    flags_pending = false;
++    flags_partial_valid = false;
++    flags_partial_objects.clear();
++  }
+ }
+ 
+ /* NOTE: Only use for attributes that are guaranteed to exist.
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 343cc7dd4c07d0c157d7b69328973246d54ea43f..bafe7faa07cc0ca305bfc6c589f20179db4bd1df 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -211,6 +211,14 @@ class ObjectManager {
+    * Valid from that object update until the object manager is tagged again (any object added,
+    * removed or modified, which includes a change of geometry); the light manager, which runs after
+    * the object update of a scene update, then reads a fresh list. */
++  /* Object flags (see device_update_flags): the objects written by a partial object table write of
++   * this update, whether the flags pass may update only them, a hand-shake set by every object
++   * update and cleared by a completed flags pass, and whether the last full pass found volumes. */
++  bool flags_partial_valid = false;
++  vector<Object *> flags_partial_objects;
++  bool flags_pending = false;
++  bool flags_pending_before = false;
++  bool flags_have_volume = true;
+   bool light_objects_valid = false;
+   vector<Object *> light_objects;
+   vector<Object *> top_level_changed_objects;
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index 2d4db7baa5f0a9ff91f93e0fc01100f7b46e64cd..e3f5fcc8a3fcfc4439116de7b9034e076e0657a2 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -236,6 +236,7 @@ void Scene::device_update(Device *device_, Progress &progress)
+     }
+ 
+     /* Compile shaders and get information about features they used. */
++    shaders_updated_this_update = shader_manager->need_update();
+     const bool update_object_palettes = shader_manager->need_update() && object_manager->have_shader_palettes;
+     progress.set_status("Updating Shaders");
+     osl_manager->device_update_pre(device, this);
+diff --git a/src/scene/scene.h b/src/scene/scene.h
+index 3bbd77d3fabe6881736e419173db927a67307976..4002729a8e64b7930f8f2373989a4335dce462db 100644
+--- a/src/scene/scene.h
++++ b/src/scene/scene.h
+@@ -175,6 +175,8 @@ class Scene : public NodeOwner {
+   unique_ptr<ShaderManager> shader_manager;
+   unique_ptr<GeometryManager> geometry_manager;
+   unique_ptr<ObjectManager> object_manager;
++  /* Whether the shader manager had updates in the current device update (object flags). */
++  bool shaders_updated_this_update = true;
+   unique_ptr<ParticleSystemManager> particle_system_manager;
+   unique_ptr<BakeManager> bake_manager;
+   unique_ptr<ProceduralManager> procedural_manager;

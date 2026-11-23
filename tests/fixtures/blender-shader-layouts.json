@@ -1,0 +1,2929 @@
+{
+  "blender_version": "5.2.0 LTS",
+  "blender_commit": "fbe6228777e7",
+  "source_sha256": "b91ae7fb0fa69889c920c16d386471825b48c5e751f90a05def733b45da7a4c1",
+  "scope": "Observed socket availability facts from Blender factory shader nodes; named Houdini adapters. No Blender implementation code.",
+  "variants": [
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "add"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "subtract"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "multiply"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "divide"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "multiply_add"
+      },
+      "active_inputs": [
+        "value1",
+        "value2",
+        "value3"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "power"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "logarithm"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "sqrt"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "inversesqrt"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "absolute"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "exponent"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "minimum"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "maximum"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "less_than"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "greater_than"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "sign"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "compare"
+      },
+      "active_inputs": [
+        "value1",
+        "value2",
+        "value3"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "smoothmin"
+      },
+      "active_inputs": [
+        "value1",
+        "value2",
+        "value3"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "smoothmax"
+      },
+      "active_inputs": [
+        "value1",
+        "value2",
+        "value3"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "round"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "floor"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "ceil"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "trunc"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "fraction"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "modulo"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "floored_modulo"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "wrap"
+      },
+      "active_inputs": [
+        "value1",
+        "value2",
+        "value3"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "snap"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "pingpong"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "sine"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "cosine"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "tangent"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "arcsine"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "arccosine"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "arctangent"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "arctan2"
+      },
+      "active_inputs": [
+        "value1",
+        "value2"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "sinh"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "cosh"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "tanh"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "radians"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "math",
+      "settings": {
+        "math_type": "degrees"
+      },
+      "active_inputs": [
+        "value1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "add"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "subtract"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "multiply"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "divide"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "multiply_add"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2",
+        "vector3"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "cross_product"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "project"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "reflect"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "refract"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2",
+        "scale"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "faceforward"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2",
+        "vector3"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "dot_product"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "distance"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "length"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "scale"
+      },
+      "active_inputs": [
+        "vector1",
+        "scale"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "normalize"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "absolute"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "power"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "sign"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "minimum"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "maximum"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "round"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "floor"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "ceil"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "fraction"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "modulo"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "wrap"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2",
+        "vector3"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "snap"
+      },
+      "active_inputs": [
+        "vector1",
+        "vector2"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "sine"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "cosine"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "vector_math",
+      "settings": {
+        "math_type": "tangent"
+      },
+      "active_inputs": [
+        "vector1"
+      ]
+    },
+    {
+      "kind": "map_range",
+      "settings": {
+        "range_type": "linear"
+      },
+      "active_inputs": [
+        "value",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max",
+        "clamp"
+      ]
+    },
+    {
+      "kind": "map_range",
+      "settings": {
+        "range_type": "stepped"
+      },
+      "active_inputs": [
+        "value",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max",
+        "steps",
+        "clamp"
+      ]
+    },
+    {
+      "kind": "map_range",
+      "settings": {
+        "range_type": "smoothstep"
+      },
+      "active_inputs": [
+        "value",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max"
+      ]
+    },
+    {
+      "kind": "map_range",
+      "settings": {
+        "range_type": "smootherstep"
+      },
+      "active_inputs": [
+        "value",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max"
+      ]
+    },
+    {
+      "kind": "vector_map_range",
+      "settings": {
+        "range_type": "linear"
+      },
+      "active_inputs": [
+        "vector",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max"
+      ]
+    },
+    {
+      "kind": "vector_map_range",
+      "settings": {
+        "range_type": "stepped"
+      },
+      "active_inputs": [
+        "vector",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max",
+        "steps"
+      ]
+    },
+    {
+      "kind": "vector_map_range",
+      "settings": {
+        "range_type": "smoothstep"
+      },
+      "active_inputs": [
+        "vector",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max"
+      ]
+    },
+    {
+      "kind": "vector_map_range",
+      "settings": {
+        "range_type": "smootherstep"
+      },
+      "active_inputs": [
+        "vector",
+        "from_min",
+        "from_max",
+        "to_min",
+        "to_max"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "1D",
+        "type": "multifractal"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "1D",
+        "type": "ridged_multifractal"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "1D",
+        "type": "hybrid_multifractal"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "1D",
+        "type": "fBM"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "1D",
+        "type": "hetero_terrain"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "2D",
+        "type": "multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "2D",
+        "type": "ridged_multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "2D",
+        "type": "hybrid_multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "2D",
+        "type": "fBM"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "2D",
+        "type": "hetero_terrain"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "3D",
+        "type": "multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "3D",
+        "type": "ridged_multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "3D",
+        "type": "hybrid_multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "3D",
+        "type": "fBM"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "3D",
+        "type": "hetero_terrain"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "4D",
+        "type": "multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "4D",
+        "type": "ridged_multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "4D",
+        "type": "hybrid_multifractal"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "gain",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "4D",
+        "type": "fBM"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "noise_texture",
+      "settings": {
+        "dimensions": "4D",
+        "type": "hetero_terrain"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "offset",
+        "distortion"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f2",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f2",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f2",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "f2",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "smooth_f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "smooth_f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "smooth_f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "smooth_f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "distance_to_edge",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "distance_to_edge",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "distance_to_edge",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "distance_to_edge",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "n_sphere_radius",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "n_sphere_radius",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "n_sphere_radius",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "1D",
+        "feature": "n_sphere_radius",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f2",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f2",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f2",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "f2",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "smooth_f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "smooth_f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "smooth_f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "smooth_f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "distance_to_edge",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "distance_to_edge",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "distance_to_edge",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "distance_to_edge",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "n_sphere_radius",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "n_sphere_radius",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "n_sphere_radius",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "2D",
+        "feature": "n_sphere_radius",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f2",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f2",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f2",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "f2",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "smooth_f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "smooth_f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "smooth_f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "smooth_f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "distance_to_edge",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "distance_to_edge",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "distance_to_edge",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "distance_to_edge",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "n_sphere_radius",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "n_sphere_radius",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "n_sphere_radius",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "3D",
+        "feature": "n_sphere_radius",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f2",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f2",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f2",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "f2",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "smooth_f1",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "smooth_f1",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "smooth_f1",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "smooth_f1",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "smoothness",
+        "exponent",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "distance_to_edge",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "distance_to_edge",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "distance_to_edge",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "distance_to_edge",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "detail",
+        "roughness",
+        "lacunarity",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "n_sphere_radius",
+        "metric": "euclidean"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "n_sphere_radius",
+        "metric": "manhattan"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "n_sphere_radius",
+        "metric": "chebychev"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "voronoi_texture",
+      "settings": {
+        "dimensions": "4D",
+        "feature": "n_sphere_radius",
+        "metric": "minkowski"
+      },
+      "active_inputs": [
+        "vector",
+        "w",
+        "scale",
+        "randomness"
+      ]
+    },
+    {
+      "kind": "white_noise_texture",
+      "settings": {
+        "dimensions": "1D"
+      },
+      "active_inputs": [
+        "w"
+      ]
+    },
+    {
+      "kind": "white_noise_texture",
+      "settings": {
+        "dimensions": "2D"
+      },
+      "active_inputs": [
+        "vector"
+      ]
+    },
+    {
+      "kind": "white_noise_texture",
+      "settings": {
+        "dimensions": "3D"
+      },
+      "active_inputs": [
+        "vector"
+      ]
+    },
+    {
+      "kind": "white_noise_texture",
+      "settings": {
+        "dimensions": "4D"
+      },
+      "active_inputs": [
+        "vector",
+        "w"
+      ]
+    },
+    {
+      "kind": "gabor_texture",
+      "settings": {
+        "type": "2D"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "frequency",
+        "anisotropy",
+        "orientation_2d"
+      ]
+    },
+    {
+      "kind": "gabor_texture",
+      "settings": {
+        "type": "3D"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "frequency",
+        "anisotropy",
+        "orientation_3d"
+      ]
+    },
+    {
+      "kind": "vector_rotate",
+      "settings": {
+        "rotate_type": "axis"
+      },
+      "active_inputs": [
+        "vector",
+        "center",
+        "axis",
+        "angle"
+      ]
+    },
+    {
+      "kind": "vector_rotate",
+      "settings": {
+        "rotate_type": "x_axis"
+      },
+      "active_inputs": [
+        "vector",
+        "center",
+        "angle"
+      ]
+    },
+    {
+      "kind": "vector_rotate",
+      "settings": {
+        "rotate_type": "y_axis"
+      },
+      "active_inputs": [
+        "vector",
+        "center",
+        "angle"
+      ]
+    },
+    {
+      "kind": "vector_rotate",
+      "settings": {
+        "rotate_type": "z_axis"
+      },
+      "active_inputs": [
+        "vector",
+        "center",
+        "angle"
+      ]
+    },
+    {
+      "kind": "vector_rotate",
+      "settings": {
+        "rotate_type": "euler_xyz"
+      },
+      "active_inputs": [
+        "vector",
+        "center",
+        "rotation"
+      ]
+    },
+    {
+      "kind": "principled_hair_bsdf",
+      "settings": {
+        "model": "Chiang",
+        "parametrization": "Absorption coefficient"
+      },
+      "active_inputs": [
+        "absorption_coefficient",
+        "roughness",
+        "radial_roughness",
+        "coat",
+        "ior",
+        "offset",
+        "random_roughness",
+        "random"
+      ]
+    },
+    {
+      "kind": "principled_hair_bsdf",
+      "settings": {
+        "model": "Chiang",
+        "parametrization": "Melanin concentration"
+      },
+      "active_inputs": [
+        "melanin",
+        "melanin_redness",
+        "tint",
+        "roughness",
+        "radial_roughness",
+        "coat",
+        "ior",
+        "offset",
+        "random_color",
+        "random_roughness",
+        "random"
+      ]
+    },
+    {
+      "kind": "principled_hair_bsdf",
+      "settings": {
+        "model": "Chiang",
+        "parametrization": "Direct coloring"
+      },
+      "active_inputs": [
+        "color",
+        "roughness",
+        "radial_roughness",
+        "coat",
+        "ior",
+        "offset",
+        "random_roughness",
+        "random"
+      ]
+    },
+    {
+      "kind": "principled_hair_bsdf",
+      "settings": {
+        "model": "Huang",
+        "parametrization": "Absorption coefficient"
+      },
+      "active_inputs": [
+        "absorption_coefficient",
+        "aspect_ratio",
+        "roughness",
+        "ior",
+        "offset",
+        "random_roughness",
+        "random",
+        "R",
+        "TT",
+        "TRT"
+      ]
+    },
+    {
+      "kind": "principled_hair_bsdf",
+      "settings": {
+        "model": "Huang",
+        "parametrization": "Melanin concentration"
+      },
+      "active_inputs": [
+        "melanin",
+        "melanin_redness",
+        "tint",
+        "aspect_ratio",
+        "roughness",
+        "ior",
+        "offset",
+        "random_color",
+        "random_roughness",
+        "random",
+        "R",
+        "TT",
+        "TRT"
+      ]
+    },
+    {
+      "kind": "principled_hair_bsdf",
+      "settings": {
+        "model": "Huang",
+        "parametrization": "Direct coloring"
+      },
+      "active_inputs": [
+        "color",
+        "aspect_ratio",
+        "roughness",
+        "ior",
+        "offset",
+        "random_roughness",
+        "random",
+        "R",
+        "TT",
+        "TRT"
+      ]
+    },
+    {
+      "kind": "metallic_bsdf",
+      "settings": {
+        "fresnel_type": "physical_conductor"
+      },
+      "active_inputs": [
+        "ior",
+        "k",
+        "roughness",
+        "anisotropy",
+        "rotation",
+        "normal",
+        "tangent",
+        "thin_film_thickness",
+        "thin_film_ior"
+      ]
+    },
+    {
+      "kind": "metallic_bsdf",
+      "settings": {
+        "fresnel_type": "f82"
+      },
+      "active_inputs": [
+        "color",
+        "edge_tint",
+        "roughness",
+        "anisotropy",
+        "rotation",
+        "normal",
+        "tangent",
+        "thin_film_thickness",
+        "thin_film_ior"
+      ]
+    },
+    {
+      "kind": "scatter_volume",
+      "settings": {
+        "phase": "Henyey-Greenstein"
+      },
+      "active_inputs": [
+        "color",
+        "density",
+        "anisotropy"
+      ]
+    },
+    {
+      "kind": "scatter_volume",
+      "settings": {
+        "phase": "Fournier-Forand"
+      },
+      "active_inputs": [
+        "color",
+        "density",
+        "IOR",
+        "backscatter"
+      ]
+    },
+    {
+      "kind": "scatter_volume",
+      "settings": {
+        "phase": "Draine"
+      },
+      "active_inputs": [
+        "color",
+        "density",
+        "anisotropy",
+        "alpha"
+      ]
+    },
+    {
+      "kind": "scatter_volume",
+      "settings": {
+        "phase": "Rayleigh"
+      },
+      "active_inputs": [
+        "color",
+        "density"
+      ]
+    },
+    {
+      "kind": "scatter_volume",
+      "settings": {
+        "phase": "Mie"
+      },
+      "active_inputs": [
+        "color",
+        "density",
+        "diameter"
+      ]
+    },
+    {
+      "kind": "volume_coefficients",
+      "settings": {
+        "phase": "Henyey-Greenstein"
+      },
+      "active_inputs": [
+        "absorption_coeffs",
+        "scatter_coeffs",
+        "anisotropy",
+        "emission_coeffs"
+      ]
+    },
+    {
+      "kind": "volume_coefficients",
+      "settings": {
+        "phase": "Fournier-Forand"
+      },
+      "active_inputs": [
+        "absorption_coeffs",
+        "scatter_coeffs",
+        "IOR",
+        "backscatter",
+        "emission_coeffs"
+      ]
+    },
+    {
+      "kind": "volume_coefficients",
+      "settings": {
+        "phase": "Draine"
+      },
+      "active_inputs": [
+        "absorption_coeffs",
+        "scatter_coeffs",
+        "anisotropy",
+        "alpha",
+        "emission_coeffs"
+      ]
+    },
+    {
+      "kind": "volume_coefficients",
+      "settings": {
+        "phase": "Rayleigh"
+      },
+      "active_inputs": [
+        "absorption_coeffs",
+        "scatter_coeffs",
+        "emission_coeffs"
+      ]
+    },
+    {
+      "kind": "volume_coefficients",
+      "settings": {
+        "phase": "Mie"
+      },
+      "active_inputs": [
+        "absorption_coeffs",
+        "scatter_coeffs",
+        "diameter",
+        "emission_coeffs"
+      ]
+    },
+    {
+      "kind": "mapping",
+      "settings": {
+        "mapping_type": "point"
+      },
+      "active_inputs": [
+        "vector",
+        "location",
+        "rotation",
+        "scale"
+      ]
+    },
+    {
+      "kind": "mapping",
+      "settings": {
+        "mapping_type": "texture"
+      },
+      "active_inputs": [
+        "vector",
+        "location",
+        "rotation",
+        "scale"
+      ]
+    },
+    {
+      "kind": "mapping",
+      "settings": {
+        "mapping_type": "vector"
+      },
+      "active_inputs": [
+        "vector",
+        "rotation",
+        "scale"
+      ]
+    },
+    {
+      "kind": "mapping",
+      "settings": {
+        "mapping_type": "normal"
+      },
+      "active_inputs": [
+        "vector",
+        "rotation",
+        "scale"
+      ]
+    },
+    {
+      "kind": "wave_texture",
+      "settings": {
+        "wave_type": "bands"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "distortion",
+        "detail",
+        "detail_scale",
+        "detail_roughness",
+        "phase"
+      ]
+    },
+    {
+      "kind": "wave_texture",
+      "settings": {
+        "wave_type": "rings"
+      },
+      "active_inputs": [
+        "vector",
+        "scale",
+        "distortion",
+        "detail",
+        "detail_scale",
+        "detail_roughness",
+        "phase"
+      ]
+    },
+    {
+      "kind": "normal_map",
+      "settings": {
+        "space": "tangent"
+      },
+      "active_inputs": [
+        "strength",
+        "color"
+      ]
+    },
+    {
+      "kind": "normal_map",
+      "settings": {
+        "space": "object"
+      },
+      "active_inputs": [
+        "strength",
+        "color"
+      ]
+    },
+    {
+      "kind": "normal_map",
+      "settings": {
+        "space": "world"
+      },
+      "active_inputs": [
+        "strength",
+        "color"
+      ]
+    },
+    {
+      "kind": "normal_map",
+      "settings": {
+        "space": "blender_object"
+      },
+      "active_inputs": [
+        "strength",
+        "color"
+      ]
+    },
+    {
+      "kind": "normal_map",
+      "settings": {
+        "space": "blender_world"
+      },
+      "active_inputs": [
+        "strength",
+        "color"
+      ]
+    },
+    {
+      "kind": "tangent",
+      "settings": {
+        "direction_type": "radial"
+      },
+      "active_inputs": []
+    },
+    {
+      "kind": "tangent",
+      "settings": {
+        "direction_type": "uv_map"
+      },
+      "active_inputs": []
+    }
+  ]
+}

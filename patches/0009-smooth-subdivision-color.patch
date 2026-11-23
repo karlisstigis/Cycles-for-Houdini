@@ -1,0 +1,47 @@
+From 685b40190b7f5e41b1ab3394b225665d0140e1a3 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:30 +0100
+Subject: [PATCH] Read float3 face-varying values with packed storage and
+ enable the existing smooth evaluator for packed float3.
+
+Locked-Patch: patches/0009-smooth-subdivision-color.patch
+Locked-Patch-SHA256: cfa360da31ca87d5fd2e8d1b58d88995ed4dad1ccd02ac56b4a7fda80b847b78
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_subdivision_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: a82a53d996ae196464de549e114cbe120ae6be93
+Previous-Patch: patches/0009-smooth-subdivision-color.patch
+Previous-Patch-SHA256: cfa360da31ca87d5fd2e8d1b58d88995ed4dad1ccd02ac56b4a7fda80b847b78
+Rationale: Packed float3 face-varying data must use packed reads and the smooth evaluator; this fixes color interpolation independent of the host.
+Contract: Read float3 face-varying values with packed storage and enable the existing smooth evaluator for packed float3.
+Tests: tests/houdini_subdivision_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/subd/interpolation.cpp b/src/subd/interpolation.cpp
+index e29499ab13255008d34a92c83eba2cc5683b0aa9..5aacc71863b34d24df0c2fe77c3cda13096cb664 100644
+--- a/src/subd/interpolation.cpp
++++ b/src/subd/interpolation.cpp
+@@ -626,7 +626,8 @@ void SubdAttributeInterpolation::setup_attribute_type(const Attribute &subd_attr
+       if (osd_mesh.use_smooth_fvar(subd_attr)) {
+         for (const auto &merged_fvar : osd_mesh.merged_fvars) {
+           if (&merged_fvar.attr == &subd_attr) {
+-            if constexpr (std::is_same_v<typename T::Type, float2>) {
++            if constexpr (std::is_same_v<typename T::Type, float2> ||
++                          std::is_same_v<typename T::Type, packed_float3>) {
+               setup_attribute_corner_smooth<T>(mesh_attr, merged_fvar.channel, merged_fvar.values);
+               return;
+             }
+diff --git a/src/subd/osd.cpp b/src/subd/osd.cpp
+index eb4672bf35dc9eb67d2a766a4fe9c24cfe040da1..d5a7543130361e355366b6c1112723cb5ad87a23 100644
+--- a/src/subd/osd.cpp
++++ b/src/subd/osd.cpp
+@@ -214,7 +214,8 @@ bool TopologyRefinerFactory<OsdMesh>::assignFaceVaryingTopology(TopologyRefiner
+       merge_smooth_fvar<float2>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
+     }
+     else if (Attribute::same_storage(subd_attr.type, TypeVector)) {
+-      merge_smooth_fvar<float3>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
++      merge_smooth_fvar<packed_float3>(
++          mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);
+     }
+     else if (Attribute::same_storage(subd_attr.type, TypeFloat4)) {
+       merge_smooth_fvar<float4>(mesh, subd_attr, merged_fvar, merged_next, merged_face_corners);

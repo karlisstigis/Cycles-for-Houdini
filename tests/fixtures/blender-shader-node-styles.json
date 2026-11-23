@@ -1,0 +1,549 @@
+{
+  "blender_version": "5.2.0 LTS",
+  "blender_commit": "fbe6228777e7",
+  "scope": "Factory theme categories; set_normal and scene_time use semantic equivalents, material/subnet containers use Group, ports Interface. Houdini user color overrides remain user-owned.",
+  "palette_rgb8": {
+    "Input": [
+      130,
+      53,
+      76
+    ],
+    "Output": [
+      62,
+      35,
+      42
+    ],
+    "Shader": [
+      43,
+      101,
+      43
+    ],
+    "Texture": [
+      121,
+      70,
+      29
+    ],
+    "Color": [
+      110,
+      110,
+      35
+    ],
+    "Vector": [
+      60,
+      60,
+      131
+    ],
+    "Converter": [
+      36,
+      98,
+      131
+    ],
+    "Group": [
+      55,
+      71,
+      37
+    ],
+    "Interface": [
+      29,
+      29,
+      29
+    ]
+  },
+  "nodes": {
+    "absorption_volume": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_volume_absorption.cc",
+      "source_sha256": "f68087932e494eacb73a38cb54a0d4becca4ef88c96708d3044aac225f4daef6"
+    },
+    "add_closure": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_add_shader.cc",
+      "source_sha256": "6437da7c6b850bd210e7c7948b7bacf078d11e4b0aaad62b591e597f8cddfe7c"
+    },
+    "ambient_occlusion": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_ambient_occlusion.cc",
+      "source_sha256": "01f934e2d4c2cbc1bc7a5c7fa824ebad75bd0164de33695440ebdfda0d10aeb3"
+    },
+    "aov_output": {
+      "style": "Output",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_output_aov.cc",
+      "source_sha256": "2341963b5b966308de53419a5be5175746ebacece091d27bf7bdf65a0ce4a9a2"
+    },
+    "attribute": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_attribute.cc",
+      "source_sha256": "dbc703b4c911ce8d74e323430727dab696630405163362cfc4e9ec7d333e4ad9"
+    },
+    "background_shader": {
+      "style": "Shader",
+      "reference": "https://github.com/blender/blender/blob/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_background.cc"
+    },
+    "bevel": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bevel.cc",
+      "source_sha256": "25d5614c5dbb95e7148d40648e95b3a8d82b7cdf65aae77d9b9f019190cc0337"
+    },
+    "blackbody": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_blackbody.cc",
+      "source_sha256": "7cd091645c365bd93a12a5da8339b8c968d351a106a6fa46aa20f8d9f0ab8272"
+    },
+    "brick_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_brick.cc",
+      "source_sha256": "fb891864ed5c9e84fc0fd8bf74cd00b732b33953e367fdefc63155bcb5c5f4c5"
+    },
+    "brightness_contrast": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_brightness.cc",
+      "source_sha256": "c9483425a5a702d156750e9319a6e3eadd169bfbf940cc47ddb26e047407673b"
+    },
+    "bump": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bump.cc",
+      "source_sha256": "9e0eb7562ff5d55f1b6730346d7f38b4f34d374ce9d9fa9f51c4898e85c98828"
+    },
+    "camera_info": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_camera.cc",
+      "source_sha256": "18bbef86d561d41749daf34b14d837180b069a0bcbb0ee0a6a26795e2edec689"
+    },
+    "checker_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_checker.cc",
+      "source_sha256": "ccaaa0a97d9c64818596dc52af31d55ff45e54752ceff5a166c57420815c3445"
+    },
+    "clamp": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_clamp.cc",
+      "source_sha256": "d9d683ab334b407fb84d6b4c462d60719d0e6f9fd6f26adfb4cd9f965c10a17b"
+    },
+    "color": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_rgb.cc",
+      "source_sha256": "30cf1b0465dd70d858a5eb2e5f792e4629a49fbc87fe1e168aa12c36bc4ecf49"
+    },
+    "color_ramp": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_color_ramp.cc"
+    },
+    "combine_color": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_sepcomb_color.cc",
+      "source_sha256": "eb23068b5ff31530b91957ef15149e93a0cb613ae91fbd9248aa8bcca488a958"
+    },
+    "combine_xyz": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_sepcomb_xyz.cc",
+      "source_sha256": "87f1d7266e4dda007f1be0563534adb976be2fdf69c66a013deeb56119e66f7d"
+    },
+    "diffuse_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_diffuse.cc",
+      "source_sha256": "ee9830e34d8314b142a52244a6bd52bfe3f13184fd4f854b1f3948aea32f3b17"
+    },
+    "displacement": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_displacement.cc",
+      "source_sha256": "4940856056a5a5dfd689e8ad2b0dead656a03f7191ded86880100cc882443d9c"
+    },
+    "emission": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_emission.cc",
+      "source_sha256": "e9fd8d1f1cc08aa0e9b34c72b25b60ac6ba154922a86327985a164c78bd57ef4"
+    },
+    "environment_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_environment.cc",
+      "source_sha256": "b553a969833cbd64961a90f85eb8ecf98dfac0a7495d67f47cb80a63d5524595"
+    },
+    "float_curve": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_curves.cc",
+      "source_sha256": "e45e36457903c593aea0bae40dcb729d84f80df33f86635131ecd386bfa46fe6"
+    },
+    "fresnel": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_fresnel.cc",
+      "source_sha256": "82f78d685ccba944d13509a5b883cb7c3dc9ea5b4a059b8cdc430a34963bbb17"
+    },
+    "gabor_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_gabor.cc",
+      "source_sha256": "84bd40d587a76225fd953bfc3b49c44d75bd5a493e0f72b6e84e3a7700db5d7c"
+    },
+    "gamma": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_gamma.cc",
+      "source_sha256": "08905adee7624261f86147b532abcbc965889934976e314438bc6e94f3afadab"
+    },
+    "geometry": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_geometry.cc",
+      "source_sha256": "a2ba9694676f09d50714c5a3d4cfdfa2300f05919a03cba44733da3578d97bc3"
+    },
+    "glass_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_glass.cc",
+      "source_sha256": "19be460ea96d316c42862a4a32883d3579ce5e7b2ba46e41354c712184c3ad02"
+    },
+    "glossy_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_glossy.cc",
+      "source_sha256": "49f8b867ff32f41d5b1d29c1121a76fc2cf2a490c3b51b2e97b31045432cc1a2"
+    },
+    "gradient_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_gradient.cc",
+      "source_sha256": "3c9c0e4717aba9baf0c3846f39510fe350b76734ec532748338a99c27be6e4e0"
+    },
+    "hair_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_hair.cc",
+      "source_sha256": "73675df6ba545c2280df20f221b21c67bdc5526095dddae82d81ab8dbadc0110"
+    },
+    "hair_info": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_hair_info.cc",
+      "source_sha256": "6440ec700c309f4712238361194f9f9a46fb3c6d929948ec5a943256f5dbea80"
+    },
+    "holdout": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_holdout.cc",
+      "source_sha256": "7d0dfde2399ab344c2606326e4258537ca1c3625f0389f6a073a9d1d99795e08"
+    },
+    "hsv": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_hueSatVal.cc",
+      "source_sha256": "2e9fced89488ddd8fc076ea0e7b97ffe3e3e379cc4c8d407ea4319037d3c054e"
+    },
+    "image_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_image.cc",
+      "source_sha256": "bd7d25727f19e43b37a28b79ac6c9de0c05b748fec036509b259d4b361b8c8cc"
+    },
+    "invert": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_invert.cc",
+      "source_sha256": "230da636f216206ed30ea19b1e261ec18734b6605137b2b178bd2c79b38ad51b"
+    },
+    "layer_weight": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_layer_weight.cc",
+      "source_sha256": "fc78a9dc0a14d60bde01fe9a1fdfb530770e9aff8905d9a5838ab575644aada3"
+    },
+    "light_falloff": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_light_falloff.cc",
+      "source_sha256": "31ef2b8eff1d2d78cb4ccdc77fd8fe3a9e8affb8ab2e30ceec312baa2e67e304"
+    },
+    "light_path": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_light_path.cc",
+      "source_sha256": "ab0b242082237b130f662a4016a85636c3a372680315277d1061299cdae64c2d"
+    },
+    "magic_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_magic.cc",
+      "source_sha256": "0d6c22f177cb5c6fd5fbbf3e709c8c2e48df0257a51ed0f8a95328dcaa08aed6"
+    },
+    "map_range": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_map_range.cc",
+      "source_sha256": "40cab6e554c9b164d5c99767d405af44848aabca6083fd4c30a725d543903111"
+    },
+    "mapping": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_mapping.cc",
+      "source_sha256": "49e99f72b473e13a49e451a1c1ddb991e3bf57486e95213c52e26977d956a8a3"
+    },
+    "material": {
+      "style": "Group",
+      "reference": "https://github.com/blender/blender/blob/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_common.cc"
+    },
+    "math": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_math.cc",
+      "source_sha256": "e17e32d34e0e5a24a9ecea84f8f6d21d679a0c023ae790a81e0d2ea6878acc5e"
+    },
+    "metallic_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_metallic.cc",
+      "source_sha256": "2a4dd738ba177e88521237f4ea41a8b2648c87dc56b6a1fae309c5e4c2e078ba"
+    },
+    "mix": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_mix_rgb.cc",
+      "source_sha256": "0999cec917f2cdf3587e7123747855a0293db4c8742d12c04494373faf3e2b41"
+    },
+    "mix_closure": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_mix_shader.cc",
+      "source_sha256": "846896242a4c39b72d1186ef1a69b491a93e8cb23d403b50ed357864bc514f49"
+    },
+    "mix_color": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_mix.cc",
+      "source_sha256": "5a19dbd05562b2a230e31e7d79e3e76a23f754551c4a6e767328ec5c9c3af085"
+    },
+    "mix_float": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_mix.cc",
+      "source_sha256": "5a19dbd05562b2a230e31e7d79e3e76a23f754551c4a6e767328ec5c9c3af085"
+    },
+    "mix_vector": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_mix.cc",
+      "source_sha256": "5a19dbd05562b2a230e31e7d79e3e76a23f754551c4a6e767328ec5c9c3af085"
+    },
+    "mix_vector_non_uniform": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_mix.cc",
+      "source_sha256": "5a19dbd05562b2a230e31e7d79e3e76a23f754551c4a6e767328ec5c9c3af085"
+    },
+    "noise_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_noise.cc",
+      "source_sha256": "e9f6a8efecb78c9a75a3ca4adbb9e9e734601c827727d238d6de708a9f4a7930"
+    },
+    "normal": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_normal.cc",
+      "source_sha256": "3538f51bb321a97881f57a29bfde882cc83418e7d7e915935edc2bf32b18ed5b"
+    },
+    "normal_map": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_normal_map.cc",
+      "source_sha256": "45de85cb56d0b8426843a7fa20d94de3fa4fb54aaec73b1c47ed728bfcc0b6a4"
+    },
+    "object_info": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_object_info.cc",
+      "source_sha256": "445cbb878a6a12d0276e6956795fd1c19be2679b7d62aa5529ef6e2e3e063e85"
+    },
+    "point_info": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_point_info.cc",
+      "source_sha256": "5523ff8e39bd39ff3774bd8b549808137c7c71a4e3dd74d4ef1ffdec015aa966"
+    },
+    "principled_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_principled.cc",
+      "source_sha256": "79d855aac8a2aaf4b3b18be537bb3f70394428679dd83a0bf040a35866ee8491"
+    },
+    "principled_hair_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_hair_principled.cc",
+      "source_sha256": "044c6b329e95fa7ae1af6c90decd6d712eb9b3d704bafd2d98bef46fbeb4e1d0"
+    },
+    "principled_volume": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_volume_principled.cc",
+      "source_sha256": "f49c02de5fee3052d38931fc937eeab9e134634283c12ba0bff2fba9c7e9bca4"
+    },
+    "radial_tiling": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_radial_tiling.cc",
+      "source_sha256": "acac47184dd703392602ac7e0e69dab204f20b3d99c6526c4e10473c17c0ea30"
+    },
+    "ray_portal_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_ray_portal.cc",
+      "source_sha256": "cc02cd664b43f0981f70007be6205d4b38611c72c66fde0dd703df5664006169"
+    },
+    "raycast": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_raycast.cc",
+      "source_sha256": "ade376fbb8efae25d0a752bed80c7157ccbb5423171a9195b7ca057d3fd9533a"
+    },
+    "refraction_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_refraction.cc",
+      "source_sha256": "c5891817728dccdb1dddf5c17894102577a548b3a6a60c42b870c1613f69985d"
+    },
+    "rgb_curves": {
+      "style": "Color",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_curves.cc",
+      "source_sha256": "e45e36457903c593aea0bae40dcb729d84f80df33f86635131ecd386bfa46fe6"
+    },
+    "rgb_to_bw": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_rgb_to_bw.cc",
+      "source_sha256": "428e4dbabdca34d545697463b8b7a29b8539c2e0a7176d530d5fad5be293afc9"
+    },
+    "scatter_volume": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_volume_scatter.cc",
+      "source_sha256": "f1010e7905af6e233b273102a057f9796f58f5cc56281f0e14d1685c7247153f"
+    },
+    "scene_time": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_value.cc",
+      "source_sha256": "896a4a60f33ffd43c77293ca6323b75915c592a77c74f28207a81aa9ad0e89da"
+    },
+    "separate_color": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_sepcomb_color.cc",
+      "source_sha256": "eb23068b5ff31530b91957ef15149e93a0cb613ae91fbd9248aa8bcca488a958"
+    },
+    "separate_xyz": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_sepcomb_xyz.cc",
+      "source_sha256": "87f1d7266e4dda007f1be0563534adb976be2fdf69c66a013deeb56119e66f7d"
+    },
+    "set_normal": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_normal.cc",
+      "source_sha256": "3538f51bb321a97881f57a29bfde882cc83418e7d7e915935edc2bf32b18ed5b"
+    },
+    "sheen_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_sheen.cc",
+      "source_sha256": "ab2ab9dbb67cdb326c482fa062e8ce992590b53604d16be4fb03e9444ff33bbd"
+    },
+    "sky_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_sky.cc",
+      "source_sha256": "7499ddfb23dbeaf157bc8ff042ddfefe16ae6f157795857c9bde15baadfd7b9b"
+    },
+    "subnet": {
+      "style": "Group",
+      "reference": "https://github.com/blender/blender/blob/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_common.cc"
+    },
+    "subnet_connector": {
+      "style": "Interface",
+      "reference": "https://github.com/blender/blender/blob/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_common.cc"
+    },
+    "subsurface_scattering": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_subsurface_scattering.cc",
+      "source_sha256": "8137e05d0654482f6796271d1c4129f5e5ae734982fc6289bdf1a61afe049398"
+    },
+    "surface_output": {
+      "style": "Output",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_output_material.cc"
+    },
+    "tangent": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tangent.cc",
+      "source_sha256": "a81d197be1c395541d09ca706d498b53613fe0277cac3672f206a5eea11658bd"
+    },
+    "texture_coordinate": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_coord.cc",
+      "source_sha256": "449d3701629ae43816f1a61443a3800e5bd632461701e277b0a36648105755b6"
+    },
+    "toon_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_toon.cc",
+      "source_sha256": "f1b61513f9f322f862e58e0332d58a8b91dbbce9323ee6c3787cd884df247e01"
+    },
+    "translucent_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_translucent.cc",
+      "source_sha256": "a7304cedcde936c811b89e26fe7b26c8cc255741ff56adce4931bed6f54fc39e"
+    },
+    "transparent_bsdf": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_bsdf_transparent.cc",
+      "source_sha256": "4d8597b6a67abee73e08da21c1f9158691bfcbf3a74af352d6758982ea47d5c3"
+    },
+    "uvmap": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_uvmap.cc",
+      "source_sha256": "bf1ea13c45d92dcf4ffed4f4355383fe2e8eb4c360e944a65aa3dea19637e709"
+    },
+    "value": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_value.cc",
+      "source_sha256": "896a4a60f33ffd43c77293ca6323b75915c592a77c74f28207a81aa9ad0e89da"
+    },
+    "vector_curves": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_curves.cc",
+      "source_sha256": "e45e36457903c593aea0bae40dcb729d84f80df33f86635131ecd386bfa46fe6"
+    },
+    "vector_displacement": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_vector_displacement.cc",
+      "source_sha256": "0dfde630f278b24c948c26e033fb5cd0985203bb61a81f995a9f22730c0b32ae"
+    },
+    "vector_map_range": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_map_range.cc",
+      "source_sha256": "40cab6e554c9b164d5c99767d405af44848aabca6083fd4c30a725d543903111"
+    },
+    "vector_math": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_vector_math.cc",
+      "source_sha256": "761a8ed159dc11b4e1409674b43e415eb15ea711c1bb4a07c89277991bb01a64"
+    },
+    "vector_rotate": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_vector_rotate.cc",
+      "source_sha256": "19104d1c6c5f32e05c4d85dc6f3ef9c12528ce65b022bafd171def8d19f84cc5"
+    },
+    "vector_transform": {
+      "style": "Vector",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_vector_transform.cc",
+      "source_sha256": "e512dcdb21b069ae85a5c3e87cfc75dbd7a38d38854b800290344a3464f4d2e2"
+    },
+    "vertex_color": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_vertex_color.cc",
+      "source_sha256": "609241649f161256caf1f35f159f43e39b77b8c88941d74546e617a1ac0b650c"
+    },
+    "volume_coefficients": {
+      "style": "Shader",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_volume_coefficients.cc",
+      "source_sha256": "8e471c1c744c74f5be3011b7e29f48e6155b3f93afdd130108c9d7e55f7ee95b"
+    },
+    "volume_info": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_volume_info.cc",
+      "source_sha256": "8a9ddd616adf516e16dda4310dfa7e8a235fd64b01bceaa78cb1e813a3767147"
+    },
+    "volume_material": {
+      "style": "Group",
+      "reference": "https://github.com/blender/blender/blob/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_common.cc"
+    },
+    "volume_output": {
+      "style": "Output",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_output_material.cc"
+    },
+    "voronoi_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_voronoi.cc",
+      "source_sha256": "5d815bcc553def844e2cf22d3c59f10ccfd7f72d87ac9c3bde91e9916f182429"
+    },
+    "wave_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_wave.cc",
+      "source_sha256": "26e610d03b5848762da134666109a9e14e1d261a9071c67fc4f19d349fa67e6c"
+    },
+    "wavelength": {
+      "style": "Converter",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_wavelength.cc",
+      "source_sha256": "5c035c6c69e1485caa9a9c3f822eba58def55953a39499bb896a27aa3148fefa"
+    },
+    "white_noise_texture": {
+      "style": "Texture",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_tex_white_noise.cc",
+      "source_sha256": "06a99f242d34ecf333966895784203b1f18f1ac4cb4fa5074d20bf4ee911acff"
+    },
+    "wireframe": {
+      "style": "Input",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_wireframe.cc",
+      "source_sha256": "7a969b9d0afe51fe3c06c4f27de5e8240a93539c476b6a5d69ddf16308e48f7d"
+    },
+    "world_material": {
+      "style": "Group",
+      "reference": "https://github.com/blender/blender/blob/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_common.cc"
+    },
+    "world_output": {
+      "style": "Output",
+      "reference": "https://raw.githubusercontent.com/blender/blender/fbe6228777e7/source/blender/nodes/shader/nodes/node_shader_output_material.cc"
+    }
+  }
+}

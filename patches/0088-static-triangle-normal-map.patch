@@ -1,0 +1,34 @@
+From e60784f1abfad2a435815e79f12812001f1d38e8 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:45 +0100
+Subject: [PATCH] Distinguish static triangles in tangent normal map evaluation
+
+PRIMITIVE_MOTION_TRIANGLE includes PRIMITIVE_TRIANGLE as a bit. Testing the
+combined mask with bitwise AND selects the motion-normal reader for static
+triangles as well. Require the exact motion-triangle type before reading
+shutter normal buffers.
+
+Rationale: Static normal-mapped meshes read nonexistent motion normal samples, causing faceted and nondeterministic shading or an out-of-bounds access.
+Contract: Static triangles use static corner or vertex normals. Motion triangles retain ray-time interpolation and normal transforms.
+Tests: tests/houdini_blender_mesh_shading_smoke.py, scripts/verify-upstream-patches.py
+
+Rebased-From: bff76ec5f4b10e6dda35f053454f06ba7d420a5f
+Previous-Patch: patches/0088-static-triangle-normal-map.patch
+Previous-Patch-SHA256: 0d026986d72f43a0de384be70bb38fb27d5897fbd12d3d35afbdfed6fab29fa2
+Rationale: A combined primitive bitmask sent static triangles through the motion normal reader, producing out-of-bounds reads and incorrect normal-mapped shading.
+Contract: static triangle normal map
+Tests: tests/houdini_texture_normal_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/svm/tex_coord.h b/src/kernel/svm/tex_coord.h
+index c6a697fe2a5b4805106d5b1f06844988cd3315b8..62332051eac5029e9ac5675bc7c9af0472c466a8 100644
+--- a/src/kernel/svm/tex_coord.h
++++ b/src/kernel/svm/tex_coord.h
+@@ -279,7 +279,7 @@ ccl_device_noinline void svm_node_normal_map(KernelGlobals kg,
+       }
+       else {
+ #ifdef __OBJECT_MOTION__
+-        if (sd->type & PRIMITIVE_MOTION_TRIANGLE) {
++        if (sd->type == PRIMITIVE_MOTION_TRIANGLE) {
+           /* Match the displaced surface at ray time, rather than mixing its
+            * sampled tangent with a centre-frame normal. Avoid fetching positions. */
+           normal = motion_triangle_smooth_normal(

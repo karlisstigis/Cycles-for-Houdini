@@ -1,0 +1,37 @@
+From f5b4b437584b7ae790f80c3e65feca390c7e4331 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:29 +0100
+Subject: [PATCH] Clear shader/SVM buffer modified flags after successful
+ delivery; retain pending flags on a device error. Actual shader rebuilds
+ still mark buffers dirty.
+
+Locked-Patch: patches/0007-retain-clean-shader-buffers.patch
+Locked-Patch-SHA256: f7f19d04d3f226d60d22d9b5a5fba074fc88662d494536b8c28857459e5812e2
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_shader_retirement_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 7ccd415bc246ff049087de7382c1fbd39a320605
+Previous-Patch: patches/0007-retain-clean-shader-buffers.patch
+Previous-Patch-SHA256: f7f19d04d3f226d60d22d9b5a5fba074fc88662d494536b8c28857459e5812e2
+Rationale: Shader/SVM modified flags can be cleared only after a successful upload; retaining clean buffers avoids redundant work while preserving error retry.
+Contract: Clear shader/SVM buffer modified flags after successful delivery; retain pending flags on a device error. Actual shader rebuilds still mark buffers dirty.
+Tests: tests/houdini_shader_retirement_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/shader.cpp b/src/scene/shader.cpp
+index 0a51f9d26178b7968531df8e348383a81344e3e1..d1b66577fb3d4b5c1b1f8405ecfee7861398afce 100644
+--- a/src/scene/shader.cpp
++++ b/src/scene/shader.cpp
+@@ -610,6 +610,12 @@ void ShaderManager::device_update_post(Device *device,
+   /* This runs after kernels have been loaded, so can copy to device. */
+   dscene->shaders.copy_to_device_if_modified();
+   dscene->svm_nodes.copy_to_device_if_modified();
++  if (!device->have_error()) {
++    /* Retain clean buffers across camera-only updates. Recompilation frees
++     * and reallocates these arrays, which marks them modified again. */
++    dscene->shaders.clear_modified();
++    dscene->svm_nodes.clear_modified();
++  }
+ }
+ 
+ void ShaderManager::device_update_common(Device * /*device*/,

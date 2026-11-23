@@ -1,0 +1,87 @@
+From 234f224cdf59cfd41a8b856b61188996a967c219 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 06:31:34 +0000
+Subject: [PATCH 109/109] Collect per-object kernel features on all cores
+
+Every scene update looped over all objects on one thread to collect kernel features, the largest primitive count and caustics flags: about 26 ms per edit with 500,000 objects, also for a light strength or camera edit. The objects are now visited in fixed blocks on all cores and the blocks combined in order; OR and max give the same result in any order. CYCLES_SERIAL_KERNEL_FEATURES runs the serial loop as before, as a reference.
+
+Rationale: A serial loop over all objects cost about 26 ms on every scene update of a 500,000 object scene, including light strength and camera edits.
+Contract: The same kernel features, maximum primitive count and caustics flags are computed for every scene; only the loop runs in parallel blocks combined in order; CYCLES_SERIAL_KERNEL_FEATURES restores the serial loop.
+Tests: tests/houdini_light_update_smoke.py
+---
+ src/scene/scene.cpp | 47 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 45 insertions(+), 2 deletions(-)
+
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index 2364eabb88ca7517b731f559204e4d27109a4d31..2d4db7baa5f0a9ff91f93e0fc01100f7b46e64cd 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -38,6 +38,7 @@
+ #include "util/guarded_allocator.h"
+ #include "util/log.h"
+ #include "util/progress.h"
++#include "util/tbb.h"
+ #include "util/time.h"
+ 
+ CCL_NAMESPACE_BEGIN
+@@ -622,9 +623,23 @@ void Scene::update_kernel_features()
+     kernel_features |= KERNEL_FEATURE_VOLUME;
+   }
+ 
+-  for (Object *object : objects) {
++  /* Per-object features are combined with OR and max, which give the same result in any order:
++   * collect them on all cores in fixed blocks and combine the blocks in order.
++   * CYCLES_SERIAL_KERNEL_FEATURES runs one serial loop as before, as a reference. */
++  struct ObjectFeatures {
++    uint64_t kernel_features = 0;
++    size_t kernel_max_prim_count = 0;
++    bool has_caustics_receiver = false;
++    bool has_caustics_caster = false;
++    bool has_caustics_light = false;
++  };
++  const auto object_features = [use_motion](const Object *object, ObjectFeatures &f) {
++    uint64_t &kernel_features = f.kernel_features;
++    size_t &kernel_max_prim_count = f.kernel_max_prim_count;
++    bool &has_caustics_receiver = f.has_caustics_receiver;
++    bool &has_caustics_caster = f.has_caustics_caster;
++    bool &has_caustics_light = f.has_caustics_light;
+     if (object->get_is_caustics_caster()) {
+-
+       has_caustics_caster = true;
+     }
+     else if (object->get_is_caustics_receiver()) {
+@@ -669,6 +684,34 @@ void Scene::update_kernel_features()
+     if (object->has_shadow_linking()) {
+       kernel_features |= KERNEL_FEATURE_SHADOW_LINKING;
+     }
++  };
++  static const bool serial_features = getenv("CYCLES_SERIAL_KERNEL_FEATURES") != nullptr;
++  constexpr size_t block = 4096;
++  const size_t num_blocks = (objects.size() + block - 1) / block;
++  vector<ObjectFeatures> blocks(num_blocks);
++  const auto run_block = [&](const size_t b) {
++    for (size_t i = b * block; i < std::min(objects.size(), (b + 1) * block); i++) {
++      object_features(objects[i], blocks[b]);
++    }
++  };
++  if (serial_features || num_blocks <= 1) {
++    for (size_t b = 0; b < num_blocks; b++) {
++      run_block(b);
++    }
++  }
++  else {
++    parallel_for(blocked_range<size_t>(0, num_blocks, 1), [&](const blocked_range<size_t> &r) {
++      for (size_t b = r.begin(); b != r.end(); b++) {
++        run_block(b);
++      }
++    });
++  }
++  for (const ObjectFeatures &f : blocks) {
++    kernel_features |= f.kernel_features;
++    kernel_max_prim_count = max(kernel_max_prim_count, f.kernel_max_prim_count);
++    has_caustics_receiver |= f.has_caustics_receiver;
++    has_caustics_caster |= f.has_caustics_caster;
++    has_caustics_light |= f.has_caustics_light;
+   }
+ 
+   dscene.data.integrator.use_caustics = false;

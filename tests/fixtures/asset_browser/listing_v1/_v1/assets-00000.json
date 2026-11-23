@@ -1,0 +1,67 @@
+{
+  "asset_count": 2,
+  "file_count": 1,
+  "assets": [
+    {
+      "name": "Metal - Galvanized",
+      "id_type": "MATERIAL",
+      "files": [
+        "materials/metal.blend"
+      ],
+      "bl_versions": {
+        "min": "5.3"
+      },
+      "thumbnail": {
+        "url": "materials/metal_thumbnails/Material/metal-galvanized.webp",
+        "hash": "SHA256:50142a10bff05f1cf5190db07b306a9e0749c25e0cb4fe9acb49606f3a8d0d23"
+      },
+      "meta": {
+        "catalog_id": "d7a2f3c1-0d5e-4c4b-9a8e-1f2e3d4c5b6a",
+        "tags": [
+          "metal",
+          "shiny"
+        ],
+        "author": "Test Author",
+        "description": "A galvanized metal",
+        "license": "CC0",
+        "copyright": "nobody"
+      }
+    },
+    {
+      "name": "Tri Prop",
+      "id_type": "OBJECT",
+      "files": [
+        "materials/metal.blend"
+      ],
+      "bl_versions": {
+        "min": "5.3"
+      },
+      "meta": {
+        "catalog_id": "a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d",
+        "tags": [
+          "prop"
+        ],
+        "properties": [
+          {
+            "name": "dimensions",
+            "type": "IDP_ARRAY",
+            "value": [
+              1.0,
+              1.0,
+              0.0
+            ],
+            "itemtype": "IDP_FLOAT"
+          }
+        ]
+      }
+    }
+  ],
+  "files": [
+    {
+      "path": "materials/metal.blend",
+      "size_in_bytes": 88322,
+      "hash": "SHA256:0552de0b8e7d2a948bc3cd82cbe3f978cd13489e950190fe5e8e8605d03895c9",
+      "blender_version": "5.3.31"
+    }
+  ]
+}

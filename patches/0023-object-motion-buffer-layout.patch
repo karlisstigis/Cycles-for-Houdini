@@ -1,0 +1,64 @@
+From aa433ff6321d26ca33af5193c092e588d1a84605 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:32 +0100
+Subject: [PATCH] object motion buffer layout
+
+Locked-Patch: patches/0023-object-motion-buffer-layout.patch
+Locked-Patch-SHA256: 7604272e05a3f7c4cca9189b16ebe5025f95261a91725b21abd3b338d4ff5f10
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_velocity_normal_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 9f4703ecf3c475f6efa8c61a29166280a25b1471
+Previous-Patch: patches/0023-object-motion-buffer-layout.patch
+Previous-Patch-SHA256: 7604272e05a3f7c4cca9189b16ebe5025f95261a91725b21abd3b338d4ff5f10
+Rationale: Variable transform counts change motion offsets even for otherwise unchanged objects; buffer reallocation must force all affected records to refresh.
+Contract: object motion buffer layout
+Tests: tests/houdini_velocity_normal_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index ce213b69b0a16a4850a074bd86df9b41bd9e5bad..f5f3441c748b6219a78067d7ab20284acd30524e 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -567,6 +567,7 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+                                                    const Scene *scene)
+ {
+   KernelObject &kobject = state->objects[ob->index];
++  const uint previous_motion_offset = update_all ? 0 : kobject.motion_offset;
+   Transform *object_motion_pass = state->object_motion_pass;
+ 
+   Geometry *geom = ob->geometry;
+@@ -703,7 +704,9 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+       kobject.motion_offset = state->motion_offset[ob->index];
+ 
+       /* Decompose transforms for interpolation. */
+-      if (ob->tfm_is_modified() || ob->motion_is_modified() || update_all) {
++      if (ob->tfm_is_modified() || ob->motion_is_modified() || update_all ||
++          previous_motion_offset != kobject.motion_offset)
++      {
+         DecomposedTransform *decomp = state->object_motion + kobject.motion_offset;
+         transform_motion_decompose(decomp, ob->motion.data(), ob->motion.size());
+       }
+@@ -821,6 +824,7 @@ void ObjectManager::device_update_prim_offsets(Device * /*device*/,
+ 
+ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, Progress &progress)
+ {
++  const size_t previous_motion_size = dscene->object_motion.size();
+   UpdateObjectTransformState state;
+   state.need_motion = scene->need_motion();
+   state.have_motion = false;
+@@ -867,8 +871,12 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+     numparticles += psys->particles.size();
+   }
+ 
+-  /* as all the arrays are the same size, checking only dscene.objects is sufficient */
+-  const bool update_all = dscene->objects.need_realloc();
++  /* Motion storage has a variable number of transforms per object. Changing
++   * one object's samples can reallocate it without changing the object count.
++   * Rebuild every decomposition when storage changes; unchanged-size layouts
++   * are handled by checking each object's previous motion offset above. */
++  const bool update_all = dscene->objects.need_realloc() || dscene->object_motion.need_realloc() ||
++                          previous_motion_size != dscene->object_motion.size();
+ 
+   /* Parallel object update, with grain size to avoid too much threading overhead
+    * for individual objects. */

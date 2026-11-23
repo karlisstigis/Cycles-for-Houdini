@@ -1,0 +1,71 @@
+From 789863fb8fee8f74010cfe4592a235f01337d17c Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:31 +0100
+Subject: [PATCH] world shadow catcher reference
+
+Locked-Patch: patches/0019-world-shadow-catcher-reference.patch
+Locked-Patch-SHA256: d4baf7084fc0c01e146c23227cf9f1c3046cb32fa16b29ae73fd6cea73796351
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_world_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 85177ba1a3b113ca693d92aa3abddb356f17123f
+Previous-Patch: patches/0019-world-shadow-catcher-reference.patch
+Previous-Patch-SHA256: d4baf7084fc0c01e146c23227cf9f1c3046cb32fa16b29ae73fd6cea73796351
+Rationale: A world background's shadow-catcher reference visibility is an authored scene choice represented by a new socket, beyond a local bug correction.
+Contract: world shadow catcher reference
+Tests: tests/houdini_world_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/integrator/shade_background.h b/src/kernel/integrator/shade_background.h
+index 66df298206dea3bba892330127db62dd490396e4..22c27954974ec52a63b71d7e2bb262aa5e590492 100644
+--- a/src/kernel/integrator/shade_background.h
++++ b/src/kernel/integrator/shade_background.h
+@@ -47,7 +47,10 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
+   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+ 
+   /* Use visibility flag to skip lights. */
+-  if (!is_light_shader_visible_to_path(shader, path_visibility, path_flag)) {
++  if (((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
++       (shader & SHADER_EXCLUDE_SHADOW_CATCHER)) ||
++      !is_light_shader_visible_to_path(shader, path_visibility, path_flag))
++  {
+     result = SHADER_EVAL_EMPTY;
+     return zero_spectrum();
+   }
+diff --git a/src/scene/background.cpp b/src/scene/background.cpp
+index 997afd6b5591416d5448c574006a373c14f73b2c..f8544e52780e427f784b74889589060e301a8bda 100644
+--- a/src/scene/background.cpp
++++ b/src/scene/background.cpp
+@@ -23,6 +23,7 @@ NODE_DEFINE(Background)
+ 
+   SOCKET_BOOLEAN(use_shader, "Use Shader", true);
+   SOCKET_UINT(visibility, "Visibility", PATH_RAY_VISIBILITY_ALL);
++  SOCKET_BOOLEAN(is_shadow_catcher, "Shadow Catcher Reference", true);
+ 
+   SOCKET_BOOLEAN(transparent, "Transparent", false);
+   SOCKET_BOOLEAN(transparent_glass, "Transparent Glass", false);
+@@ -66,6 +67,12 @@ void Background::device_update(Device *device, DeviceScene *dscene, Scene *scene
+ 
+   kbackground->transparent = transparent;
+   kbackground->surface_shader = scene->shader_manager->get_shader_id(bg_shader);
++  /* Match the sampled BackgroundLight's reference visibility for rays which
++   * miss geometry. Constant environments can have background MIS disabled,
++   * so the light object's visibility flags alone do not cover these paths. */
++  if (!is_shadow_catcher) {
++    kbackground->surface_shader |= SHADER_EXCLUDE_SHADOW_CATCHER;
++  }
+ 
+   if (transparent && transparent_glass) {
+     /* Square twice, once for principled BSDF convention, and once for
+diff --git a/src/scene/background.h b/src/scene/background.h
+index ba2f4713ea20028f2ccc9f22d0ee6d4b39e3fa55..b18e001f98f3396c8d8db6b071f7a8f554bdfe5d 100644
+--- a/src/scene/background.h
++++ b/src/scene/background.h
+@@ -22,6 +22,7 @@ class Background : public Node {
+   NODE_SOCKET_API(bool, use_shader)
+ 
+   NODE_SOCKET_API(uint, visibility)
++  NODE_SOCKET_API(bool, is_shadow_catcher)
+   NODE_SOCKET_API(Shader *, shader)
+ 
+   NODE_SOCKET_API(bool, transparent)

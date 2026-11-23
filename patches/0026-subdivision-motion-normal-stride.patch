@@ -1,0 +1,38 @@
+From 95107668f51914dccddbe8d8530bc0ecdc51f66e Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:33 +0100
+Subject: [PATCH] subdivision motion normal stride
+
+Locked-Patch: patches/0026-subdivision-motion-normal-stride.patch
+Locked-Patch-SHA256: 347b1f8e490d4d5c28067a446a0293222fb79af67bc8d1acd80e0b5ab0e89003
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_velocity_normal_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: e9e8aa72fe74c31e998a95402583984f13865e83
+Previous-Patch: patches/0026-subdivision-motion-normal-stride.patch
+Previous-Patch-SHA256: 347b1f8e490d4d5c28067a446a0293222fb79af67bc8d1acd80e0b5ab0e89003
+Rationale: Subdivision motion normals require the actual per-step stride; a wrong stride can read another pose even with valid buffers.
+Contract: subdivision motion normal stride
+Tests: tests/houdini_velocity_normal_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index f5f3441c748b6219a78067d7ab20284acd30524e..107dcd356660515117b0d8ab40b5fdbc4150c907 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -1258,6 +1258,15 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
+       kobject.numverts = numverts;
+       update = true;
+     }
++    /* Tessellation can change triangle counts after object transforms were
++     * prepared. Motion corner normals use this count as their sample stride. */
++    const int numprims = (geom->is_mesh() || geom->is_volume()) ?
++                             static_cast<Mesh *>(geom)->num_triangles() :
++                             0;
++    if (kobject.numprims != numprims) {
++      kobject.numprims = numprims;
++      update = true;
++    }
+   }
+ 
+   if (update) {

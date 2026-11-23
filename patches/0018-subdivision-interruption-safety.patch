@@ -1,0 +1,139 @@
+From 026a86199841b0f7404115ba9b7da78013570846 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:31 +0100
+Subject: [PATCH] subdivision interruption safety
+
+Locked-Patch: patches/0018-subdivision-interruption-safety.patch
+Locked-Patch-SHA256: b8bfd1003f55b05a3f7766f1a1e30168782b44c2c4c08ab77d2e1b1d6938bd32
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_scene_interruption_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 855d91554f26c7389f7be21cf6cb7d19515df791
+Previous-Patch: patches/0018-subdivision-interruption-safety.patch
+Previous-Patch-SHA256: b8bfd1003f55b05a3f7766f1a1e30168782b44c2c4c08ab77d2e1b1d6938bd32
+Rationale: Interrupted dicing allocates buffers before filling them; publishing partial geometry can corrupt the next render rather than just cancel the current one.
+Contract: subdivision interruption safety
+Tests: tests/houdini_scene_interruption_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 7f8fc7e8ed73fceda2283b3a5e172215cbf49763..db2900e737a1567066ca1d2f7e70d1c7fa3c0be2 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -968,6 +968,13 @@ void GeometryManager::device_update(Device *device,
+       mesh->tessellate(subd_params);
+     }
+ 
++    /* Dicing allocates the final buffers before filling them. An interrupted
++     * or failed tessellation can leave triangles incomplete; neither tangent
++     * generation nor any later geometry/device stage may consume them. */
++    if (progress.get_cancel() || progress.get_error()) {
++      return;
++    }
++
+     /* Apply tangents for generated and UVs (if any need them) or remove if not needed */
+     mesh->update_tangents(scene, true);
+     if (!mesh->has_true_displacement()) {
+@@ -975,7 +982,7 @@ void GeometryManager::device_update(Device *device,
+     }
+   });
+ 
+-  if (progress.get_cancel()) {
++  if (progress.get_cancel() || progress.get_error()) {
+     return;
+   }
+ 
+diff --git a/src/scene/mesh_subdivision.cpp b/src/scene/mesh_subdivision.cpp
+index 02fc5c6d983c73215794f6145de8e1fc05869660..09d54029fd4400485d87f22b11890f30c75eea08 100644
+--- a/src/scene/mesh_subdivision.cpp
++++ b/src/scene/mesh_subdivision.cpp
+@@ -87,7 +87,7 @@ void Mesh::tessellate(SubdParams &params)
+     /* Split patches. */
+     DiagSplit split(params);
+     split.split_patches(osd_patches.data(), sizeof(OsdPatch));
+-    if (params.progress && params.progress->get_cancel()) {
++    if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+       return;
+     }
+ 
+@@ -161,7 +161,7 @@ void Mesh::tessellate(SubdParams &params)
+     /* Split patches. */
+     DiagSplit split(params);
+     split.split_patches(linear_patches.data(), sizeof(LinearQuadPatch));
+-    if (params.progress && params.progress->get_cancel()) {
++    if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+       return;
+     }
+ 
+@@ -177,7 +177,8 @@ void Mesh::tessellate(SubdParams &params)
+     dice.dice(split);
+   }
+ 
+-  if ((!params.progress || !params.progress->get_cancel()) && subdivision_post_tessellate) {
++  if ((!params.progress || (!params.progress->get_cancel() && !params.progress->get_error())) &&
++      subdivision_post_tessellate) {
+     subdivision_post_tessellate(*this);
+   }
+ 
+diff --git a/src/subd/dice.cpp b/src/subd/dice.cpp
+index 30e33bbd7a6bb7843fd4209a4ad4994179bf66a6..797377cd69bc8f8f2dd9fc834d3bf9bb96ec57af 100644
+--- a/src/subd/dice.cpp
++++ b/src/subd/dice.cpp
+@@ -672,7 +672,7 @@ void EdgeDice::dice(const DiagSplit &split)
+    * on these coordinates and they are unique assigned to a subpatch for determinism. */
+   parallel_for(blocked_range<size_t>(0, num_subpatches, 8), [&](const blocked_range<size_t> &r) {
+     for (size_t i = r.begin(); i != r.end(); i++) {
+-      if (params.progress && params.progress->get_cancel()) {
++      if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+         return;
+       }
+       const SubPatch &subpatch = split.get_subpatch(i);
+@@ -688,7 +688,7 @@ void EdgeDice::dice(const DiagSplit &split)
+   /* Inner vertex coordinates and triangles. */
+   parallel_for(blocked_range<size_t>(0, num_subpatches, 8), [&](const blocked_range<size_t> &r) {
+     for (size_t i = r.begin(); i != r.end(); i++) {
+-      if (params.progress && params.progress->get_cancel()) {
++      if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+         return;
+       }
+       const SubPatch &subpatch = split.get_subpatch(i);
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index 0cb4cbb8f8d692914c9c451eb766d833743e737a..a0a7ab000287c9115d5727fcc7d5b0f9d1584350 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -67,7 +67,7 @@ void DiagSplit::alloc_edge(SubPatch::Edge *sub_edge,
+ 
+ void DiagSplit::alloc_subpatch(SubPatch &&sub)
+ {
+-  if (params.progress && params.progress->get_cancel()) {
++  if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+     return;
+   }
+   if (params.triangle_limit &&
+@@ -353,7 +353,7 @@ float2 DiagSplit::split_edge(const Patch *patch,
+ 
+ void DiagSplit::split_quad(SubPatch &&sub)
+ {
+-  if (params.progress && params.progress->get_cancel()) {
++  if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+     return;
+   }
+   /* Set edge factors if we haven't already. */
+@@ -596,7 +596,7 @@ void DiagSplit::split_quad_into_triangles(SubPatch &&sub)
+ 
+ void DiagSplit::split_triangle(SubPatch &&sub)
+ {
+-  if (params.progress && params.progress->get_cancel()) {
++  if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+     return;
+   }
+   assert(sub.shape == SubPatch::TRIANGLE);
+@@ -790,7 +790,7 @@ void DiagSplit::split_patches(const Patch *patches, const size_t patches_byte_st
+ 
+   /* Split all faces in the mesh. */
+   for (int f = 0; f < params.mesh->get_num_subd_faces(); f++) {
+-    if (params.progress && params.progress->get_cancel()) {
++    if (params.progress && (params.progress->get_cancel() || params.progress->get_error())) {
+       return;
+     }
+     Mesh::SubdFace face = params.mesh->get_subd_face(f);

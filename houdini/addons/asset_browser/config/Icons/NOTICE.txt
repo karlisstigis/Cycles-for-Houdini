@@ -1,0 +1,18 @@
+Asset browser add-on icons: origin and licence
+==============================================
+
+| File | Origin | Licence |
+| --- | --- | --- |
+| cycles_asset_browser.svg | Blender asset_manager icon (release/datafiles/icons_svg/asset_manager.svg, compared against Blender tag v5.3.0), flattened, recoloured white and drawn on the dark rounded square used by the Cycles Tools shelf icons | GPL-2.0-or-later |
+
+The changes named in the table were made in 2026; the changed file has been in
+this repository since 13 November 2026.
+
+This icon is part of the Blender source code (copyright the Blender authors),
+which Blender's licence page (https://www.blender.org/about/license/) says is
+licensed by default under the GNU General Public License version 2 or later.
+It is NOT covered by the Apache-2.0 licence of the rest of Cycles for Houdini.
+Full licence texts ship with the main package in
+config/Icons/licenses/GPL-2.0-or-later.txt and
+config/Icons/licenses/GPL-3.0-or-later.txt. See also
+config/Icons/CYCLES_TOOLS_NOTICE.txt for how the origin was determined.

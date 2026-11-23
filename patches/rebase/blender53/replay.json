@@ -1,0 +1,693 @@
+{
+  "result": "passed",
+  "previous_base": "74e9d9e48f86330987d7392166a51b3652d7c557",
+  "base": "77edc33168528e06b35540452bce5cce6068c3aa",
+  "patches": [
+    {
+      "path": "patches/0001-integration-build-hook.patch",
+      "previous_commit": "cccab836ae1822ed0199bae821a58c59f8b859f2",
+      "previous_sha256": "70e8afd80c45042ec91be31607c9c355619a6857e84a360e3813204ccabf9604",
+      "commit": "000022e55ca051c6f035d7525eabbc80881f32dd",
+      "sha256": "dfea783d01827dfefd64318f8966a35f0142d047b734132abdffe8ed6315f49d",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0002-houdini-usd-link-libraries.patch",
+      "previous_commit": "5a3f51087c90fcc8c994fa7c71d82375d8aba86f",
+      "previous_sha256": "2cf4692c8a94d521bd80f14a423ccc8f7afaa2b52e48fea442238d3b104ed355",
+      "commit": "ab6298cf50ef35e44bccc633acf14c71d4efe5e7",
+      "sha256": "9aa3896bd101fdce31749d9e22d30d85b194461f9bd9f6b30bdfa7d69da0948d",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0003-point-nonuniform-normals.patch",
+      "previous_commit": "d1c9cddf32f619dfd79b838b24bbc2134b41e467",
+      "previous_sha256": "3445bf84e54bfdd16e680a7d053a00b90f1f15a41e23c04e775bd71f1f3e784b",
+      "commit": "aba2beea452e7e3e40785f0d25e525d97798f4fd",
+      "sha256": "38f8a1f85b5fc21f07028201ec67e491067abadf66ffea57df322f184ee9f5bb",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0004-volume-shutter-and-bounds.patch",
+      "previous_commit": "743976c4e8683d379aa74336a302d139975403f6",
+      "previous_sha256": "32c533710b73f7eb88c4ced13d85d1b57cdf165dce5c90faac021a96bd2ab9ed",
+      "commit": "c9e18972f87c126e42dda5a85dccadf7e12c80c7",
+      "sha256": "23e03c5f40043739c91d70c0a3b8b670ccf5dbcb5c19e7a18b0daa15bc8fc474",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0005-point-lifetime-intersections.patch",
+      "previous_commit": "9bba13b5abf63e86c205f10e7e82fff92d2ea245",
+      "previous_sha256": "460df55c81c241b9ffc5be6ebb272a9175930be4cb330da8aaf0acccb0dbb874",
+      "commit": "aa05faf4e97accb082217c8a6225ccbda8dce477",
+      "sha256": "9063de1266e6ef7d1da6c2203c07f596999ae3456ffa70084972c5f6fa7412b5",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0006-opt-in-phase-diagnostics.patch",
+      "previous_commit": "e6ebdc6ed1a87ef6ad9d3c26aa9f13d096cd2242",
+      "previous_sha256": "41a5c958ef734448fb7939b6fcb06463ceada161e79f7b6d62b8e4f357a29660",
+      "commit": "d82e76cbfda7817ce2a54599fc60cf2b3a02f113",
+      "sha256": "b27f6ff83abaa5689d41bb66df6940957269db31197f70e3457534bf75e484d4",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0007-retain-clean-shader-buffers.patch",
+      "previous_commit": "7ccd415bc246ff049087de7382c1fbd39a320605",
+      "previous_sha256": "f7f19d04d3f226d60d22d9b5a5fba074fc88662d494536b8c28857459e5812e2",
+      "commit": "f5b4b437584b7ae790f80c3e65feca390c7e4331",
+      "sha256": "5125f7a6426403dadb92aa0d487c1afdc8782c9398504f225bd64bde8021f3e1",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0008-bounded-subdivision.patch",
+      "previous_commit": "6dbc90bfd742d937d5e966b9dcec8fe55ef5b72f",
+      "previous_sha256": "fa432f1042293c745b05e0dae58a7a9dc36c3bc0f3911d52af53ec2c55b120fc",
+      "commit": "42f7f29d02f33b86e18a72ff9740b0efd28eb2f5",
+      "sha256": "602e37027e410728ac9ffb3895c585d9f3fb44bb7186e6ca9249d1056cb65883",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0009-smooth-subdivision-color.patch",
+      "previous_commit": "a82a53d996ae196464de549e114cbe120ae6be93",
+      "previous_sha256": "cfa360da31ca87d5fd2e8d1b58d88995ed4dad1ccd02ac56b4a7fda80b847b78",
+      "commit": "685b40190b7f5e41b1ab3394b225665d0140e1a3",
+      "sha256": "ca0fcef1b25515fc68f716f2d6868f09529ca5bd3052b0a640f59afb02a97666",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0010-texture-resource-revisions.patch",
+      "previous_commit": "1afcc15aa9aebd2a7d803fbf45da2ea805ebbf0d",
+      "previous_sha256": "3a19b25f869977726b33e0c01d2b8c5e972d891a16ffa56dc7d78e5ec5a3c313",
+      "commit": "1d506d2bd168496cf968e444dfbf47d11b740b0e",
+      "sha256": "8fc82ff6d5b2fb29d25e30b02b2ebeadcbb5f26df894028accb17671a0280b42",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0013-texture-coverage-alpha.patch",
+      "previous_commit": "91da715cae5c435e2cfa8721fa097936f4ef396c",
+      "previous_sha256": "13e3458892a22711e0aa7e7ae010c278e2895eb5ca4c36fdb5680e2d580b726c",
+      "commit": "9a8942ffb243e8ce2c6d3e3cf1e99537548c780d",
+      "sha256": "e947242040b013715129823ef3c7995f3929594217b1547c2f02e29f7d023601",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0014-persistent-scene-sync.patch",
+      "previous_commit": "d45574f0836b3fd958cf962eb701e66f4aabfae4",
+      "previous_sha256": "040f8e4e431c1c76316ce179d8a46defdf8c14276bbf81fa792e552033df6562",
+      "commit": "da531bfc65b81b8d3f3ce58d26771cb3e8b5e9e2",
+      "sha256": "093b3dbe3b0dafef3eb627f502f7c8d0e342928dc1a4bee3a8216b0497c5a404",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0015-fixed-subdivision-levels.patch",
+      "previous_commit": "992d92066f8cb004dc597ebf300e424181c4cc76",
+      "previous_sha256": "7be3c79392936825ebe40ce1e19148d7077754afac0d7a3baf496c82cb625714",
+      "commit": "718401de2ee4d9a48b20e7ee7524dadff3288d54",
+      "sha256": "c553beb5b80324e8a021da49c51d8d584315438680095aec15d54edc553c9712",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0016-output-sample-statistics.patch",
+      "previous_commit": "e75e964ee45f457e7e949485f25efc1cec48dfdf",
+      "previous_sha256": "f6d00c8af08bc0c43c88f3ddb62436d7257c88ba43fc5a444211c2525695eba0",
+      "commit": "3bca15fa9b415312d8f19bc6c40d0f079c3621bf",
+      "sha256": "8e527b2d5cee07ed7dd67b7fa1975fe33b635935b50e07cc0572f8f1e236d60c",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0017-output-display-ownership.patch",
+      "previous_commit": "f061b5eecaeecd201b47f362f1b7bc3f69a4742f",
+      "previous_sha256": "3adb0840d0886a606ab6b2fd6b8e79097d3f542f3297d904d6be3e0b79b90334",
+      "commit": "a008de96b6df9b180a81d25d6fc68d703e3c61d9",
+      "sha256": "9f46b4a0d6c40c088a1782ba42434bd6b05928828009a2d8cd2beb8e94c97efc",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0018-subdivision-interruption-safety.patch",
+      "previous_commit": "855d91554f26c7389f7be21cf6cb7d19515df791",
+      "previous_sha256": "b8bfd1003f55b05a3f7766f1a1e30168782b44c2c4c08ab77d2e1b1d6938bd32",
+      "commit": "026a86199841b0f7404115ba9b7da78013570846",
+      "sha256": "e56ced06733cedf900f0c1f7a51ea0761b0adfeed8367dc3a55e1aacf769568d",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0019-world-shadow-catcher-reference.patch",
+      "previous_commit": "85177ba1a3b113ca693d92aa3abddb356f17123f",
+      "previous_sha256": "d4baf7084fc0c01e146c23227cf9f1c3046cb32fa16b29ae73fd6cea73796351",
+      "commit": "789863fb8fee8f74010cfe4592a235f01337d17c",
+      "sha256": "6dcef15ea91eff1fbe84ded810ca74c2a0c8135152d864a073049a8d44243c59",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0020-world-auto-map-resolution.patch",
+      "previous_commit": "c038022952a744a0e1a590bbb64e496f3358f660",
+      "previous_sha256": "23d581bc91af1ccbc0b73c0eebbe0d48a4119cde5c62c69a5e3612a21e9e5e83",
+      "commit": "9f1020edd6e2509f67f2541872e6b8c8618e1404",
+      "sha256": "e04f7567cfc590f19c57273775cb745db0ee81d104e826582a0c29f2c030f4bf",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0021-scene-sampling-interruption.patch",
+      "previous_commit": "4dfb52a757452e0987875d1789b80bceada000d5",
+      "previous_sha256": "96523849cccee06a1453eea9f7b754fc7a77fe2a04b630e94b62fe6ce32940a3",
+      "commit": "14988fd785d2c607265b6d8e8f48178b4be1c166",
+      "sha256": "55c297db52e710205133cf72116ab9c3942aeac81533f43ff4a98c3a6a6e7239",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0022-progressive-output-layout.patch",
+      "previous_commit": "9051ad751b5f173d5660d6e1b37f7615e461e04b",
+      "previous_sha256": "5f6420fd8bcdb089adb7a0d94447b8067f16df942ca97e5eecdaaba6ab965321",
+      "commit": "fbae5bdcc58d7479269967c7406bc47d18d1e4d5",
+      "sha256": "471583fcc6cdcb17ef041a165058dfee4fa365e582259055a987483cceb8b145",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0023-object-motion-buffer-layout.patch",
+      "previous_commit": "9f4703ecf3c475f6efa8c61a29166280a25b1471",
+      "previous_sha256": "7604272e05a3f7c4cca9189b16ebe5025f95261a91725b21abd3b338d4ff5f10",
+      "commit": "aa433ff6321d26ca33af5193c092e588d1a84605",
+      "sha256": "7c80ea9b4fdd022056ed93c3c635010da463f3bddc09b6563dcb8c711241e5e8",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0024-sampled-displacement.patch",
+      "previous_commit": "c16ad6b030fd475fa29e1c153c54088f52a63e2d",
+      "previous_sha256": "2f9f0963c6c521015b5d4138cff650064c88aef8f886d27dbd5d1d949955f102",
+      "commit": "40e7c0a5c2fc474d960932ddb86d70448b92c48c",
+      "sha256": "21c4674d6254420a84db37d5ac9de3dd101408a78ae142d51a3bbf35114bc3b4",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0025-temporal-displacement-shaders.patch",
+      "previous_commit": "5a63c016c04556719223298e7c9dd659e830bd1e",
+      "previous_sha256": "14a1366c04b7b081aa056e7ac4b01a2752d164fcf087b4d2bcf9fdc9fe97cc92",
+      "commit": "0059cb6dac1ead30a25ad1c144244fca373e51dc",
+      "sha256": "27672cef64ff152577541710463a85209334d2bc6a1e6d114a20e79fdceba7ba",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0026-subdivision-motion-normal-stride.patch",
+      "previous_commit": "e9e8aa72fe74c31e998a95402583984f13865e83",
+      "previous_sha256": "347b1f8e490d4d5c28067a446a0293222fb79af67bc8d1acd80e0b5ab0e89003",
+      "commit": "95107668f51914dccddbe8d8530bc0ecdc51f66e",
+      "sha256": "c229a5cba0904964facb1f7645f61a9a2a8718e7fcd266513e8a4abb042f65ef",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0027-linear-subdivision-motion-normals.patch",
+      "previous_commit": "43799cb2bd617510e8b2547919dc291a82b81aae",
+      "previous_sha256": "ab7f6a221e6545d78e4856c7c161ad6cf380ef18dbe24f20c4adc3402183c12b",
+      "commit": "3f17913e793bba7aeae91adb0f0dd7c7d89bbfef",
+      "sha256": "4214feb0d213ba2c4f1033dd9c7d4d351b0672e0e98c49e281307b965b9f7871",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0028-sampled-mesh-attributes.patch",
+      "previous_commit": "4fd41984d25829272a01e175748789e14e2d5fa7",
+      "previous_sha256": "e234f4b6819ece287875886dc8191c7dbfa7febf0a84cc67e73ec2822a36cba8",
+      "commit": "f419ee3d017aeab010969ed1fcdb9febab9407d9",
+      "sha256": "672bdf5ee21d73d7097538aa95bfb00a3adb7696cbf708cbb2681544f46be094",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0029-sampled-point-curve-attributes.patch",
+      "previous_commit": "0f1a8b0d752738c765405155cdf1ec66d834404f",
+      "previous_sha256": "fd6f610bb3795d5f54c4ed395ca010bca55033b5b5d21fe3d3be9bc9db25bb63",
+      "commit": "4e4462b8db3e858f8c3a9c548cb148d33dbf9716",
+      "sha256": "a6a84a6f15437c6961e7fed49bcf4e9baf36cc58d3c7a6bacdb946f75ec86e10",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0030-sampled-named-tangent-bases.patch",
+      "previous_commit": "b78bb4e6eebaa115037bd65410f304cdea745f6b",
+      "previous_sha256": "104ec8ad51b37740652472baeb533aa5679c471dd05cdd4433bc5516cca5f5d8",
+      "commit": "f3dc653bd55442dc131d2beadecffa38a9af1552",
+      "sha256": "652fee12fa863ea6903130af2c82c2369c984e32daf86e638bce1213de679bf3",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0031-motion-normal-map-basis.patch",
+      "previous_commit": "848e86d44a4f3ed5fee23592bcd553ea8e523641",
+      "previous_sha256": "e776da510a4ab309316d633d9b3a377845f5929c45736ddaca5cb2d812d5808c",
+      "commit": "2ed66f65f2a05ace90ad015f9e7a13e30d0843c3",
+      "sha256": "e9dbb428177b9d9e655845f7759e975b825392080ca47fa06397448f7c381b03",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0032-compact-output-passes.patch",
+      "previous_commit": "c8a554e25d071aa7662c3d8c53aad323f9e1031a",
+      "previous_sha256": "1bee5f61a4292dccc123d26a01734e28b1ccddfbe6c3fdcf26be9c939f3ef0d7",
+      "commit": "f955d860dc62807a200947e1115a758fcd2d6182",
+      "sha256": "f6a3ba17df3bfd85f1511a8fc583a6c484f13e93ea4c70d98f8b9379157bf006",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0033-local-light-tree-cache.patch",
+      "previous_commit": "851250ae907a020578065dad76cedda0f1e54dc4",
+      "previous_sha256": "c9535193795761258b02568c635e55a63d8c4042b5d5de2bbc93d2e732226f9b",
+      "commit": "257f07566fad70e40765cdb4eb87742df0c12e9e",
+      "sha256": "68eb756a5dc02b74d9db611c311dc6fa2353ebb42c946b55fe2a0c3f239b4418",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0034-light-tree-phase-diagnostics.patch",
+      "previous_commit": "3ffc4754af28eee88fb4d36eeb06769d419f3d27",
+      "previous_sha256": "f6809accd519c4643b02e6c2cc5e143ce6773b42d6b55717c88e82468c06a5e1",
+      "commit": "8a5f653576b01dea7b837be3f40abb4384bc650c",
+      "sha256": "6e2a496762398967c398e302df81bd99ec8b154d4bbb22950287aa5c3128410b",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0035-flat-light-tree-views.patch",
+      "previous_commit": "cf530418eb07eaff9a688a1369ff29b2f73913ec",
+      "previous_sha256": "b46c05e8f6e790ece8090e13b6f2581fea3cd703238fa69841e43029a5458784",
+      "commit": "54ea33217ba8aed008ddd6ab3abee25e240f8535",
+      "sha256": "0c32cdaf51c34975ea83fab030f3bbba7acc95f12aa946b0fda6b8f128efc6be",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0036-cancel-diagnostics.patch",
+      "previous_commit": "2764fccd7ac24a8b1653ba99b18db6180ee4fe67",
+      "previous_sha256": "6c27496ca8483b786a56e02f4ee7d873eb55f042892bbe0c6e019b2e95f17ae7",
+      "commit": "8bc4e46ec62a4d8a791d7b4f2d2f205dce9d4f35",
+      "sha256": "2edb41f857f578be51f1dc5c4510e97d9946d66092d842d7fe996b65894e9c10",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0037-latched-quick-cancellation.patch",
+      "previous_commit": "2336230a956d40913f965062b5481052f2589804",
+      "previous_sha256": "a5b38078f5823c1f6ca2694c890423d2d3ab26e7e0b3d32f052f79ca55924e41",
+      "commit": "26812cecd9900dbbec3f6a39c1b89ad29a0e9ce0",
+      "sha256": "ca130e31e0ff9697e971a5db55bd13a98c1a972842c0533e4b66ba7ea7ff47a8",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0038-displacement-dependency-hash.patch",
+      "previous_commit": "2c0f206728bed03d747ed5d7b1ac2b284ff89a89",
+      "previous_sha256": "e269f42450a4bf5b4216884e50f69700f6394ec872e07914d8811bd428244b8c",
+      "commit": "59eb8efde658dcb027982fd08e57ebefd8ea84e9",
+      "sha256": "8aa692535553358c9192ee56f533925db653f1526640554b8a86a6494984f091",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0039-owned-ies-text.patch",
+      "previous_commit": "9ac444b193d9d04370af605c8932623891c48113",
+      "previous_sha256": "7bb83fb5f4097f180c507f4db0a569af358d0d4eed6fead294961a25bce7208d",
+      "commit": "c8a2748a24386d9b036572daeaa18a887f2049e4",
+      "sha256": "9d4407f3e047c00617c4ab99cc5d38e051b92241b4ce912675c4bd3c18470fec",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0040-independent-attribute-buffers.patch",
+      "previous_commit": "4724b445aa47c629dadccdb8162bdbfc0dac77b8",
+      "previous_sha256": "39a7a5980b28af0ae1a1477f7a90b8136d75320496c6e74fe9ef3f14cb2abc7f",
+      "commit": "662f5e4877d0f1fae1a6c58d887e6b3c1eb69ff0",
+      "sha256": "b7c3fdccd8e7401f7f63615714ba890838171b8aaa7209a1d89e19e4657dc136",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0041-displacement-world-position.patch",
+      "previous_commit": "cc241b3e583f1be7003de962c95b9483a37c1a3b",
+      "previous_sha256": "4948d0ba391194276edb4598bfcd160725052c9b51d3bd04c1702e14d8541a9f",
+      "commit": "2647ed74f31e82d7767264fbc612a2a841650a90",
+      "sha256": "db52ee9aa683b25840d387eff0a0a512bfa1a12f1bc667d62bd5ee594d71de21",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0042-camera-shutter-curve-endpoints.patch",
+      "previous_commit": "eb230d690f89e8fdc4a594ce8a62559d98a38938",
+      "previous_sha256": "07e42b302276fd26814abce28cc8f07e851b4b334f5153f7c57cd3b3a235815d",
+      "commit": "86cbf53e867f847eec5bac09bfcf4a5225421b3f",
+      "sha256": "9b23db0f15183009ff958903ea6ec949d8a7d338871cc4b82052af4bddf79ff7",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0043-panorama-projection-inverses.patch",
+      "previous_commit": "279758a8356c662c359bebbc3fcdc06051caedd4",
+      "previous_sha256": "7881178f7f278d199568ef49896284349c88b742a006d13ddd96568fcd3adb3f",
+      "commit": "15b9f75dd4aadf98d2596c8908b8399ef90acd72",
+      "sha256": "47441f8ef398b37ad3cd0284833e0c6526b91119e79af8b3e4ed8aa0f1fa3370",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0044-panorama-motion-seams.patch",
+      "previous_commit": "f88cfa37ec03ab52dfc4e54c1287bf9b06b570c9",
+      "previous_sha256": "c828e936abb3cc9cac66f73549aecf25091ae6bf25e27ac12bbf66498cdb6cf6",
+      "commit": "19153c5c9ec6cd0e7be0af5ecaee328eff238d0c",
+      "sha256": "1ed3733f75216998343ed9a400104e67f19660397fa4850ad79eb7127b25ada5",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0046-emitter-dirty-state.patch",
+      "previous_commit": "ddfdda574f97216ab07346c0e7c879b42fea9866",
+      "previous_sha256": "f85ca8ecfbd2a3f2960a4d7fd03511a4f59d331fffd2eec73e6f74a7e1d6a44a",
+      "commit": "60877d05f930f645abc12753d6ccddd58f1307dc",
+      "sha256": "fe43530ec73ac88b3177a62cbb32400307abeb28e25b6efd92769c7f2318eaee",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0047-parallel-cached-light-tree-flatten.patch",
+      "previous_commit": "0544b02fc0fa4f7f99621d7f3e9f9add60e6714f",
+      "previous_sha256": "a9e6f0afffc46d2f8dc1c05bd8a5a317f0d5ff8513b9f65a63b5c8eed055671b",
+      "commit": "7ae2be37e654ac75449b74b6647dd33d94703ca9",
+      "sha256": "af9e63020b03a2d2c34c24f6589caa4d6a4c03567c19981721424078a07d5952",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0048-constant-attribute-sampling.patch",
+      "previous_commit": "932755a8451e872ba32d58c82e905d8d728eb41c",
+      "previous_sha256": "ea7531d51d214d6b7381f7d31d34b62caf7ae262c695f2910e5144e267348186",
+      "commit": "664c765c6f35c7ef04e69c6c0f8dcc262a31ff99",
+      "sha256": "0de5bd01241969f3615309ccc40f0e1e03a5cf0732993183942cdae4284ad7c6",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0049-retained-subdivision-shading.patch",
+      "previous_commit": "57e63c4e7597f9ca44b5cacd489c91a656c0201d",
+      "previous_sha256": "336ff7b16f8b68d949e0d2d6e4c37cbc7d3d15cc08d0cc182ba5d11bf677a97d",
+      "commit": "41bf8fd91bfad9b8ec98f3660244efb2da5a7b21",
+      "sha256": "b7c0ea23fadbaf95dc9260c979e7abf9285459e6c2b0a4715232209dfa296c3b",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0050-retained-mesh-shading.patch",
+      "previous_commit": "973ef783e52b65283f525d9bb5da45ef33ac5d86",
+      "previous_sha256": "56601d5c314ae1027fe459739626cb9e04c6e6823244c185bcefcc72b24cd4e1",
+      "commit": "679743f917e9b07bd4cd4b938b49b04ae55156e1",
+      "sha256": "bdc8097b5853253b0fc5ef90bf8dbea911ce768e1291009d36d6a01843329f1c",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0051-selective-shading-preparation.patch",
+      "previous_commit": "e04479c2f94ac8cd1e5d9d36e4bb6866586e5d6f",
+      "previous_sha256": "0ead75487c1358860738ff61cf5e15298f63f5a6fbd6dbfa5f6bc76ae0fd12de",
+      "commit": "e1460e18f590ab5f01ecf85b5197d3177e3455e0",
+      "sha256": "b36a166f6ee3ddb3a6fa85efb12c46f1ad7d347e39bd26a3455edb9b149e0b63",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0052-owned-attribute-table-layout.patch",
+      "previous_commit": "14138cad9ece745d8cbd8a4056da3ae0dcdfc7a8",
+      "previous_sha256": "46faa767f3b16989fdafbc0c7f1dd88e43412b5d0b76e5fc2265997fcae897f1",
+      "commit": "a0ffd7605f66cd9f5dc0228fd2b7d74dd94fdf39",
+      "sha256": "c77d453f2acb62874072a23726c8402002ebb3b757d21362d74f1fe3265f84e5",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0054-retained-light-tree-uploads.patch",
+      "previous_commit": "e6a983a7dc528b653821ca22c90785848d77c3fc",
+      "previous_sha256": "44cd78a29d465a145ccc6a7024886d6fc03e2a29744c340795e07e5b1eba7ec8",
+      "commit": "c7f4b48b2d9778d2c3439efcb44e746fa70f7c0b",
+      "sha256": "e6f621dbd60fabf6c9ed7af4801c2f93ea827c7fe7ba7668400e8c081c1548ad",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0055-scalar-attribute-output-precision.patch",
+      "previous_commit": "142e1297132690316c1eeb9c2333ab91edbfa243",
+      "previous_sha256": "d0a7869b3cdf012e67ba24c7a0bfab8fe7c7eccdcabd042ac1ee867fe85a0522",
+      "commit": "d720b43e4a41f0ff7a68750a23da67f41efd4d6a",
+      "sha256": "31fb37d9918ecbc77cc2eada30d36ab237c6ef92a0fc6ccd15c49ae96469a493",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0056-bounded-light-tree-compaction.patch",
+      "previous_commit": "82207e9c5687b5bdec17c0342d9149b8202de9a1",
+      "previous_sha256": "ef4cca6fa416afb3e4441583c5dd29a2037e934ffd735d31cc645467db9287cf",
+      "commit": "f109556225c90dd877fa4620626a5a5f21c62388",
+      "sha256": "afa665bdf9dfda9ce9803ebe2fec68b83c450b1fa4bd791c2e9ddfc563205d7c",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0057-object-material-slots-and-shared-mesh-lights.patch",
+      "previous_commit": "90be37a66b5bbc67ce12f5e937090907f442e5d9",
+      "previous_sha256": "9f49cfcdd202990997ba6fcb81d0cae57c8fdd367c3e28b9af73655e3a520b63",
+      "commit": "415ab2205534603a4f4b8704b951a73dbdc075ce",
+      "sha256": "667f2ea6a09d6f0ed1d9524a62a6e604fc415cf6581c5c0a6b82f22f4d60d9ce",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0058-retain-exact-cached-light-tree-interiors.patch",
+      "previous_commit": "93b0aa8354692043d88328df8f6b63e5dda24533",
+      "previous_sha256": "50dc38bdaa01932c60ff60e686979236c6113f7636c11f71ee55cc9a261098e4",
+      "commit": "85f6dfac07422422ea0def388afb139c1e710628",
+      "sha256": "3d6c0ada66ddf553c0ef1ecfffd5745a5fa6de7e275595969ca49a69f659bd37",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0059-upload-owned-light-tree-dirty-ranges.patch",
+      "previous_commit": "8e5df9e6a01ee34430db8a8f046ff540c3b56d52",
+      "previous_sha256": "947b9c45bcbbb09f19f5d2e51f7120f65ab998a80f5643de7975510427990449",
+      "commit": "708d17fd39270ecb501d78d26655d857da58eb22",
+      "sha256": "14726d18fa5566199c828949269c470e29388ee3fe5c1bf9f6056331a78ffeb0",
+      "substantive_edits_unchanged": false
+    },
+    {
+      "path": "patches/0060-borrow-immutable-cached-triangle-emitters.patch",
+      "previous_commit": "34ac51709728c344ff1496e4cf8844c920235f57",
+      "previous_sha256": "dee7c04ea06569a7bf9ffc7605ad054a0ea14e59654a5343ed19ed2836eda7cf",
+      "commit": "c380874bef0c34d10348e51229b48d9741a6eed8",
+      "sha256": "112a6951e25041f011595526397d314e80abfa05ee16a9f47535089e63323683",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0061-key-mesh-lights-by-exact-consumed-energy.patch",
+      "previous_commit": "9ed35f82bcb40e98dce7d7d131c7b4216c9b507a",
+      "previous_sha256": "494fd486c9a5f189720bc48c8d3459b05468427cba80a411d30ebe6553336f02",
+      "commit": "dc4d69ff09c2963739789e269eacfbd558b1a8e9",
+      "sha256": "ad15c71cb47fd9b1cad2b86809a585d3ef8af73f7042fcb5ed58e140b4dd2838",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0062-profile-cold-light-tree-construction.patch",
+      "previous_commit": "18b4f87caa9c2557e55b386bb00b31473802f164",
+      "previous_sha256": "1bac1465e35c4ccfd65890e327393c47a3973f12167a9c0d7e5d8060249da0e5",
+      "commit": "455c4fae78415c1dbda71a2236f637deb4c26a9c",
+      "sha256": "5f305d75e0e8619693cfe67a433a3e87c4f47a6429d924efd0f11ba6f1781944",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0063-preserve-shader-socket-float-bits.patch",
+      "previous_commit": "4d37fc5233d30d41058db6076e5e78c30b7190e5",
+      "previous_sha256": "c49b8868e26ca58ba37b17cca990537239f46c4ce162c44de2fec577800c9bab",
+      "commit": "d0b7a00d597886558d02dab95fbe48b1bec977f1",
+      "sha256": "caaee35392af260c31f19416b1b844871bc333c31a1ac6378e548c710e3d0368",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0064-houdini-sdk-oidn-runtime-provider.patch",
+      "previous_commit": "db9390e7c3575c16c854638d2600e26ceca7a84d",
+      "previous_sha256": "4c6dedb4ca96d6ca2ecfaad9bcfdd2296cb3ea7b93ac4b40475a8b199c3b7dcd",
+      "commit": "f821381204240cdd14cb563eb8aebcf948892fa7",
+      "sha256": "9b4d8c92272cd737ea41b785785908f43476a347fae7cc4ff9163569a482dcde",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0065-shutter-sampled-object-attributes.patch",
+      "previous_commit": "40dd8e6adc79a2dc8e96f470d00ef96ac5df31aa",
+      "previous_sha256": "f8707c5996f5a5905ac75346c00829c2cb0ccc1d7e670bb77db66186375d675d",
+      "commit": "741006c972fc6b61969e65c690e3dce931ede16f",
+      "sha256": "6bab61c7a437f572b05c03b845801969cadc9b3020edbf4e90db7673c562d39a",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0066-uniform-camera-exposure-cdf.patch",
+      "previous_commit": "d3e28e12cd42a7b59a5e85e9c5e37182ff55eef3",
+      "previous_sha256": "9be21965c5e8bd7a01b7647a4a8589ab34caa820d1c38a7f1543c0b46305c65a",
+      "commit": "633facc552197465c71dcb3938b1af52427c3fb8",
+      "sha256": "c42c0fbd948e3750217f59405692bb85cbc137ca6665c594f152d885b0a816d1",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0067-shutter-sampled-camera-optics.patch",
+      "previous_commit": "8870274335ae5963108b6978b2a73999956e1b49",
+      "previous_sha256": "e1b70a27572dea5a75227b13540a6d41e446e7f5f67d35c202a4a294eafc371d",
+      "commit": "da2ce9ff8ba4b4dd97b252e8365e82d44af3140b",
+      "sha256": "b5435d096b397fe314624f0b7fa9c3d86d17bdaca7c58e49b01d1a4c0ca6656a",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0068-shutter-sampled-camera-intrinsics.patch",
+      "previous_commit": "3c68fee0e104722b68e38072a53767e9275cbc5b",
+      "previous_sha256": "ff8014419f331cc6b7c78cf717bb1baae6f79718c98dba847bdcadd75bfe1a22",
+      "commit": "0ffb4672f6af2048f5637e8face4a414cdc6b1ee",
+      "sha256": "60cf4380530e9f58e94414ece7df99e65f1b7b8c66b3e48484b0789a43f58762",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0069-volume-zero-throughput.patch",
+      "previous_commit": "0dfe21a7768b284927b4ec64ed0af46ecf09b17e",
+      "previous_sha256": "48f34ac096593db5eee3a43daa614e8490ab62cfa532a7bb41590253de00adcc",
+      "commit": "bb8ee76eecb430cda91383806b862690b8ed08db",
+      "sha256": "8497a0096bd90d065b17ab942afde2646138c77e006e82c2b656e50fb76405c9",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0070-image-iris.patch",
+      "previous_commit": "4b91134f2632b073d689468ed635393c36e724cb",
+      "previous_sha256": "2579412a0b0cf84d839902c6becdfe2813ac7ce8e7383b882c408a3b4ad26452",
+      "commit": "701e987593fcfb7207cd4a37f97985e71882c31e",
+      "sha256": "5efd67d4e0322a56bef6ea0b79e6beb4782610ac47e8840b023eb2367a69788b",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0071-colored-image-iris.patch",
+      "previous_commit": "bdfd5e4fdd86e23c4938e9f1f701f5252f40839e",
+      "previous_sha256": "b470b91fe99ec8650c17d24fa0455c590e7afc10cc1b9b128fd5f21cbc8b6859",
+      "commit": "9c865647cf218d5adfc20ea8e602eb82d73245c4",
+      "sha256": "fb3e93b3828fd6520372a711fdf7c527e35c644d17cab27a400307ce68c05fc8",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0072-interactive-adaptive-target.patch",
+      "previous_commit": "20eaa7afaa5062c3926ff6a2dcf236a0ef86b07f",
+      "previous_sha256": "2deb22f9f09488e01c995a82539f0fa179d0c322f36da2f6af0a75ecb63806e6",
+      "commit": "d3073e0ecab36c683d34cc298bbff6ac84de53b1",
+      "sha256": "5b2091290764c59f32188f2417cc429c18f4ed3b3b429a5f77505a9ccb15cedd",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0073-resampled-light-sampling.patch",
+      "previous_commit": "9a6046495e67f65a34d8129ffef090fb85bd3d08",
+      "previous_sha256": "6168057095e55f46ef0a1a3317d25314e1b27c5611f7e4abc2e941d7e3ad5c14",
+      "commit": "bcd2be84f1326cf875288d505ac7e8dd6c998878",
+      "sha256": "3265ef74dc81fc71c301f60745619cac9d76661ab678320c21976a47eb9de3e1",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0074-nested-dielectrics.patch",
+      "previous_commit": "e6775e761804d1a6c2a9891cd429cc8d48874e2c",
+      "previous_sha256": "e82678b8bd2030dcbdd223afc022452f0a339abc6bf1db661986738e0fc6b63c",
+      "commit": "4d492d9aa604e322e9cf586bb8c65900d5d3c6f0",
+      "sha256": "4ae306d87cf7e99f7528956a4b86261dbafe649eb0d75466ee8ec411bd0dffb8",
+      "substantive_edits_unchanged": false
+    },
+    {
+      "path": "patches/0075-subdivision-count-overflow.patch",
+      "previous_commit": "3fc27c4115324f19b0c2542b67a8f8245c6337d0",
+      "previous_sha256": "2cc5a57cb9a46cd8d9a37400051066c47ccff58e207cf4bfcca1531c297be522",
+      "commit": "e8e58e66c678cf7bcacba76c09e582d0c962f069",
+      "sha256": "8c7df23c2811db9f9ced23997cae7772e835b0e2c06dd4de82119a000e1516de",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0076-selective-resampled-light-sampling.patch",
+      "previous_commit": "f24c0f232fdfe2c8ba5df1bc7853175f514b9a1a",
+      "previous_sha256": "b901dfee9b390146987665bd5dd97eb5daf5e375b524ddb2e2a439fd5971006e",
+      "commit": "f00045d7b58b1b1d0952caf5b2a8c1127f18106b",
+      "sha256": "99cbe42e03550cf2ecf8eac229dd053e4d8358f1a8d11873b9828b27007dbc8c",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0077-houdini-dlss-project.patch",
+      "previous_commit": "0008fb9e482a35d496bf3366d6db5f6a68c74b46",
+      "previous_sha256": "fcd9639f809bbd7a5c5ac8171865c09fb470062f257361c458ca8c9a5be87c97",
+      "commit": "8f5237e6da233ee884a580df7c1c9263d893ab8b",
+      "sha256": "fc773eb0b1b771de43f903a40c8b7408debe7d57e7b33b0abbaa4355e92bd826",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0078-spectral-nested-medium-ior-and-53-kernel-types.patch",
+      "previous_commit": "7b6cc7c5894c387a4aa84f093502f8c4ee783d24",
+      "previous_sha256": "f6b342c8264b2e1964a3fee72a812f52c0b2c709507ea0e2067003e7a3785574",
+      "commit": "07bf0ad9e2fe5021a4c3dab3c40c0bfde6eb27f2",
+      "sha256": "b0d2bdc816092f198c4fcf7c3a5eb4fcd77e4f95f61afb18418ba849933e8295",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0079-dlss-history-epoch.patch",
+      "previous_commit": "ffa465fd8c3bf3dd9e4ce4e82dc0648e32974d5a",
+      "previous_sha256": "1c39bc5ebabdee713bbd964062c0ae90ae8fc8c0da88de4a695da130b7ac815d",
+      "commit": "5b74612c6d5d5f92a89d79e8550feeafa968825f",
+      "sha256": "cb2e9d6d0762a1cc160ae0154013d1fdee4c28908d01ea4ee51ea23421d6a476",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0080-blender53-native-attribute-and-tessellation-api.patch",
+      "previous_commit": "04376919ddbc0572cf759a2130aa8a37001500ef",
+      "previous_sha256": "b04f4fe1f016080d764708a4cbe6ada8b7805996a50def45dc4208399aa1d2a8",
+      "commit": "a14c68c88e467c475f955f2dfe3c89cfbb28a083",
+      "sha256": "58fca40f6e731414e2512d269371351968cede214b5e2e5bcb884096d0dcafa7",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0081-gsplat-retained-attribute-copies.patch",
+      "previous_commit": "5bee9d5d4614e932284bfbdef839559ecf3d8496",
+      "previous_sha256": "8fa97defd8c75f9076b564382eb487dfc792c4874c9d76e3981073b351acdd73",
+      "commit": "d1bbdcd399982147711129e6fdfb36139de6f935",
+      "sha256": "b423ea9051a661587aa7178748b637de4d82acc425be4140b502fa5e07744da9",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0082-hosted-ipr-gpu-state-budget.patch",
+      "previous_commit": "e1429f9b4aab8c7899bcf5490f8815b54d5bd818",
+      "previous_sha256": "9d8560ef3b7939dfef6dfb7a4a0413d92b1f9e01170885e4240d0b843283d03b",
+      "commit": "d9cfdd8c4ec616f87fe75bb42ff93f877dc0a4af",
+      "sha256": "2f6d1e4540e7126d588f7ade7b03740ce478bec17e1f17e23ca433129030cba9",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0083-full-precision-light-pass-weights.patch",
+      "previous_commit": "bc8dc63c42ef04203c2109542efe941d1aa26603",
+      "previous_sha256": "8bc91890b0f48b9aeb6890571a70f6d2df84697f149cb1fe056115c7c24ba4d5",
+      "commit": "303f2f1b3c269e7a2a94e3ab68e11f9259b1aba7",
+      "sha256": "db53fe8d93bd9baa4861ba75b5a3cf5e74969f3b0397e3aadeb25df3fe03d9fd",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0084-gsplat-point-lifetime-intersections.patch",
+      "previous_commit": "94eb18efaff89ef5a34b4e1c78f1f9f8c2c8fee0",
+      "previous_sha256": "0070317c88d86c5794d442863519681b9b9ea5465d36a2214a6114eb65291d33",
+      "commit": "854a13da5b07b878bd31195c9eecfcf343e01b58",
+      "sha256": "fb6fe2858334cb54c107383ec91e43fba4c7fb9550ec1d3efad0a2647172710d",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0085-temporal-output-sample-count.patch",
+      "previous_commit": "30ae38908d4a29e9e3d34c2dbac6f874667527b8",
+      "previous_sha256": "23fa2425fc582df90c6c80cb8f15db0dfcf62a16e3c6e69436cb5dc80c96b92b",
+      "commit": "e51aa45a816a82cc43378b1f911cdfd8d9802415",
+      "sha256": "55bdd8ee007c510e01777b780da059ed582c6431ca103e4023b7e127532b25cd",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0086-tessellated-motion-normal-stride.patch",
+      "previous_commit": "b2a9a712f76d938a6b7209324f219d5e223a149a",
+      "previous_sha256": "705036f1404a53636fc4c1ff2e6028e0c67cbf096219fba3f936b52ace91499b",
+      "commit": "e968ac447f79c8792bdc40001fc2ba995439f838",
+      "sha256": "99c85134fa2e69a887925bf09544f447c2066e63a17ad4c16f69d378c4b07de5",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0087-volume-object-overlap-broad-phase.patch",
+      "previous_commit": "b2e6b875571979ee570592db50e5a2bde28599db",
+      "previous_sha256": "f4be8f2ad5a02a62e1db421feb97740f4932f9a6e5e29bd1490c7ac277e71957",
+      "commit": "b8261ce10d68d167c4bd7339d4c81c4880a3c241",
+      "sha256": "4600fb7d5db73b0443591c2a97f6c5725df1e5e304b7ec18795a327f821d0a0e",
+      "substantive_edits_unchanged": true
+    },
+    {
+      "path": "patches/0088-static-triangle-normal-map.patch",
+      "previous_commit": "bff76ec5f4b10e6dda35f053454f06ba7d420a5f",
+      "previous_sha256": "0d026986d72f43a0de384be70bb38fb27d5897fbd12d3d35afbdfed6fab29fa2",
+      "commit": "e60784f1abfad2a435815e79f12812001f1d38e8",
+      "sha256": "1135122d26f87947a45fa1cf98278cfadda90e11b597fce5967b94cebea04ae2",
+      "substantive_edits_unchanged": true
+    }
+  ],
+  "tip": "e60784f1abfad2a435815e79f12812001f1d38e8",
+  "history_normalized": true,
+  "integration_adjustments": [
+    "0057: preserve material palette insertion after upstream update_motion signature change.",
+    "0059: use stable ptr_map_find locking helper in private range-upload pointer lookup.",
+    "0074: preserve stable state clear/reestimate and exact volume size allocation; include nested on/size in equality and memory estimate; filter disabled nested members; retain texture-cache allocation flags. Use ptr_map_find for nested counter."
+  ],
+  "independent_replay": {
+    "result": "passed",
+    "compared_files": 1055,
+    "artifact": "artifacts/rebase53/independent-replay/report.json"
+  },
+  "substantive_comparison": "Multiset of diff additions/deletions grouped by diff --git path; excludes commit headers, hunk locations, index hashes and file order.",
+  "unchanged_substantive_patches": 82
+}

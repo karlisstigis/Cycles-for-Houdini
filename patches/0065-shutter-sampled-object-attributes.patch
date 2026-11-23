@@ -1,0 +1,474 @@
+From 741006c972fc6b61969e65c690e3dce931ede16f Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:40 +0100
+Subject: [PATCH] shutter sampled object attributes
+
+Locked-Patch: patches/0065-shutter-sampled-object-attributes.patch
+Locked-Patch-SHA256: f8707c5996f5a5905ac75346c00829c2cb0ccc1d7e670bb77db66186375d675d
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_sampled_instance_attribute_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 40dd8e6adc79a2dc8e96f470d00ef96ac5df31aa
+Previous-Patch: patches/0065-shutter-sampled-object-attributes.patch
+Previous-Patch-SHA256: f8707c5996f5a5905ac75346c00829c2cb0ccc1d7e670bb77db66186375d675d
+Rationale: Shutter-sampled object fields store requested-frame values plus all authored samples and interpolate exact equal values; this extends the object attribute ABI.
+Contract: shutter sampled object attributes
+Tests: tests/houdini_sampled_instance_attribute_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/bake/bake.h b/src/kernel/bake/bake.h
+index a1ba7a7fc97915301ce77b3e5f27eb680da9d5da..c7a03293ceb09eae6a3e44d279cc42c9d71d19bd 100644
+--- a/src/kernel/bake/bake.h
++++ b/src/kernel/bake/bake.h
+@@ -31,7 +31,12 @@ ccl_device void kernel_displace_evaluate(KernelGlobals kg,
+   const KernelShaderEvalInput in = input[offset];
+ 
+   ShaderData sd;
+-  shader_setup_from_displace(kg, &sd, in.object, in.prim, in.u, in.v, in.time);
++  shader_setup_from_displace(
++      kg, &sd, in.object, in.prim, in.u, in.v, in.time < 0.0f ? 0.5f : in.time);
++  /* Geometry setup keeps its existing centre convention; unsampled displacement
++   * reads requested-frame object values, independent of the shutter offset. */
++  sd.time = in.time;
++  sd.runtime_flag |= SR_OBJECT_ATTRIBUTE_DISPLACEMENT;
+   /* Smooth/shadow flags occupy the sign bit of a valid shader ID. */
+   if (in.shader != SHADER_NONE) {
+     sd.shader = in.shader;
+diff --git a/src/kernel/geom/attribute.h b/src/kernel/geom/attribute.h
+index e1a43260ed8327523382b4cd1185f87e06035147..73fe5e83fff3fc3e0e61c6370937702dac17c3f4 100644
+--- a/src/kernel/geom/attribute.h
++++ b/src/kernel/geom/attribute.h
+@@ -122,6 +122,7 @@ ccl_device_inline AttributeDescriptor find_attribute(const ccl_global AttributeM
+   desc.offset = (attr_map.element == ATTR_ELEMENT_NONE) ? (int)ATTR_STD_NOT_FOUND :
+                                                           attr_map.offset;
+   desc.type = (NodeAttributeType)attr_map.type;
++  desc.object_motion = attr_map.object_motion;
+ 
+   return desc;
+ }
+@@ -323,6 +324,70 @@ ccl_device T attribute_data_fetch_motion(KernelGlobals kg,
+   return attribute_data_fetch<T>(kg, desc.element, desc.offset + index);
+ }
+ 
++/* Object user fields store their requested-frame value first, followed by ALL
++ * chronological shutter samples. The requested frame need not be the shutter
++ * midpoint. Their sample count is independent of prototype deformation. */
++ccl_device_inline float attribute_object_lerp(const float a, const float b, const float factor)
++{
++  if (factor <= 0.0f || __float_as_uint(a) == __float_as_uint(b)) {
++    return a;
++  }
++  if (factor >= 1.0f) {
++    return b;
++  }
++  return (1.0f - factor) * a + factor * b;
++}
++
++ccl_device_inline float2 attribute_object_lerp(const float2 a, const float2 b, const float factor)
++{
++  return make_float2(attribute_object_lerp(a.x, b.x, factor),
++                     attribute_object_lerp(a.y, b.y, factor));
++}
++
++ccl_device_inline float3 attribute_object_lerp(const float3 a, const float3 b, const float factor)
++{
++  return make_float3(attribute_object_lerp(a.x, b.x, factor),
++                     attribute_object_lerp(a.y, b.y, factor),
++                     attribute_object_lerp(a.z, b.z, factor));
++}
++
++ccl_device_inline float4 attribute_object_lerp(const float4 a, const float4 b, const float factor)
++{
++  return make_float4(attribute_object_lerp(a.x, b.x, factor),
++                     attribute_object_lerp(a.y, b.y, factor),
++                     attribute_object_lerp(a.z, b.z, factor),
++                     attribute_object_lerp(a.w, b.w, factor));
++}
++
++template<typename T>
++ccl_device T attribute_data_fetch_object(KernelGlobals kg,
++                                         const ccl_private ShaderData *sd,
++                                         const AttributeDescriptor desc)
++{
++  const int encoded_steps = desc.object_motion & 127;
++  const int count = encoded_steps ? 2 * encoded_steps + 1 : 0;
++  const bool hold = (desc.object_motion & 128) &&
++                    (sd->runtime_flag & SR_OBJECT_ATTRIBUTE_DISPLACEMENT);
++  if (count > 1 && !hold && sd->time >= 0.0f && kernel_data.cam.shuttertime != -1.0f) {
++    const float normalized_time = saturatef(sd->time);
++    const float time = normalized_time * (count - 1);
++    const int step = min(int(time), count - 2);
++    const float factor = time - step;
++    const T a = attribute_data_fetch<T>(kg, desc.element, desc.offset + step + 1);
++    const T b = attribute_data_fetch<T>(kg, desc.element, desc.offset + step + 2);
++    /* A normalized authored breakpoint can multiply to just below its integer
++     * lattice position. Preserve its payload even for non-power-of-two grids. */
++    if (normalized_time == float(step) / float(count - 1)) {
++      return a;
++    }
++    if (normalized_time == float(step + 1) / float(count - 1)) {
++      return b;
++    }
++    return attribute_object_lerp(a, b, factor);
++  }
++  return attribute_data_fetch<T>(kg, desc.element, desc.offset);
++}
++
+ /* Transform matrix attribute on meshes */
+ 
+ ccl_device Transform primitive_attribute_matrix(KernelGlobals kg, const AttributeDescriptor desc)
+diff --git a/src/kernel/geom/primitive.h b/src/kernel/geom/primitive.h
+index 603b8086b9540e5ee33ed5e132f9f4c98280c24a..e77f53e47a8dcd9a8738461577ea3c707407f277 100644
+--- a/src/kernel/geom/primitive.h
++++ b/src/kernel/geom/primitive.h
+@@ -36,7 +36,7 @@ ccl_device_forceinline T primitive_surface_attribute(KernelGlobals kg,
+   using BaseT = dual_base_t<T>;
+ 
+   if (desc.element & (ATTR_ELEMENT_OBJECT | ATTR_ELEMENT_MESH)) {
+-    return T(attribute_data_fetch<BaseT>(kg, desc.element, desc.offset));
++    return T(attribute_data_fetch_object<BaseT>(kg, sd, desc));
+   }
+ 
+   if (sd->type & PRIMITIVE_TRIANGLE) {
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index d3de0ade8d92103522a2b2c21cf79a7d4ad762c1..a413d62bb783d715cbf48c0a811c654299cd6add 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -849,12 +849,16 @@ enum AttributeStandard : int {
+ enum AttributeFlag {
+   ATTR_SUBDIVIDE_SMOOTH_FVAR = (1 << 0), /* This attribute is face-varying and requires smooth
+                                           * subdivision (typically UV map). */
++  ATTR_OBJECT_MOTION_DISPLACEMENT_HOLD = (1 << 1),
+ };
+ 
+ struct AttributeDescriptor {
+   AttributeElement element;
+   NodeAttributeType type;
+   int offset;
++  /* Low7 bits: half of (full object sample count-1); high bit: bake-only hold.
++   * Zero means ordinary nominal attributes. */
++  uint object_motion = 0;
+ };
+ 
+ /* For looking up attributes on objects and geometry. */
+@@ -863,7 +867,7 @@ struct AttributeMap {
+   int offset;       /* Offset into __attributes global arrays. */
+   uint16_t element; /* AttributeElement. */
+   uint8_t type;     /* NodeAttributeType. */
+-  uint8_t pad;
++  uint8_t object_motion;
+ };
+ 
+ /* Closure data */
+@@ -971,7 +975,9 @@ enum ShaderRuntimeFlag {
+   /* Flags that indicate the presence of closures. */
+   SR_CLOSURE_FLAG = (SR_EMISSION | SR_BSDF | SR_BSDF_HAS_EVAL | SR_BSSRDF | SR_HOLDOUT |
+                      SR_EXTINCTION | SR_SCATTER | SR_IS_VOLUME_SHADER_EVAL | SR_TRANSPARENT |
+-                     SR_BSDF_HAS_TRANSMISSION | SR_RAY_PORTAL | SR_BSDF_HAS_DISPERSION)
++                     SR_BSDF_HAS_TRANSMISSION | SR_RAY_PORTAL | SR_BSDF_HAS_DISPERSION),
++  /* True displacement can hold an individual unsupported object field. */
++  SR_OBJECT_ATTRIBUTE_DISPLACEMENT = (1 << 14),
+ };
+ 
+ /* Shader flags that are set after compiling the shaders. */
+diff --git a/src/scene/attribute.cpp b/src/scene/attribute.cpp
+index 1dfa163c57dd9db2846c2cd37fe045dc7f782e92..08faacb2d5d9bca0158c79bcb0f7cca86d537785 100644
+--- a/src/scene/attribute.cpp
++++ b/src/scene/attribute.cpp
+@@ -162,12 +162,16 @@ void Attribute::resize(const size_t num_elements)
+ 
+ void Attribute::add_motion(const Geometry *geom)
+ {
+-  const int motion_steps = geom->get_motion_steps();
++  add_motion_steps(geom->get_motion_steps());
++}
++
++void Attribute::add_motion_steps(const int motion_steps)
++{
+   if (motion_steps <= 0) {
+     return;
+   }
+ 
+-  const int motion_size = geom->get_motion_steps() - 1;
++  const int motion_size = motion_steps - 1;
+   if (motion_size == motion.size()) {
+     return;
+   }
+diff --git a/src/scene/attribute.h b/src/scene/attribute.h
+index 41ddb1e31fc2012981577e1ed79d0d9eb155d8d3..ed016113a73f1292611b8f5a86669819ff36b0c5 100644
+--- a/src/scene/attribute.h
++++ b/src/scene/attribute.h
+@@ -101,6 +101,9 @@ class Attribute {
+ 
+   /* Allocate or free motion steps, matching the geometry's motion_steps. */
+   void add_motion(const Geometry *geom);
++  /* Explicit stored step count, including the primary buffer. Object user
++   * fields use a nominal primary buffer plus their full chronological shutter. */
++  void add_motion_steps(int motion_steps);
+   void remove_motion();
+   bool has_motion() const
+   {
+diff --git a/src/scene/geometry_attributes.cpp b/src/scene/geometry_attributes.cpp
+index bbdea91d76db7d68ce2d53b501bece4b6a92a385..4e13ac6e643b78da8221308fdc132e9e8bbc2291 100644
+--- a/src/scene/geometry_attributes.cpp
++++ b/src/scene/geometry_attributes.cpp
+@@ -22,6 +22,8 @@
+ #include "util/progress.h"
+ #include "util/set.h"
+ 
++#include <algorithm>
++
+ CCL_NAMESPACE_BEGIN
+ 
+ bool Geometry::need_attribute(const Scene *scene, AttributeStandard std)
+@@ -90,30 +92,32 @@ bool Geometry::has_voxel_attributes() const
+ }
+ 
+ /* Generate a normal attribute map entry from an attribute descriptor. */
+-static void emit_attribute_map_entry(AttributeMap *attr_map,
++static bool emit_attribute_map_entry(AttributeMap *attr_map,
+                                      const size_t index,
+                                      const uint64_t id,
+                                      const TypeDesc type,
+                                      const AttributeDescriptor &desc)
+ {
+-  attr_map[index].id = id;
+-  attr_map[index].element = desc.element;
+-  attr_map[index].offset = as_uint(desc.offset);
++  AttributeMap next = {};
++  next.id = id;
++  next.element = desc.element;
++  next.offset = as_uint(desc.offset);
++  next.object_motion = uint8_t(desc.object_motion);
+ 
+   if (type == TypeFloat) {
+-    attr_map[index].type = NODE_ATTR_FLOAT;
++    next.type = NODE_ATTR_FLOAT;
+   }
+   else if (type == TypeMatrix) {
+-    attr_map[index].type = NODE_ATTR_MATRIX;
++    next.type = NODE_ATTR_MATRIX;
+   }
+   else if (type == TypeFloat2) {
+-    attr_map[index].type = NODE_ATTR_FLOAT2;
++    next.type = NODE_ATTR_FLOAT2;
+   }
+   else if (type == TypeFloat4) {
+-    attr_map[index].type = NODE_ATTR_FLOAT4;
++    next.type = NODE_ATTR_FLOAT4;
+   }
+   else if (type == TypeRGBA) {
+-    attr_map[index].type = NODE_ATTR_RGBA;
++    next.type = NODE_ATTR_RGBA;
+   }
+   else if (type == TypeQuaternion) {
+     attr_map[index].type = NODE_ATTR_QUATERNION;
+@@ -122,32 +126,47 @@ static void emit_attribute_map_entry(AttributeMap *attr_map,
+     attr_map[index].type = NODE_ATTR_SPHERICAL_HARMONICS_REST;
+   }
+   else {
+-    attr_map[index].type = NODE_ATTR_FLOAT3;
++    next.type = NODE_ATTR_FLOAT3;
++  }
++  const AttributeMap &old = attr_map[index];
++  if (old.id == next.id && old.offset == next.offset && old.element == next.element &&
++      old.type == next.type && old.object_motion == next.object_motion) {
++    return false;
+   }
++  attr_map[index] = next;
++  return true;
+ }
+ 
+ /* Generate an attribute map end marker, optionally including a link to another map.
+  * Links are used to connect object attribute maps to mesh attribute maps. */
+-static void emit_attribute_map_terminator(AttributeMap *attr_map,
++static bool emit_attribute_map_terminator(AttributeMap *attr_map,
+                                           const size_t index,
+                                           const bool chain,
+                                           const uint chain_link)
+ {
++  bool modified = false;
+   for (int j = 0; j < ATTR_PRIM_TYPES; j++) {
+-    attr_map[index + j].id = ATTR_STD_NONE;
+-    attr_map[index + j].element = chain;                     /* link is valid flag */
+-    attr_map[index + j].offset = chain ? chain_link + j : 0; /* link to the correct sub-entry */
+-    attr_map[index + j].type = 0;
+-  }
++    AttributeMap next = {};
++    next.id = ATTR_STD_NONE;
++    next.element = chain;                     /* link is valid flag */
++    next.offset = chain ? chain_link + j : 0; /* link to the correct sub-entry */
++    const AttributeMap &old = attr_map[index + j];
++    if (old.id != next.id || old.offset != next.offset || old.element != next.element ||
++        old.type != next.type || old.object_motion != next.object_motion) {
++      attr_map[index + j] = next;
++      modified = true;
++    }
++  }
++  return modified;
+ }
+ 
+ /* Generate all necessary attribute map entries from the attribute request. */
+-static void emit_attribute_mapping(AttributeMap *attr_map,
++static bool emit_attribute_mapping(AttributeMap *attr_map,
+                                    const size_t index,
+                                    const uint64_t id,
+                                    AttributeRequest &req)
+ {
+-  emit_attribute_map_entry(attr_map, index, id, req.type, req.desc);
++  return emit_attribute_map_entry(attr_map, index, id, req.type, req.desc);
+ }
+ 
+ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+@@ -204,14 +223,18 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+     return;
+   }
+ 
+-  if ((attr_map_size == dscene->attributes_map.size()) && !dscene->attributes_map.need_realloc()) {
+-    return;
++  /* Request count alone cannot certify offsets or object sample metadata.
++   * Reuse the owned host allocation, compare entries and upload only a changed
++   * map. This also handles same-sized count exchanges and bake-only holds. */
++  const bool reusable = attr_map_size == dscene->attributes_map.size() &&
++                        !dscene->attributes_map.need_realloc();
++  bool modified = !reusable;
++  AttributeMap *attr_map = reusable ? dscene->attributes_map.data() :
++                                    dscene->attributes_map.alloc(attr_map_size);
++  if (!reusable) {
++    memset(attr_map, 0, attr_map_size * sizeof(*attr_map));
+   }
+ 
+-  /* create attribute map */
+-  AttributeMap *attr_map = dscene->attributes_map.alloc(attr_map_size);
+-  memset(attr_map, 0, dscene->attributes_map.size() * sizeof(*attr_map));
+-
+   for (size_t i = 0; i < scene->geometry.size(); i++) {
+     Geometry *geom = scene->geometry[i];
+     AttributeRequestSet &attributes = geom_attributes[i];
+@@ -228,20 +251,20 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+         id = scene->shader_manager->get_attribute_id(req.std);
+       }
+ 
+-      emit_attribute_mapping(attr_map, index, id, req);
++      modified |= emit_attribute_mapping(attr_map, index, id, req);
+       index += ATTR_PRIM_TYPES;
+ 
+       if (use_osl) {
+         /* Some standard attributes are explicitly referenced via their standard ID, so add those
+          * again in case they were added under a different attribute ID. */
+         if (req.std != ATTR_STD_NONE && id != (uint64_t)req.std) {
+-          emit_attribute_mapping(attr_map, index, (uint64_t)req.std, req);
++          modified |= emit_attribute_mapping(attr_map, index, (uint64_t)req.std, req);
+           index += ATTR_PRIM_TYPES;
+         }
+       }
+     }
+ 
+-    emit_attribute_map_terminator(attr_map, index, false, 0);
++    modified |= emit_attribute_map_terminator(attr_map, index, false, 0);
+   }
+ 
+   for (size_t i = 0; i < scene->objects.size(); i++) {
+@@ -261,16 +284,19 @@ void GeometryManager::update_svm_attributes(Device * /*unused*/,
+           id = scene->shader_manager->get_attribute_id(req.std);
+         }
+ 
+-        emit_attribute_mapping(attr_map, index, id, req);
++        modified |= emit_attribute_mapping(attr_map, index, id, req);
+         index += ATTR_PRIM_TYPES;
+       }
+ 
+-      emit_attribute_map_terminator(attr_map, index, true, object->geometry->attr_map_offset);
++      modified |= emit_attribute_map_terminator(attr_map, index, true, object->geometry->attr_map_offset);
+     }
+   }
+ 
+   /* copy to device */
+-  dscene->attributes_map.copy_to_device();
++  if (modified) {
++    dscene->attributes_map.tag_modified();
++    dscene->attributes_map.copy_to_device();
++  }
+ }
+ 
+ template<typename T> struct AttributeTableEntry {
+@@ -342,6 +368,7 @@ class AttributeTableBuilder {
+            AttributeDescriptor &desc,
+            const bool force_copy)
+   {
++    desc.object_motion = 0;
+     if (mattr == nullptr) {
+       /* attribute not found */
+       desc.element = ATTR_ELEMENT_NONE;
+@@ -362,6 +389,12 @@ class AttributeTableBuilder {
+ 
+     /* Store element and type. */
+     desc.element = mattr->element;
++    if (mattr->element & ATTR_ELEMENT_OBJECT) {
++      desc.object_motion = uint(mattr->motion.size()) >> 1;
++      if (mattr->flags & ATTR_OBJECT_MOTION_DISPLACEMENT_HOLD) {
++        desc.object_motion |= 128;
++      }
++    }
+     /* Positions, radii and normals retain dedicated readers. Other sampled
+      * mesh, point and hair fields use the generic readers at shader ray time. */
+     if (mattr->has_motion() &&
+@@ -673,6 +706,28 @@ void GeometryManager::device_update_attributes(Device *device,
+         Attribute *attr = values.add(param.name(), param.type(), ATTR_ELEMENT_OBJECT);
+         assert(param.nvalues() == attr->size);
+         memcpy(attr->data_for_write(), param.data(), param.datasize());
++        for (const ParamValue &sampled : object->attribute_motion) {
++          if (sampled.name() != param.name()) {
++            continue;
++          }
++          assert(sampled.type() == param.type());
++          assert(sampled.nvalues() >= 3 && sampled.nvalues() <= 129 &&
++                 (sampled.nvalues() & 1));
++          const int count = sampled.nvalues();
++          if (std::find(object->attribute_motion_displacement_hold.begin(),
++                        object->attribute_motion_displacement_hold.end(),
++                        param.name()) != object->attribute_motion_displacement_hold.end()) {
++            attr->flags |= ATTR_OBJECT_MOTION_DISPLACEMENT_HOLD;
++          }
++          attr->add_motion_steps(count + 1);
++          const size_t bytes = attr->data_sizeof();
++          for (int step = 0; step < count; step++) {
++            memcpy(attr->data_for_write(step + 1),
++                   static_cast<const char *>(sampled.data()) + step * bytes,
++                   bytes);
++          }
++          break;
++        }
+       }
+     }
+   }
+diff --git a/src/scene/mesh_displace.cpp b/src/scene/mesh_displace.cpp
+index 8da7e023a85d44441c6d41e4bc9129fc8a7bf941..7d1252e5a9735c57c204eaa4836aed3dc88d8b4e 100644
+--- a/src/scene/mesh_displace.cpp
++++ b/src/scene/mesh_displace.cpp
+@@ -82,7 +82,9 @@ static int fill_shader_input(const Scene *scene,
+         in.prim = prim;
+         in.u = u;
+         in.v = v;
+-        in.time = steps == 1 ? 0.5f : float(step) / float(steps - 1);
++        /* Negative means the requested-frame field values, rather than a
++         * shutter midpoint which may have a different animated instance value. */
++        in.time = steps == 1 ? -1.0f : float(step) / float(steps - 1);
+         in.shader = palette_size ? scene->shader_manager->get_shader_id(
+                                        static_cast<Shader *>(mesh_used_shaders[temporal[step * palette_size + shader_index]]), true) :
+                                    SHADER_NONE;
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 0919608e986c42b6dca44c6560cbed633d4e9f74..862ea8c6d50e1afd1037b0f767fa19fbeb44c40f 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -53,6 +53,10 @@ class Object : public Node {
+   NODE_SOCKET_API(float, alpha)
+   NODE_SOCKET_API(ustring, asset_name)
+   vector<ParamValue> attributes;
++  /* Full chronological shutter values, matched by name/type to attributes.
++   * Kept separate from the nominal value and from geometry deformation steps. */
++  vector<ParamValue> attribute_motion;
++  vector<ustring> attribute_motion_displacement_hold;
+   NODE_SOCKET_API(uint, visibility)
+   NODE_SOCKET_API_ARRAY(array<Transform>, motion)
+   NODE_SOCKET_API(bool, hide_on_missing_motion)

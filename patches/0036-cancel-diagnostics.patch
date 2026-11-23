@@ -1,0 +1,91 @@
+From 8bc4e46ec62a4d8a791d7b4f2d2f205dce9d4f35 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:35 +0100
+Subject: [PATCH] cancel diagnostics
+
+Locked-Patch: patches/0036-cancel-diagnostics.patch
+Locked-Patch-SHA256: 6c27496ca8483b786a56e02f4ee7d873eb55f042892bbe0c6e019b2e95f17ae7
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_scene_interruption_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 2764fccd7ac24a8b1653ba99b18db6180ee4fe67
+Previous-Patch: patches/0036-cancel-diagnostics.patch
+Previous-Patch-SHA256: 6c27496ca8483b786a56e02f4ee7d873eb55f042892bbe0c6e019b2e95f17ae7
+Rationale: Cancellation timestamps and diagnostics exist to measure the worker/IPR interruption contract; they do not define a standalone renderer feature.
+Contract: cancel diagnostics
+Tests: tests/houdini_scene_interruption_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index d601347c0a18f8338f15bdab395592141c4fd3b1..2da5860ecebca04e836736e35f5905387f12f67c 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -130,8 +130,11 @@ void Session::start()
+ 
+ void Session::cancel(bool quick)
+ {
++  cancel_statistics_ = {};
++  const double started = time_dt();
+   /* Cancel any long running device operations (e.g. shader compilations). */
+   device->cancel();
++  cancel_statistics_.device_seconds = time_dt() - started;
+ 
+   /* Check if session thread is rendering. */
+   const bool rendering = is_session_thread_rendering();
+@@ -139,10 +142,13 @@ void Session::cancel(bool quick)
+   if (rendering) {
+     /* Cancel path trace operations. */
+     if (quick && path_trace_) {
++      const double path_trace_started = time_dt();
+       path_trace_->cancel();
++      cancel_statistics_.path_trace_seconds = time_dt() - path_trace_started;
+     }
+ 
+     /* Cancel other operations. */
++    const double progress_started = time_dt();
+     progress.set_cancel("Exiting");
+ 
+     /* Signal unpause in case the render was paused. */
+@@ -151,10 +157,14 @@ void Session::cancel(bool quick)
+       pause_ = false;
+     }
+     pause_cond_.notify_all();
++    cancel_statistics_.progress_seconds = time_dt() - progress_started;
+ 
+     /* Wait for render thread to be cancelled or finished. */
++    const double wait_started = time_dt();
+     wait();
++    cancel_statistics_.session_wait_seconds = time_dt() - wait_started;
+   }
++  cancel_statistics_.total_seconds = time_dt() - started;
+ }
+ 
+ bool Session::ready_to_reset()
+diff --git a/src/session/session.h b/src/session/session.h
+index 92fecbcd31b2b304002d2ebbba23e4e4cb72b016..dd14083da044e665257772aaf9dd0b3a23376d91 100644
+--- a/src/session/session.h
++++ b/src/session/session.h
+@@ -135,6 +135,15 @@ class Session {
+   /* When quick cancel is requested path tracing is cancels as soon as possible, without waiting
+    * for the buffer to be uniformly sampled. */
+   void cancel(bool quick = false);
++  struct CancelStatistics {
++    double device_seconds = 0;
++    double path_trace_seconds = 0;
++    double progress_seconds = 0;
++    double session_wait_seconds = 0;
++    double total_seconds = 0;
++  };
++  /* Read by the serialized host controller after cancel() returns. */
++  const CancelStatistics &get_cancel_statistics() const { return cancel_statistics_; }
+ 
+   void draw();
+   void wait();
+@@ -272,6 +281,7 @@ class Session {
+    * Is a single full-frame path tracer for interactive viewport rendering.
+    * A path tracer for the current big-tile for an offline rendering. */
+   unique_ptr<PathTrace> path_trace_;
++  CancelStatistics cancel_statistics_;
+ };
+ 
+ CCL_NAMESPACE_END

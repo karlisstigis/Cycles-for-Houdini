@@ -1,0 +1,124 @@
+From ea1f5c02fbe42f7b11ece78edc253fdcbed8412c Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Wed, 18 Nov 2026 12:57:48 +0000
+Subject: [PATCH 116/116] Copy the motion transforms of a scattered top level
+ update whole
+
+The incremental top level update uploaded the changed motion transforms
+with one synchronous copy per contiguous run, so a scattered move of many
+blurred instances paid one copy per run, as the object table did before
+0114. The runs are now collected and the whole motion transform buffer is
+copied in one piece when the number of runs times 128 KiB reaches its
+size, the same rule as device_memory::device_copy_to_ranges.
+
+CYCLES_VERIFY_TOP_LEVEL now compares each motion transform rather than the
+whole motion buffer, and every motion transform is cleared before it is
+written: the padding inside OptixSRTMotionTransform and the alignment gaps
+between transforms were never written, so with blurred instances the
+verification reported differences in uninitialised padding bytes (seen
+with blurred scattered instances in the product test). Uploaded transform
+values are unchanged; the padding is now zero.
+
+Rationale: Scattered moves of thousands of motion blurred instances issued thousands of synchronous copies of a few hundred bytes in the top level stage.
+Contract: The device motion transforms equal the host copy (checked by CYCLES_VERIFY_TOP_LEVEL); only the way they are uploaded changes.
+Tests: tests/houdini_top_level_incremental_smoke.py
+---
+ src/device/optix/device_impl.cpp | 55 +++++++++++++++++++++++++-------
+ 1 file changed, 44 insertions(+), 11 deletions(-)
+
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 4dc9e9a1d50a7b4e4b493d635080086cb02f1d95..fc76098e5c57d4bd43a8a0e7311d71462fc4f22c 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -2223,6 +2223,9 @@ void OptiXDevice::fill_top_level_instance(TopLevelCache &cache, const size_t slo
+     /* Fill host side memory for motion transform with transform data. */
+     OptixSRTMotionTransform *motion_transform = reinterpret_cast<OptixSRTMotionTransform *>(
+         cache.motion_host.data() + slot.motion_transform_offset);
++    /* Clear the padding of the structure as well, so the uploaded data is fully defined and the
++     * verification can compare whole transforms. */
++    memset(motion_transform, 0, slot.motion_transform_size);
+     motion_transform->child = handle;
+     motion_transform->motionOptions.numKeys = ob->get_motion().size();
+     motion_transform->motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
+@@ -2345,11 +2348,10 @@ bool OptiXDevice::update_top_level_instances(BVHOptiX *bvh_optix,
+   const CUDAContextScope scope(this);
+   vector<DeviceMemoryRange> instance_ranges;
+   size_t motion_begin = 0, motion_end = 0;
++  vector<std::pair<size_t, size_t>> motion_runs;
+   auto flush_motion = [&]() {
+     if (motion_end > motion_begin) {
+-      cuda_assert(cuMemcpyHtoD(cache.motion_pointer + motion_begin,
+-                               cache.motion_host.data() + motion_begin,
+-                               motion_end - motion_begin));
++      motion_runs.emplace_back(motion_begin, motion_end);
+     }
+     motion_begin = motion_end = 0;
+   };
+@@ -2383,6 +2385,20 @@ bool OptiXDevice::update_top_level_instances(BVHOptiX *bvh_optix,
+     }
+   }
+   flush_motion();
++  /* One synchronous copy per run costs about as much as copying 128 KiB in one piece (see
++   * device_memory::device_copy_to_ranges): copy the whole motion buffer when the runs cost more. */
++  constexpr size_t bytes_per_run = 128 * 1024;
++  if (!motion_runs.empty() && motion_runs.size() * bytes_per_run >= cache.motion_host.size()) {
++    cuda_assert(
++        cuMemcpyHtoD(cache.motion_pointer, cache.motion_host.data(), cache.motion_host.size()));
++  }
++  else {
++    for (const std::pair<size_t, size_t> &run : motion_runs) {
++      cuda_assert(cuMemcpyHtoD(cache.motion_pointer + run.first,
++                               cache.motion_host.data() + run.first,
++                               run.second - run.first));
++    }
++  }
+   if (!instance_ranges.empty() && !instances.copy_to_device_ranges(instance_ranges)) {
+     instances.copy_to_device();
+   }
+@@ -2419,11 +2435,19 @@ bool OptiXDevice::verify_top_level_instances(BVHOptiX *bvh_optix, string &differ
+       return false;
+     }
+   }
+-  if (cache.motion_host.size() &&
+-      std::memcmp(full.motion_host.data(), cache.motion_host.data(), cache.motion_host.size()) != 0)
+-  {
+-    difference = "motion transforms differ from a full rewrite";
+-    return false;
++  /* Compare the motion transforms themselves: the alignment gaps between them are never written. */
++  for (size_t slot = 0; slot < cache.slots.size(); slot++) {
++    const TopLevelSlot &cached = cache.slots[slot];
++    if (cached.motion_transform_offset != SIZE_MAX &&
++        std::memcmp(full.motion_host.data() + cached.motion_transform_offset,
++                    cache.motion_host.data() + cached.motion_transform_offset,
++                    cached.motion_transform_size) != 0)
++    {
++      difference = string_printf("motion transform of instance %zu (%s) differs from a full rewrite",
++                                 slot,
++                                 cached.ob->name.c_str());
++      return false;
++    }
+   }
+   /* The device copies hold the host data. */
+   const CUDAContextScope scope(this);
+@@ -2441,9 +2465,18 @@ bool OptiXDevice::verify_top_level_instances(BVHOptiX *bvh_optix, string &differ
+   if (cache.motion_host.size()) {
+     vector<uint8_t> device_motion(cache.motion_host.size());
+     cuda_assert(cuMemcpyDtoH(device_motion.data(), (CUdeviceptr)cache.motion_pointer, device_motion.size()));
+-    if (std::memcmp(device_motion.data(), cache.motion_host.data(), device_motion.size()) != 0) {
+-      difference = "device motion transforms differ from the host on " + info.description;
+-      return false;
++    for (size_t slot = 0; slot < cache.slots.size(); slot++) {
++      const TopLevelSlot &cached = cache.slots[slot];
++      if (cached.motion_transform_offset != SIZE_MAX &&
++          std::memcmp(device_motion.data() + cached.motion_transform_offset,
++                      cache.motion_host.data() + cached.motion_transform_offset,
++                      cached.motion_transform_size) != 0)
++      {
++        difference = string_printf("device motion transform of instance %zu differs from the host on ",
++                                   slot) +
++                     info.description;
++        return false;
++      }
+     }
+   }
+   return true;

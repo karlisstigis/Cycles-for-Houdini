@@ -1,0 +1,146 @@
+From c9e18972f87c126e42dda5a85dccadf7e12c80c7 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini stable rebase <stable-rebase@localhost>
+Date: Tue, 10 Nov 2026 18:52:29 +0100
+Subject: [PATCH] Carry the native volume's actual normalized shutter reference
+ and conservative velocity envelope through volume meshing and shading.
+ Preserve upstream defaults for other adapters.
+
+Locked-Patch: patches/0004-volume-shutter-and-bounds.patch
+Locked-Patch-SHA256: 32c533710b73f7eb88c4ced13d85d1b57cdf165dce5c90faac021a96bd2ab9ed
+Contract: docs/renderer-patch-contracts.md
+Related-Fixture: tests/houdini_volume_motion_smoke.py
+Qualification: Source replay only; no new runtime qualification asserted.
+
+Rebased-From: 743976c4e8683d379aa74336a302d139975403f6
+Previous-Patch: patches/0004-volume-shutter-and-bounds.patch
+Previous-Patch-SHA256: 32c533710b73f7eb88c4ced13d85d1b57cdf165dce5c90faac021a96bd2ab9ed
+Rationale: Volume velocity bounds and the normalized shutter reference must agree or moving density can be clipped; defaults retain other adapters' conventions.
+Contract: Carry the native volume's actual normalized shutter reference and conservative velocity envelope through volume meshing and shading. Preserve upstream defaults for other adapters.
+Tests: tests/houdini_volume_motion_smoke.py, scripts/verify-upstream-patches.py
+
+diff --git a/src/kernel/integrator/volume_shader.h b/src/kernel/integrator/volume_shader.h
+index f8b30474152e2b0513afe4fd8a2429c5a75d2031..f5bb360fab4460c70720f6cbfceda69d49648f3f 100644
+--- a/src/kernel/integrator/volume_shader.h
++++ b/src/kernel/integrator/volume_shader.h
+@@ -374,11 +374,12 @@ ccl_device_inline void volume_shader_motion_blur(KernelGlobals kg,
+   kernel_assert(is_attribute_found(v_desc));
+ 
+   const float3 P = sd->P;
+-  const float velocity_scale =
+-      kernel_data_fetch(objects, sd->object).mesh_volume.volume_velocity_scale;
+-  const float time_offset = kernel_data.cam.motion_position == MOTION_POSITION_CENTER ? 0.5f :
++  const float velocity_scale = kernel_data_fetch(objects, sd->object).mesh_volume.volume_velocity_scale;
++  const float host_offset = kernel_data_fetch(objects, sd->object).velocity_time_offset;
++  const float time_offset = host_offset >= 0.0f ? host_offset :
++                           kernel_data.cam.motion_position == MOTION_POSITION_CENTER ? 0.5f :
+                                                                                         0.0f;
+-  const float time = kernel_data.cam.motion_position == MOTION_POSITION_END ?
++  const float time = host_offset < 0.0f && kernel_data.cam.motion_position == MOTION_POSITION_END ?
+                          (1.0f - kernel_data.cam.shuttertime) + sd->time :
+                          sd->time;
+ 
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index d7b5f3cdfb6afdee51b88698cdc5b1f2e735f11d..72faff206cfaf24ed715c4105fd82fff34b9b999 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1514,6 +1514,9 @@ struct KernelObject {
+   uint visibility;
+   int primitive_type;
+ 
++  /* Host normalized volume shutter reference. */
++  float velocity_time_offset;
++
+   /* TODO: separate array to avoid memory overhead when not used. */
+   uint64_t light_set_membership;
+   uint receiver_light_set;
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 399000d22791a2e262f8a241ab546f09011e0e47..8befbe1b84889020da3dc64617f7e13029fe987d 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -641,6 +641,7 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+     {
+       flag |= SD_OBJECT_HAS_VOLUME_MOTION;
+       kobject.mesh_volume.volume_velocity_scale = volume->get_velocity_scale();
++      kobject.velocity_time_offset = volume->get_velocity_time_offset();
+     }
+   }
+   else if (geom->is_mesh()) {
+diff --git a/src/scene/volume.cpp b/src/scene/volume.cpp
+index bd330a210481a6b3ffe0af1d244136dbc898b0c0..b56dce04735ca8234ee50a28f10dc53bb8170b2f 100644
+--- a/src/scene/volume.cpp
++++ b/src/scene/volume.cpp
+@@ -28,6 +28,9 @@
+ #include "bvh/octree.h"
+ 
+ #include <OpenImageIO/filesystem.h>
++#include <cmath>
++#include <limits>
++#include <stdexcept>
+ 
+ CCL_NAMESPACE_BEGIN
+ 
+@@ -38,6 +41,8 @@ NODE_DEFINE(Volume)
+   SOCKET_FLOAT(step_size, "Step Size", 0.0f);
+   SOCKET_BOOLEAN(object_space, "Object Space", false);
+   SOCKET_FLOAT(velocity_scale, "Velocity Scale", 1.0f);
++  SOCKET_FLOAT(velocity_time_offset, "Velocity Time Offset", -1.0f);
++  SOCKET_VECTOR(velocity_max_distance, "Velocity Maximum Distance", make_float3(-1.0f));
+ 
+   return type;
+ }
+@@ -675,7 +680,9 @@ void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Pro
+         nanovdb::HostBuffer::createFull(image->memory_size(), image->host_pointer));
+ 
+     /* Add padding based on the maximum velocity vector. */
+-    if (attr.std == ATTR_STD_VOLUME_VELOCITY && scene->need_motion() != Scene::MOTION_NONE) {
++    if (attr.std == ATTR_STD_VOLUME_VELOCITY && scene->need_motion() != Scene::MOTION_NONE &&
++        volume->get_velocity_max_distance().x < 0.0f)
++    {
+       pad_size = max(pad_size,
+                      estimate_required_velocity_padding(grid, volume->get_velocity_scale()));
+     }
+@@ -689,6 +696,29 @@ void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Pro
+     return;
+   }
+ 
++  /* Host bounds cover all stored velocities, including sparse outliers. Convert
++   * after merging grids: the final topology can have a different affine map. */
++  const float3 distance = volume->get_velocity_max_distance();
++  if (scene->need_motion() != Scene::MOTION_NONE && volume->get_velocity_scale() != 0.0f &&
++      distance.x >= 0.0f)
++  {
++    const auto &map = builder.topology_grid->transform();
++    const openvdb::Vec3d origin = map.worldToIndex(openvdb::Vec3d(0.0));
++    double padding = 0.0;
++    for (int corner = 0; corner < 8; ++corner) {
++      const openvdb::Vec3d displacement((corner & 1) ? distance.x : -distance.x,
++                                       (corner & 2) ? distance.y : -distance.y,
++                                       (corner & 4) ? distance.z : -distance.z);
++      const openvdb::Vec3d index_distance = map.worldToIndex(displacement) - origin;
++      padding = std::max({padding, std::fabs(index_distance[0]), std::fabs(index_distance[1]),
++                          std::fabs(index_distance[2])});
++    }
++    if (!std::isfinite(padding) || padding > double(std::numeric_limits<int>::max() - 2)) {
++      throw std::runtime_error("Volume velocity padding exceeds the supported index range");
++    }
++    /* Sum the interpolation support and motion envelope instead of taking max. */
++    pad_size += int(std::ceil(padding));
++  }
+   builder.add_padding(pad_size);
+ 
+   /* Create mesh. */
+diff --git a/src/scene/volume.h b/src/scene/volume.h
+index 07bac0be0631ce48616c7ee9520a141794dfff9a..bbfa2e86f8bf9aa0fc006afd1548bc14dda133f4 100644
+--- a/src/scene/volume.h
++++ b/src/scene/volume.h
+@@ -26,6 +26,10 @@ class Volume : public Mesh {
+   NODE_SOCKET_API(float, step_size)
+   NODE_SOCKET_API(bool, object_space)
+   NODE_SOCKET_API(float, velocity_scale)
++  /* Optional host time reference and conservative object-space displacement.
++   * Negative defaults preserve the renderer's existing camera/estimate policy. */
++  NODE_SOCKET_API(float, velocity_time_offset)
++  NODE_SOCKET_API(float3, velocity_max_distance)
+ 
+   /* Merge attributes for efficiency, call right after creating them. */
+   void merge_grids(const Scene *scene);

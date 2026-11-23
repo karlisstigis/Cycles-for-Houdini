@@ -1,0 +1,44 @@
+From 5e04d98291fc95e499a20f8d123fd58520d897a9 Mon Sep 17 00:00:00 2001
+From: Cycles Houdini candidate rebase <candidate@localhost>
+Date: Wed, 11 Nov 2026 15:37:24 +0100
+Subject: [PATCH] Reject missing multi-device owners before range upload
+
+Rationale: A successful support probe does not guarantee the subsequent lookup exists; report through the owning child so aggregate errors remain visible. Per-device allocations require full-copy fallback.
+Contract: No upload uses a missing owner pointer; borrowed owner/key/size are restored on every exit and partial failures remain errors.
+Tests: tests/multi_device_range_fault_test.py, tests/core_device_range_smoke.py
+---
+ src/device/multi/device.cpp | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/src/device/multi/device.cpp b/src/device/multi/device.cpp
+index 3c8066ef41ca21e0674063e69e6f4ebfb917089d..6be15a291e4f74c1c19b150dbd840baa9cb0bcdf 100644
+--- a/src/device/multi/device.cpp
++++ b/src/device/multi/device.cpp
+@@ -500,7 +500,9 @@ class MultiDevice : public Device {
+ 
+   bool mem_copy_to_range_supported(device_memory &mem) override
+   {
+-    if (!mem.device_pointer || peer_islands.empty()) {
++    /* Range copies visit one owner per peer island. Per-device allocations
++     * require the ordinary full-copy path to update every peer's allocation. */
++    if (!mem.device_pointer || peer_islands.empty() || (mem.flags & MEM_FLAG_PER_DEVICE)) {
+       return false;
+     }
+     /* MultiDevice pointers are keys, never addresses. Translate only through
+@@ -543,8 +545,15 @@ class MultiDevice : public Device {
+     } restore{mem, this, key, bytes};
+     for (const vector<SubDevice *> &island : peer_islands) {
+       SubDevice *owner = find_suitable_mem_device(key, island);
++      const device_ptr pointer = ptr_map_find(*owner, key);
++      if (!pointer) {
++        /* Report on the child so MultiDevice::error_message retains the error,
++         * including when an earlier island already received this range. */
++        owner->device->set_error("Missing owned device allocation for range copy");
++        return;
++      }
+       mem.device = owner->device.get();
+-      mem.device_pointer = ptr_map_find(*owner, key);
++      mem.device_pointer = pointer;
+       mem.device_size = bytes;
+       owner->device->mem_copy_to_range(mem, offset, size);
+       if (owner->device->have_error()) {
