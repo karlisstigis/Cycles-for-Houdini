@@ -1,5 +1,7 @@
 # Optional Cycles object and light properties
 
+For acceleration blur, see [Motion blur: Deformation](#motion-blur-deformation).
+
 Standard Houdini objects remain renderer-neutral. Select geometry objects (or
 their SOPs) and use **Cycles Tools → Add Object Tab**. Select native lights
 and use **Add Native Light Tab**. **Remove Tabs** removes the

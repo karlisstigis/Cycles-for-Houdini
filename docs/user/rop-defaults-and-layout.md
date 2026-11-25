@@ -116,15 +116,9 @@ Integration-specific choices remain explicit:
 GPU selection, geometry conversion guards, motion correspondence,
 and Houdini's scene units/OCIO configuration. See "Defaults follow Blender" below.
 
-**Resampled Light Sampling** is optional and selective. At a primary shading point
-made entirely of sharp reflective microfacet lobes, it retains standard Cycles
-light sampling and the normal reflected-ray light contribution. Both microfacet
-alpha axes must be at most 0.01 (isotropic artist roughness about 0.1 or below).
-Anisotropic lobes with a broader axis, diffuse/subsurface/transmission mixtures,
-and later bounces keep the existing RLS strategy. The decision uses the evaluated
-closures, including textures, and is shared by direct sampling and the forward
-MIS weight; no transport is discarded. Huang hair retains its separate native
-fallback. RLS can improve direct lighting but is not a universal speed or noise win.
+## Resampled Light Sampling
+
+See [Resampled Light Sampling](resampled-light-sampling.md) for the control and its sampling behavior.
 
 ## Color meaning
 

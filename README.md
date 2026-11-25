@@ -1,8 +1,118 @@
+![CyclesHoudini.jpg](docs/images/cycles-houdini.jpg)
+
 # Cycles for Houdini
 
-Cycles for Houdini connects the Cycles path tracer from Blender to SideFX Houdini on Windows x64. Use the **Render ROP** shelf tool to add a **Cycles Render** output node for Houdini OBJ/SOP scenes. The **Cycles Render** Python Panel shows interactive renders. The renderer supports CPU and NVIDIA OptiX devices.
+An open-source integration of Blender's Cycles rendering engine into Houdini, bringing a free and familiar alternative to the Houdini rendering ecosystem.
 
-Included at this revision: interactive rendering with optional NVIDIA DLSS Ray Reconstruction, final renders to disk, native Cycles materials, lights and world, curves, packed instances, Gaussian splats, and an optional bridge to Blender that imports or renders objects, collections and materials from `.blend` files and Blender asset libraries ([asset browser guide](docs/user/asset-browser.md)). Solaris and deep image output are not supported.
+![Render_View.jpg](docs/images/Render_View.jpg)
+
+## Q&A
+
+**Is this vibe-coded?**
+Yes. Over the years, there have been several attempts to integrate Cycles into Houdini, but none have resulted in a widely adopted, practical rendering solution.
+
+Without a financial incentive, few developers are willing to undertake a project of this scale, let alone maintain it over the years. This makes it a particularly good candidate for AI-assisted development.
+
+As a Houdini artist, I would love to have another rendering engine at my disposal, especially one that is free, open-source and already familiar to many artists.
+
+Of course, none of this would be possible without the tremendous work of the Cycles developers. This project builds upon their achievements and in no way diminishes the value of their work.
+
+**What about maintanance and support?**
+We live in a different technological landscape now. AI-assisted development makes maintaining, extending and adapting software increasingly accessible, even to people without an extensive programming background.
+
+Rather than distributing precompiled installers for specific Houdini versions, the project provides an automated build system that allows you to compile and package the renderer for your installed Houdini 22.0 builds, whether they are production or daily releases.
+
+During testing, I successfully built installers for three different Houdini versions in a single run. While future Houdini updates may introduce compatibility issues, the source code and build infrastructure are available for anyone to investigate and resolve them.
+
+There is no guaranteed long-term maintenance or dedicated technical support. However, you are encouraged to use your preferred AI coding assistant to troubleshoot issues, implement missing features or adapt the integration to your own workflow.
+
+**Where can I get it?**
+
+You can build it yourself. No programming knowledge is required.
+
+1. Download and extract this repository.
+
+2. Run `START HERE - Build Cycles for Houdini.cmd`.
+
+3. Follow the instructions to download the required dependencies and build the renderer.
+
+4. Once the build is complete, run the generated installer for your Houdini version.
+
+The process is largely automated, including dependency management, compilation, testing and installer generation.
+Currently, the integration targets Houdini 22.0 on Windows.
+
+**Does this work in Solaris?**
+
+No. This integration focuses on the traditional OBJ/SOP workflow, with an approach similar to the classic Redshift integration. I am aware of SideFX's increasing emphasis on Solaris and USD-based workflows. However, many Houdini artists, myself included, still appreciate the simplicity, flexibility and directness of the traditional workflow. There are other projects exploring Cycles integration through Solaris. That is simply not the primary focus of this project. Being open-source, nothing prevents someone from extending the integration in that direction.
+
+**Is it production-ready?**
+
+Probably not. Not yet, anyway. I have tested the renderer across a variety of scenes, features and rendering scenarios, but there will inevitably be bugs, missing functionality, performance bottlenecks and situations I have not encountered. This is precisely where the community can make a difference. Test it, break it, report issues, improve it, experiment with new features or adapt it to your specific needs. If you have a strong technical background, great. If you don't, that is no longer necessarily a barrier to contributing. AI-assisted development is here to stay. We might as well explore what it enables us to build.
+
+**Additional Features**
+
+Beyond bringing Cycles into Houdini, this project also explores additional rendering capabilities and extensions to the existing feature set.
+
+[Dielectrics](docs/user/nested-dielectrics.md)
+
+![Cycles_Dielectrics.jpg](docs/images/nested-dielectrics.jpg)
+
+[Image Iris](docs/user/image-iris.md)
+
+![Skulls_Grayscale.png](docs/images/image-iris.jpg)
+
+[Acceleration blur](docs/user/native-object-properties.md)
+
+![Motion_Blur_Crag.jpg](docs/images/acceleration-blur.jpg)
+
+[Resampled Light Sampling](docs/user/resampled-light-sampling.md)
+
+Enable selective resampling to reduce direct-lighting noise in some scenes.
+
+[Focus pulls and zoom blur](docs/user/focus-pulls-and-zoom-blur.md)
+
+Animate focus distance and focal length. Cycles samples the camera optics across the shutter for each frame.
+
+[Gaussian splats](docs/user/gaussian-splats.md)
+
+Render Houdini points with 3DGS or GSplats attributes as native Gaussian splats on CPU or OptiX.
+
+[Convert Houdini materials](docs/user/convert-materials.md)
+
+Convert Principled Shader, MaterialX Standard Surface and OpenPBR Surface to editable Cycles materials. The conversion report flags approximations and omissions.
+
+[Live COP textures](docs/dev/notes/native-cop-images.md)
+
+Use `op:` paths to feed live COPernicus or legacy COP images into material and environment textures.
+
+[Scatter animated Blender assets](docs/user/point-instancing.md)
+
+Scatter animated `.blend` objects or collections on Houdini points, with a separate source frame per point.
+
+[Compositing passes](docs/user/native-passes.md)
+
+Save light groups and Cryptomatte alongside the beauty pass in a multilayer EXR.
+
+**Asset Browser**
+
+Import Blender assets directly into Houdini.
+
+![Asset_Browser.jpg](docs/images/Asset_Browser.jpg)
+
+## More info
+
+Render Houdini OBJ/SOP scenes with Blender's Cycles path tracer. Use the **Cycles Render** Python Panel for
+interactive rendering and the **Cycles Render** output node for final renders to disk. Render on the CPU or an
+NVIDIA GPU with OptiX.
+
+The project is in early development and ships as source. Build your own installer for Houdini 22.0 (Indie, Core or FX)
+on Windows x64. Solaris and deep image output are unsupported.
+
+[Build and install](#get-it) | [Make your first render](#make-your-first-render) | [Artist guides](docs/user/README.md) | [Development credits](#development-credits)
+
+Cycles supports native materials, lights and world shaders, curves, packed instances, Gaussian splats, and optional
+NVIDIA DLSS Ray Reconstruction in the interactive viewer. The optional Blender bridge imports or renders objects,
+collections and materials from `.blend` files and Blender asset libraries. [Blender asset browser guide](docs/user/asset-browser.md)
 
 ## Get it
 
@@ -36,23 +146,34 @@ Then:
 Step by step, with what you will see: [Build it yourself](docs/user/build-it-yourself.md). Later, the same file
 updates, rebuilds and makes new installers (for example after a new Houdini daily build).
 
+## Make your first render
+
+1. Start Houdini and set up a lit sphere with a camera aimed at it.
+2. On the **Cycles Tools** shelf, click **Render ROP** to add a **Cycles Render** output node.
+3. Set the node's device to **CPU**, then click **IPR** to open the **Cycles Render** viewer.
+4. Select the ROP and camera in the viewer, then click **Play** to start the interactive render.
+
 ## More
 
-| You want to | Read |
-| --- | --- |
-| Build and run your own copy without writing code | [Build it yourself](docs/user/build-it-yourself.md) |
-| Give your installer to someone else | [Build it yourself, Part 2](docs/user/build-it-yourself.md#part-2-give-an-installer-to-someone-else) |
-| Work on the code: repository map, build, tests, rules | [Developer guide](docs/dev/README.md) |
-| Understand how the parts fit together | [Architecture overview](docs/dev/architecture-overview.md) |
-| Report a problem or propose a change | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Build from the command line | [Building from source](docs/dev/building-from-source.md) |
-| Use the renderer in Houdini | [Artist guides](docs/user/README.md) |
-| NVIDIA parts and their licences | [NVIDIA parts and their licences](docs/dev/nvidia-licences.md) |
+| You want to                                           | Read                                                                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Build and run your own copy without writing code      | [Build it yourself](docs/user/build-it-yourself.md)                                                  |
+| Give your installer to someone else                   | [Build it yourself, Part 2](docs/user/build-it-yourself.md#part-2-give-an-installer-to-someone-else) |
+| Work on the code: repository map, build, tests, rules | [Developer guide](docs/dev/README.md)                                                                |
+| Understand how the parts fit together                 | [Architecture overview](docs/dev/architecture-overview.md)                                           |
+| Report a problem or propose a change                  | [CONTRIBUTING.md](CONTRIBUTING.md)                                                                   |
+| Build from the command line                           | [Building from source](docs/dev/building-from-source.md)                                             |
+| Use the renderer in Houdini                           | [Artist guides](docs/user/README.md)                                                                 |
+| NVIDIA parts and their licences                       | [NVIDIA parts and their licences](docs/dev/nvidia-licences.md)                                       |
 
 ## Status
 
-Early development by one developer. Expect missing features, rough edges and changes between revisions. The project
-is published as source only; there is no official installer.
+Early development. Expect missing features, rough edges and changes between revisions. The project is published
+as source only, with no official installer.
+
+## Development credits
+
+Karlis Stigis + Claude (Anthropic) & Codex (OpenAI).
 
 ## Supported Houdini builds
 
@@ -62,11 +183,11 @@ chosen version. Matching HDK ABI and libraries also allow some builds to load th
 
 ## What has been tested, and on what
 
-| Houdini Indie build | Coverage |
-| --- | --- |
-| 22.0.466 | Development and release tests, builder quick tests and hands-on use |
-| 22.0.508 | Builder quick tests and hands-on use with a self-built installer |
-| 22.0.429 | Builder quick tests |
+| Houdini Indie build | Coverage                                                            |
+| ------------------- | ------------------------------------------------------------------- |
+| 22.0.466            | Development and release tests, builder quick tests and hands-on use |
+| 22.0.508            | Builder quick tests and hands-on use with a self-built installer    |
+| 22.0.429            | Builder quick tests                                                 |
 
 - The builder's quick-test results came from one Windows 11 computer with a GeForce RTX 4090 and RTX 3080 Ti.
   It ran CPU and OptiX renders. A physical machine without NVIDIA hardware has yet to be tested.
@@ -119,13 +240,13 @@ Step by step without code: [docs/user/build-it-yourself.md](docs/user/build-it-y
 
 The test scripts live in `tests/`; `tests/test-catalogue.json` lists which runner each one belongs to and what it needs, and [tests/TESTING.md](tests/TESTING.md) explains the runners. What to expect on a machine other than the developer's:
 
-| Group | How to run | Needs | Expected on a fresh machine |
-| --- | --- | --- | --- |
-| Pure contract tests (pytest marker `pure`) | `python -m pytest -c tests/pytest.ini tests/pytest_cases -m pure` | Windows, Python 3.12 or newer, Git for temporary repository fixtures, PowerShell 7, the pinned test packages (`./scripts/bootstrap-test-deps.ps1 -Download`), `houdini/python3.13libs` on `PYTHONPATH`. No Houdini, GPU or Blender. Tests that need PySide6 are skipped without it. | Should pass. Not yet confirmed on a second machine. |
-| `fast` tier | `./scripts/run-tests.ps1 -Tier fast -BuildDirectory <build> -Artifacts <folder>` | A completed build (including its toolchain: Visual Studio C++ compiler and CMake) and a licensed Houdini 22.0.466 (`hython`). CPU only; no GPU and no Blender. | Should pass after a successful build. Not yet confirmed on a second machine. |
-| `nightly` tier (several hours) | `./scripts/run-tests.ps1 -Tier nightly ...` | Everything above, plus an NVIDIA OptiX GPU and a Blender executable (`CYCLES_HOUDINI_BLENDER`). | Needs the extra hardware and software; image comparisons were made on the developer's GPUs. |
-| Workstation-specific checks | `-Tests <name>` with exact GPU ids | Two CUDA/OptiX GPUs, or an RTX 4090 with matching Windows GPU counters; excluded from the portable nightly with a reason in the catalogue. | Not expected to run elsewhere without the same hardware. |
-| GUI, manual and benchmark scripts | see `tests/TESTING.md` | An interactive Houdini session; some need Blender. A few refer to private scenes that are not in the repository. | Not part of an automatic pass. |
+| Group                                      | How to run                                                                       | Needs                                                                                                                                                                                                                                                                               | Expected on a fresh machine                                                                 |
+| ------------------------------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Pure contract tests (pytest marker `pure`) | `python -m pytest -c tests/pytest.ini tests/pytest_cases -m pure`                | Windows, Python 3.12 or newer, Git for temporary repository fixtures, PowerShell 7, the pinned test packages (`./scripts/bootstrap-test-deps.ps1 -Download`), `houdini/python3.13libs` on `PYTHONPATH`. No Houdini, GPU or Blender. Tests that need PySide6 are skipped without it. | Should pass. Not yet confirmed on a second machine.                                         |
+| `fast` tier                                | `./scripts/run-tests.ps1 -Tier fast -BuildDirectory <build> -Artifacts <folder>` | A completed build (including its toolchain: Visual Studio C++ compiler and CMake) and a licensed Houdini 22.0.466 (`hython`). CPU only; no GPU and no Blender.                                                                                                                      | Should pass after a successful build. Not yet confirmed on a second machine.                |
+| `nightly` tier (several hours)             | `./scripts/run-tests.ps1 -Tier nightly ...`                                      | Everything above, plus an NVIDIA OptiX GPU and a Blender executable (`CYCLES_HOUDINI_BLENDER`).                                                                                                                                                                                     | Needs the extra hardware and software; image comparisons were made on the developer's GPUs. |
+| Workstation-specific checks                | `-Tests <name>` with exact GPU ids                                               | Two CUDA/OptiX GPUs, or an RTX 4090 with matching Windows GPU counters; excluded from the portable nightly with a reason in the catalogue.                                                                                                                                          | Not expected to run elsewhere without the same hardware.                                    |
+| GUI, manual and benchmark scripts          | see `tests/TESTING.md`                                                           | An interactive Houdini session; some need Blender. A few refer to private scenes that are not in the repository.                                                                                                                                                                    | Not part of an automatic pass.                                                              |
 
 Use `./scripts/run-tests.ps1 -Tier fast -ListTests` to list the current fast tier. Select `nightly` in the same
 command to list that tier. The test catalogue describes each case and its requirements. The full pure suite has been tested in a Git

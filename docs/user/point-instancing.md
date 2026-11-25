@@ -1,5 +1,7 @@
 # Point instancing
 
+For per-point playback of .blend assets, see [Animated Blender objects and collections](#animated-blender-objects-and-collections).
+
 Cycles renders Houdini point instances the way Houdini defines them:
 
 * an **Instance object** (Object > Instance) with *Point Instancing* set to *Full* or *Fast*: every
