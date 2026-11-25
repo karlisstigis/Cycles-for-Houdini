@@ -9,6 +9,7 @@ An open-source integration of Blender's Cycles rendering engine into Houdini, br
 ## Q&A
 
 **Is this vibe-coded?**
+
 Yes. Over the years, there have been several attempts to integrate Cycles into Houdini, but none have resulted in a widely adopted, practical rendering solution.
 
 Without a financial incentive, few developers are willing to undertake a project of this scale, let alone maintain it over the years. This makes it a particularly good candidate for AI-assisted development.
@@ -18,6 +19,7 @@ As a Houdini artist, I would love to have another rendering engine at my disposa
 Of course, none of this would be possible without the tremendous work of the Cycles developers. This project builds upon their achievements and in no way diminishes the value of their work.
 
 **What about maintanance and support?**
+
 We live in a different technological landscape now. AI-assisted development makes maintaining, extending and adapting software increasingly accessible, even to people without an extensive programming background.
 
 Rather than distributing precompiled installers for specific Houdini versions, the project provides an automated build system that allows you to compile and package the renderer for your installed Houdini 22.0 builds, whether they are production or daily releases.
