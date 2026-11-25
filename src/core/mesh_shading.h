@@ -111,6 +111,9 @@ inline bool managed_mesh_shading(const ccl::Attribute &attr) {
          (attr.std == ccl::ATTR_STD_NONE &&
           (attr.name == ccl::ustring("Cd") || owned_mesh_field_name(attr.name.string())));
 }
+inline void write_generated_transform(ccl::AttributeSet &target, const GeneratedCoordinates &coordinates) {
+  *target.add(ccl::ATTR_STD_GENERATED_TRANSFORM)->data_for_write<ccl::Transform>() = coordinates.volume_transform();
+}
 inline void fill_mesh_shading(ccl::AttributeSet &target, ccl::Mesh &mesh, const MeshData &source, bool generated,
                               std::span<const int> vertices, std::span<const float> islands,
                               std::span<const float> pointiness) {
@@ -162,6 +165,7 @@ inline void fill_mesh_shading(ccl::AttributeSet &target, ccl::Mesh &mesh, const 
   if (generated) {
     const auto &positions = source.nominal_pose ? source.nominal_pose->positions : source.positions;
     const GeneratedCoordinates bounds(positions, source.texture_space);
+    write_generated_transform(target, bounds);
     auto *out = target.add(ccl::ATTR_STD_GENERATED)->data_for_write<ccl::packed_float3>();
     for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
       const auto value = bounds(positions.at(owned_vertex(vertex)));
@@ -210,7 +214,14 @@ inline bool refresh_mesh_shading(ccl::Mesh &mesh, const MeshData &source, bool g
     } else
       ++it;
   }
+  if (!bound || !generated)
+    mesh.attributes.remove(ccl::ATTR_STD_GENERATED_TRANSFORM);
   for (auto &field : candidate.attributes) {
+    // Volume samples use the base geometry attribute map, even with subdivision.
+    if (field.std == ccl::ATTR_STD_GENERATED_TRANSFORM) {
+      mesh.attributes.add_from(std::move(field));
+      continue;
+    }
     const auto *old = target.find_matching(field);
     const bool flags_changed = old && old->flags != field.flags;
     auto *resolved = target.add_from(std::move(field));

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 #include "cycles_houdini/session.h"
+#include "util/transform.h"
 #include <algorithm>
 #include <span>
 
@@ -39,6 +40,12 @@ struct GeneratedCoordinates {
       high = {std::max(high.x, p.x), std::max(high.y, p.y), std::max(high.z, p.z)};
     }
     extent = {high.x - low.x, high.y - low.y, high.z - low.z};
+  }
+  ccl::Transform volume_transform() const {
+    const auto reciprocal = [](float e) { return e > 0.0f ? 1.0f / e : 0.0f; };
+    const auto scale = texture_space ? size : Float3{reciprocal(extent.x), reciprocal(extent.y), reciprocal(extent.z)};
+    const auto origin = texture_space ? loc : Float3{low.x * scale.x, low.y * scale.y, low.z * scale.z};
+    return ccl::make_transform(scale.x, 0, 0, -origin.x, 0, scale.y, 0, -origin.y, 0, 0, scale.z, -origin.z);
   }
   Float3 operator()(Float3 p) const {
     if (texture_space)

@@ -383,12 +383,13 @@ void RenderSession::Impl::mesh_palette(ccl::Mesh *mesh, const MeshData &source, 
   mesh->set_motion_displacement_shader_slots(temporal);
 }
 
-void RenderSession::Impl::generated_attribute(ccl::AttributeSet &attributes, const MeshData &source,
+void RenderSession::Impl::generated_attribute(ccl::Mesh &mesh, ccl::AttributeSet &attributes, const MeshData &source,
                                               std::span<const int> vertices, std::size_t count) {
   const auto &positions = source.nominal_pose ? source.nominal_pose->positions : source.positions;
   if ((vertices.empty() ? positions.size() : vertices.size()) != count)
     throw std::logic_error("Generated coordinate ownership does not match render vertices");
   const GeneratedCoordinates coordinates(positions, source.texture_space);
+  write_generated_transform(mesh.attributes, coordinates);
   auto *target = attributes.add(ccl::ATTR_STD_GENERATED)->data_for_write<ccl::packed_float3>();
   if (vertices.empty())
     for (const auto p : positions)
@@ -546,8 +547,8 @@ void RenderSession::Impl::fill_mesh(ccl::Mesh *mesh, const MeshData &source, boo
                 mesh->subd_attributes.add(ccl::ATTR_STD_RANDOM_PER_ISLAND)->data_for_write<float>());
     }
     if (bound && generated)
-      generated_attribute(mesh->subd_attributes, generated_source ? *generated_source : source, generated_vertices,
-                          m.positions.size());
+      generated_attribute(*mesh, mesh->subd_attributes, generated_source ? *generated_source : source,
+                          generated_vertices, m.positions.size());
     if (bound)
       pointiness_attribute(mesh->subd_attributes, pointiness, generated_vertices, m.positions.size());
     mesh->tag_position_modified();
@@ -562,7 +563,7 @@ void RenderSession::Impl::fill_mesh(ccl::Mesh *mesh, const MeshData &source, boo
               mesh->attributes.add(ccl::ATTR_STD_RANDOM_PER_ISLAND)->data_for_write<float>());
   }
   if (bound && generated)
-    generated_attribute(mesh->attributes, generated_source ? *generated_source : source, generated_vertices,
+    generated_attribute(*mesh, mesh->attributes, generated_source ? *generated_source : source, generated_vertices,
                         m.positions.size());
   if (bound)
     pointiness_attribute(mesh->attributes, pointiness, generated_vertices, m.positions.size());

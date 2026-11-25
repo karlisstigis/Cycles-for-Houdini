@@ -252,8 +252,8 @@ struct RenderSession::Impl {
   void retire_unused_geometry();
   void mesh_palette(ccl::Mesh *mesh, const MeshData &source, bool bound, bool sampled, std::size_t steps,
                     const std::set<std::string> &frozen, const std::vector<ccl::Shader *> *shared = nullptr);
-  void generated_attribute(ccl::AttributeSet &attributes, const MeshData &source, std::span<const int> vertices,
-                           std::size_t count);
+  void generated_attribute(ccl::Mesh &mesh, ccl::AttributeSet &attributes, const MeshData &source,
+                           std::span<const int> vertices, std::size_t count);
   void pointiness_attribute(ccl::AttributeSet &attributes, std::span<const float> values, std::span<const int> vertices,
                             std::size_t count);
   void fill_mesh(ccl::Mesh *mesh, const MeshData &source, bool bound, const Matrix &matrix = identity_matrix,

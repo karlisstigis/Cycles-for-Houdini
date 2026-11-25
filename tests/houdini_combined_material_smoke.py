@@ -250,6 +250,112 @@ with ch.Session(device=device, width=80, height=48, samples=1, interactive=False
 hou.hipFile.load(str(dest / "surface-volume-example.hiplc"), suppress_save_prompt=True)
 assert ch.material_graph(hou.node("/mat/surface_and_medium")) == saved
 checks.append(dict(name="Native material output and both connections survive HIP reload"))
+
+# The SOP bounds and the OBJ transform deliberately have different origins.
+# Compare Generated to an explicit normalization of the raw Object coordinate.
+fog = hou.node("/obj").createNode("geo", "generated_fog", run_init_scripts=False)
+fog_box = fog.createNode("box")
+fog_box.parmTuple("t").set((0, 2.5, 0))
+fog_box.parmTuple("size").set((2.8, 1.5, 0.8))
+fog.parm("ty").set(0.6)
+fog_cam = hou.node("/obj").createNode("cam", "generated_fog_camera")
+fog_cam.setParms(dict(ty=3.1, tz=5, projection=1, orthowidth=4))
+profile = ch.create_material(name="generated_fog_profile", shader="emission")
+fog.parm("shop_materialpath").set(profile.path())
+profile_output = profile.node("surface_output")
+glow = profile.node("surface_shader")
+glow.parmTuple("color").set((1, 1, 1))
+coords = profile.createNode("cycles::texture_coordinate::1", "fog_coordinates")
+split = profile.createNode("cycles::separate_xyz::1", "fog_height")
+split.setNamedInput("vector", coords, "generated")
+reverse = profile.createNode("cycles::map_range::1", "reverse_height")
+reverse.setParms(dict(from_min=0, from_max=1, to_min=1, to_max=0, clamp=1))
+reverse.setNamedInput("value", split, "y")
+curve = profile.createNode("cycles::float_curve::1", "fog_density_profile")
+curve.parmTuple("curve_domain").set((0, 1))
+curve.parm("fac").set(1)
+curve.parm("curve_extension").set(1)
+curve.parm("curve_value").set(hou.Ramp((hou.rampBasis.Linear,) * 3, (0, 0.5, 1), (0.15, 0.45, 1.3)))
+curve.setNamedInput("value", reverse, "result")
+glow.setNamedInput("strength", curve, "value")
+absorption = profile.createNode("cycles::absorption_volume::1", "fog_absorption")
+absorption.parmTuple("color").set((0, 0, 0))
+absorption.setNamedInput("density", curve, "value")
+fog_scene = dict(
+    geometry=[ch.geometry_request(fog, fog_box, material_mode="native", material="unused")],
+    material_resolver=native_scene.resolve_materials,
+    camera_path=fog_cam.path(),
+    background=(1, 1, 1),
+)
+# Three central bands cover both segments of the piecewise linear curve.
+rows = [14, 23, 33]
+
+
+def fog_bands(frame, plane_name, channel):
+    plane = frame["planes"][plane_name]
+    pixels = np.frombuffer(plane["pixels"], np.float32).reshape(48, 80, plane["channels"])
+    return pixels[rows, 36:44, channel].mean(axis=1)
+
+
+with ch.Session(
+    device=device, width=80, height=48, samples=256, interactive=False, passes=["combined", "position"]
+) as fog_session:
+
+    def render_fog():
+        frame = fog_session.wait(fog_session.apply(fog_scene), timeout=60)
+        assert not fog_session.status()["source_diagnostics"], fog_session.status()
+        return frame
+
+    # Derive the analytic control from the surface hit positions, in world units.
+    surface_frame = render_fog()
+    world_y = fog_bands(surface_frame, "position", 1)
+    assert np.ptp(world_y) > 0.8 and np.all((world_y > 2.35) & (world_y < 3.85)), world_y
+    expected_density = np.interp((3.85 - world_y) / 1.5, (0, 0.5, 1), (0.15, 0.45, 1.3))
+    surface_density = fog_bands(surface_frame, "combined", 0)
+    np.testing.assert_allclose(surface_density, expected_density, rtol=0, atol=0.008)
+
+    profile_output.setInput(profile_output.inputIndex("surface"), None)
+    profile_output.setNamedInput("volume", absorption, "volume")
+    split.setNamedInput("vector", coords, "object")
+    reverse.setParms(dict(from_min=1.75, from_max=3.25))
+    explicit = fog_bands(render_fog(), "combined", 0)
+    fog_session.write_exr(dest / "fog-explicit-object-bounds.exr")
+    expected_transmission = np.exp(-0.8 * expected_density)
+    np.testing.assert_allclose(explicit, expected_transmission, rtol=0, atol=0.01)
+
+    reverse.setParms(dict(from_min=0, from_max=1))
+    split.setNamedInput("vector", coords, "generated")
+    generated = fog_bands(render_fog(), "combined", 0)
+    fog_session.write_exr(dest / "fog-generated.exr")
+    measurements = dict(
+        name="Generated volume height matches explicit SOP bounds and independent extinction",
+        world_y=world_y.tolist(),
+        surface_density=surface_density.tolist(),
+        expected_transmission=expected_transmission.tolist(),
+        explicit=explicit.tolist(),
+        generated=generated.tolist(),
+    )
+    print(json.dumps(measurements))
+    np.testing.assert_allclose(generated, explicit, rtol=0, atol=0.01)
+    checks.append(measurements)
+
+    # A recooked box must replace the previously uploaded bounding-box transform.
+    fog_box.parm("sizey").set(2.2)
+    resized_generated = fog_bands(render_fog(), "combined", 0)
+    fog_session.write_exr(dest / "fog-generated-resized.exr")
+    resized_density = np.interp((4.2 - world_y) / 2.2, (0, 0.5, 1), (0.15, 0.45, 1.3))
+    resized_expected = np.exp(-0.8 * resized_density)
+    np.testing.assert_allclose(resized_generated, resized_expected, rtol=0, atol=0.01)
+    assert np.max(np.abs(resized_generated - generated)) > 0.04
+    checks.append(
+        dict(
+            name="A live SOP resize updates the Generated density profile",
+            expected=resized_expected.tolist(),
+            generated=resized_generated.tolist(),
+        )
+    )
+
+
 report = dict(
     result="passed",
     device=device,
