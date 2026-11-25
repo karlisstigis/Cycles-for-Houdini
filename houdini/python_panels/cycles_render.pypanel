@@ -11,16 +11,17 @@ def onCreateInterface():
     import time
     from cycles_houdini.ipr import session_log
     started = time.monotonic()
-    kwargs['paneTab'].showToolbar(False)
+    pane_tab = kwargs['paneTab']
+    pane_tab.showToolbar(False)
     try:
-        panel = RenderPanel()
+        panel = RenderPanel(pane_tab=pane_tab)
     except Exception as error:
         session_log.write('viewer could not be created', error=error, seconds=time.monotonic() - started)
         raise
     session_log.write('viewer created', seconds=time.monotonic() - started)
     # Changing this tab's type hides the viewer without onDestroyInterface;
     # the viewer then notices the tab is gone and releases its render.
-    panel.set_host_pane_tab(kwargs['paneTab'])
+    panel.set_host_pane_tab(pane_tab)
     return panel
 def onDestroyInterface():
     global panel

@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Cycles viewer display modes (CYCLES_HOUDINI_VIEWER_DISPLAY): gpu against classic.
 
+On Houdini 22.0.508 for Windows, a new Cycles Render tab beside Scene View
+must display its own canvas color on the desktop, both on first open and
+after switching to Scene View and back. Reading the OpenGL framebuffer
+alone misses this failure because its pixels can be correct while the
+desktop still shows the scene.
+
 A docked viewer in gpu mode renders a small scene. The viewer root must be a
 native window and its OpenGL canvas an ordinary child inside it, draw without a
 fallback, and match the classic QPainter canvas pixel for pixel (exactly)
@@ -168,17 +174,75 @@ class Probe:
         except Exception:
             self.finish(traceback.format_exc())
 
+    def check_docked_pixels(self, previous_tab, canvas):
+        tint = QtGui.QColor(37, 158, 219)
+        original_colors = canvas.scene_colors
+
+        def colors():
+            theme, background = original_colors()
+            return dict(theme, canvas=tint), background
+
+        points = [
+            canvas.mapToGlobal(QtCore.QPoint(round(canvas.width() * x), round(canvas.height() * y)))
+            for x, y in ((0.25, 0.25), (0.75, 0.25), (0.25, 0.75))
+        ]
+
+        def sampled_colors():
+            sampled = []
+            main = hou.qt.mainWindow()
+            for global_point in points:
+                screen = QtWidgets.QApplication.screenAt(global_point)
+                owner = QtWidgets.QApplication.widgetAt(global_point)
+                if screen is None or owner is None or owner.window() != main:
+                    raise RuntimeError(f"Cannot sample unobscured Houdini desktop pixels at {global_point}")
+                point = global_point - screen.geometry().topLeft()
+                image = screen.grabWindow(0, point.x(), point.y(), 1, 1).toImage()
+                if image.isNull():
+                    raise RuntimeError(f"Desktop capture did not return pixels at {global_point}")
+                sampled.append(image.pixelColor(0, 0).name())
+            return sampled
+
+        canvas.scene_colors = colors
+        try:
+            canvas.update()
+            yield from sleep(0.4)
+            first = sampled_colors()
+            previous_tab.setIsCurrentTab()
+            yield from sleep(0.25)
+            scene = sampled_colors()
+            self.tab.setIsCurrentTab()
+            yield from sleep(0.4)
+            reopened = sampled_colors()
+            record = dict(expected=tint.name(), first=first, scene=scene, reopened=reopened)
+            self.report["docked_pixels"] = record
+            self.check(first.count(tint.name()) >= 2, "the first dock still shows Scene View", record)
+            self.check(tint.name() not in scene, "the viewer remains above Scene View", record)
+            self.check(reopened.count(tint.name()) >= 2, "the dock does not repaint after a tab switch", record)
+        finally:
+            del canvas.scene_colors
+            canvas.update()
+
     def run(self):
         progress("mount")
-        editor = self.desktop.paneTabOfType(hou.paneTabType.NetworkEditor)
         viewer = self.desktop.paneTabOfType(hou.paneTabType.SceneViewer)
-        pane = (editor or viewer).pane().splitHorizontally()
-        self.tab = pane.tabs()[0].setType(hou.paneTabType.PythonPanel)
-        self.tab.setActiveInterface(hou.pypanel.interfaceByName("cycles_houdini_render"))
+        first_dock = sys.platform == "win32" and hou.applicationVersion() == (22, 0, 508)
+        if first_dock:
+            viewer.setIsCurrentTab()
+            yield from sleep(0.25)
+            self.tab = viewer.pane().createTab(
+                hou.paneTabType.PythonPanel, python_panel_interface="cycles_houdini_render"
+            )
+        else:
+            editor = self.desktop.paneTabOfType(hou.paneTabType.NetworkEditor)
+            pane = (editor or viewer).pane().splitHorizontally()
+            self.tab = pane.tabs()[0].setType(hou.paneTabType.PythonPanel)
+            self.tab.setActiveInterface(hou.pypanel.interfaceByName("cycles_houdini_render"))
         yield from wait_until(lambda: self.tab.activeInterfaceRootWidget() is not None, "viewer widget")
         panel = self.panel = self.tab.activeInterfaceRootWidget()
         yield from wait_until(lambda: panel.isVisible(), "viewer visible", 5)
         canvas = panel.canvas
+        if first_dock:
+            yield from self.check_docked_pixels(viewer, canvas)
         main = hou.qt.mainWindow()
         handle = canvas.windowHandle()
         self.report["canvas"] = dict(

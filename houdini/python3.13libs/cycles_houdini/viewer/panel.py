@@ -3,6 +3,7 @@
 
 import math
 import shiboken6
+import sys
 import time
 import weakref
 import hou
@@ -920,7 +921,7 @@ class RenderPanel(QtWidgets.QWidget):
         if not self._disposed:
             self.update_render_controls()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, pane_tab=None):
         super().__init__(parent)
         self._rop = None
         self._rop_identity = None
@@ -1253,11 +1254,20 @@ class RenderPanel(QtWidgets.QWidget):
 
         # Read once per panel: classic, native (own window) or gpu (own window, OpenGL).
         self.canvas = viewer_display.create_canvas()
-        if self.canvas.display_mode != "classic" and parent is None:
-            # As Houdini's RE_Window: the viewer root is the one native window
-            # in the pane; the canvas inside it stays an ordinary child. A viewer
-            # built inside a Qt window (the shelf IPR window) is not native: a
-            # native root there never shows the OpenGL canvas (blank window).
+        # Houdini panes use one native window for the viewer. In the shelf
+        # IPR, the dialog already provides that window.
+        native = self.canvas.display_mode != "classic" and parent is None
+        # In 22.0.508 a docked OpenGL viewer can paint into an invisible
+        # surface if its root becomes native before Houdini mounts the panel.
+        self._native_after_show = (
+            native
+            and self.canvas.display_mode == "gpu"
+            and pane_tab is not None
+            and sys.platform == "win32"
+            and hou.applicationVersion() == (22, 0, 508)
+            and pane_tab.floatingPanel() is None
+        )
+        if native and not self._native_after_show:
             viewer_display.make_native(self)
         layout.addWidget(self.canvas, 1)
         self.canvas.regionSelected.connect(self.set_region)
@@ -2753,13 +2763,27 @@ class RenderPanel(QtWidgets.QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        if self._native_after_show:
+            QtCore.QTimer.singleShot(0, self, self._mount_native_viewer)
+        self._watch_native_exposure()
+        self.update_lifetime()
+
+    def _mount_native_viewer(self):
+        if not self._native_after_show or self._disposed or not self.isVisible() or self._fullscreen is not None:
+            return
+        from . import viewer_display
+
+        self._native_after_show = False
+        viewer_display.make_native(self)
+        self._watch_native_exposure()
+
+    def _watch_native_exposure(self):
         handle = self.windowHandle() if self.internalWinId() else None
         if handle is not None and handle is not self._expose_watched:
             # The native viewer root: draw the canvas when it is exposed again
             # (also when the canvas comes back from image-only fullscreen).
             self._expose_watched = handle
             handle.installEventFilter(self._expose_repaint)
-        self.update_lifetime()
 
     def _host_pane_tabs(self):
         tabs = list(hou.ui.paneTabs())
