@@ -4,6 +4,8 @@
 
 An open-source integration of Blender's Cycles rendering engine into Houdini, bringing a free and familiar alternative to the Houdini rendering ecosystem.
 
+Cycles for Houdini is an independent community project, unaffiliated with SideFX or the Blender Foundation.
+
 ![Render_View.jpg](docs/images/Render_View.jpg)
 
 ## Q&A
