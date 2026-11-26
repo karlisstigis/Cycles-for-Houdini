@@ -157,6 +157,16 @@ int main(int argc, char **argv) {
     a.material_motion_cache_hits = (fixture == 0   ? 0ULL
                                     : fixture == 1 ? std::numeric_limits<unsigned long long>::max()
                                                    : 56ULL);
+    const auto count = fixture == 0 ? 0ULL : fixture == 1 ? std::numeric_limits<unsigned long long>::max() : 60ULL;
+    s.subdivision_topology_cache_hits = count + (fixture > 1 ? 1 : 0);
+    s.subdivision_topology_cache_misses = count + (fixture > 1 ? 2 : 0);
+    s.subdivision_topology_cache_admissions = count + (fixture > 1 ? 3 : 0);
+    s.subdivision_topology_cache_evictions = count + (fixture > 1 ? 4 : 0);
+    s.subdivision_topology_cache_oversized = count + (fixture > 1 ? 5 : 0);
+    s.subdivision_topology_cache_entries = count + (fixture > 1 ? 6 : 0);
+    s.subdivision_topology_cache_bytes = count + (fixture > 1 ? 7 : 0);
+    s.subdivision_topology_cache_budget_bytes = count + (fixture > 1 ? 8 : 0);
+    s.subdivision_topology_cache_active_retired_bytes = count + (fixture > 1 ? 9 : 0);
     s.state = static_cast<ch::SessionState>(fixture % 8);
     if (fixture) {
       s.message = "message \u00e9";

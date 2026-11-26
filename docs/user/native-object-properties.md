@@ -39,6 +39,12 @@ This is an integration pattern, not rendering-feature parity.
 Turning its header checkbox off renders the original polygons; the ROP never enables subdivision globally.
 Fixed subdivision has separate IPR and final levels; level zero disables it.
 Adaptive subdivision exposes Pixel/Object space and a per-object Pixel Size or Edge Length, multiplied by the ROP Render/Viewport dicing rate.
+The fixed levels are hidden while Adaptive Subdivision is enabled and retain their previous values.
+**Cache Subdivision Topology** defaults to on and reuses OpenSubdiv topology for adaptive Catmull–Clark in IPR.
+Cycles still recalculates the tessellation and rendered detail. Compatible instances sharing tessellation
+can use the cache when any of their source objects enables it. The ROP's **Rendering > Geometry > Subdivision > IPR Topology
+Cache Limit (MiB)** sets the shared host-memory budget. It defaults to 512 MiB. Zero disables and clears the cache,
+and closing IPR releases the retained topology.
 The ROP supplies the adaptive maximum level. UV smoothing,
 boundary interpolation and use of Houdini crease attributes are explicit.
 

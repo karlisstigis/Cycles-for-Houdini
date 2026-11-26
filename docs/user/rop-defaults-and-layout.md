@@ -86,6 +86,9 @@ header. Scene rates multiply the object's adaptive Pixel Size or Edge Length;
 uniform object levels stay independent of the adaptive scene limit.
 An empty Dicing Camera follows the render camera. A separate camera fixes the
 dicing reference for IPR and disk renders without replacing the rendered view.
+**IPR Topology Cache Limit (MiB)** sets the host memory available to retain OpenSubdiv
+topology across IPR updates. The default is 512 MiB and zero clears the cache.
+The limit affects reuse while dicing continues at the selected detail.
 **Limit Subdivision Triangles** is an integration-specific guard at the bottom of
 this panel, disabled by default. When enabled, **Triangle Budget** starts at
 100 million per mesh and accepts larger values. It reports excess rather than

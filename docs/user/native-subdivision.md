@@ -118,6 +118,14 @@ Regression coverage is in `tests/houdini_tessellation_update_smoke.py`,
 `tests/houdini_dicing_disk_smoke.py`. Reports are in
 `artifacts/tessellation-update`.
 
+**Cache Subdivision Topology**, immediately below **Adaptive Subdivision** on
+the object, reuses OpenSubdiv topology for adaptive Catmull–Clark in IPR. It
+defaults to on. Cycles still evaluates the current surface, dicing and shading.
+The ROP's **Rendering > Geometry > Subdivision > IPR Topology Cache Limit (MiB)** gives the
+session a shared 512 MiB host-memory budget by default. A zero limit clears the
+cache and turns off reuse. Topology that exceeds the budget is evaluated normally.
+Disk renders use ordinary OpenSubdiv evaluation.
+
 The object Subdivision panel starts with **Enable in IPR**, enabled by default.
 Turn it off to render the original polygons in **Cycles Render** and native IPR,
 for both uniform and adaptive subdivision, including packed instances. Disk
@@ -137,6 +145,14 @@ camera edits redice compatible variants without converting the SOP again. An
 identical camera supplied during a surface-only material edit is compared
 semantically and does not force another tessellation. Crop changes keep the
 full-camera dicing policy.
+
+Surface previews reuse the current control polygons or diced geometry when the
+displacement inputs stay the same. Very dense meshes can exceed the separate
+256 MiB interpolation-map budget for retained shading. Already evaluated
+Generated coordinates can then be reused across preview switches. A newly
+requested field whose values are unavailable can require another interpolation
+and displacement pass. If adaptive updates are off, this shading refresh keeps
+the existing diced variant's density.
 
 Object-space instances share compatible tessellations. Pixel-space instances
 with different centre transforms receive private variants because their screen

@@ -72,6 +72,7 @@ def recipes():
             "houdini_panorama_smoke.py": "artifacts/stage2/cameras/panorama/report.json",
             "core_image_iris_smoke.py": "{output}/image-iris-{backend}/report.json",
             "houdini_camera_dof_motion_smoke.py": "{output}/camera-dof-{backend}.json",
+            "houdini_subdivision_topology_cache_smoke.py": "{output}/subdivision-topology-cache-{backend}/report.json",
             "houdini_light_material_smoke.py": "artifacts/light-material-20261026/material-{device_file}.json",
             "houdini_adaptive_target_smoke.py": "artifacts/stage3/render-settings/houdini-adaptive-target-smoke-{backend}.json",
             "houdini_release_runtime_smoke.py": "{output}/release-runtime.json",
@@ -262,7 +263,11 @@ def plan(
                 arguments += ["--label", prefix + "-" + values["backend"], "--output", str(ROOT / output)]
             elif filename == "houdini_nested_dielectrics_plumbing_smoke.py":
                 arguments += ["--out", str(ROOT / output / ("nested-" + values["backend"]))]
-            elif filename in ("houdini_camera_dof_motion_smoke.py", "core_image_iris_smoke.py"):
+            elif filename in (
+                "houdini_camera_dof_motion_smoke.py",
+                "core_image_iris_smoke.py",
+                "houdini_subdivision_topology_cache_smoke.py",
+            ):
                 arguments += ["--report", str(ROOT / report)]
             elif filename == "houdini_spectral_nested_smoke.py":
                 arguments += ["--output", str(ROOT / output / ("spectral-" + values["backend"]))]

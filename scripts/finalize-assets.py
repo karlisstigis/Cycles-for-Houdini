@@ -395,7 +395,7 @@ def render_parameters(definition):
                 section(
                     "ch_subdivision",
                     "Subdivision",
-                    "dicing_rate ipr_dicing_rate offscreen_dicing_scale max_subdivisions dicing_camera limit_subdivision subdivision_limit",
+                    "dicing_rate ipr_dicing_rate offscreen_dicing_scale max_subdivisions dicing_camera ipr_topology_cache_mib limit_subdivision subdivision_limit",
                 ),
                 section("ch_primitive_defaults", "Points and Curves", "point_radius curve_width curve_subdivisions"),
             ],

@@ -110,6 +110,7 @@ $testCases=@(
     @('houdini_cop_batch_smoke.py','artifacts/stage3/textures/cop-batch/report.json'),
     @('core_owned_image_smoke.py','artifacts/stage3/textures/owned-engine/report.json'),
     @('houdini_shader_bypass_preview_smoke.py','artifacts/stage3/materials/bypass-preview/report.json'),
+    @('houdini_shader_preview_displacement_smoke.py','artifacts/stage3/materials/preview-displacement.json'),
     @('houdini_shader_input_states_smoke.py','artifacts/stage3/materials/input-states/report.json'),
     @('houdini_hash_displacement_smoke.py','artifacts/stage3/materials/hash-displacement/report.json'),
     @('houdini_hash_displacement_recovery_smoke.py','artifacts/stage3/materials/hash-displacement/recovery-report.json'),

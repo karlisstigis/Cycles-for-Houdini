@@ -17,6 +17,12 @@ from .control_bridge import ControlBridge
 from ..scene import native_scene
 
 
+def _mouse_button_down():
+    from PySide6 import QtCore, QtWidgets
+
+    return QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
+
+
 def _pose_channels_driven(node, names):
     for name in names:
         for parm in node.parmTuple(name) or ():
@@ -67,6 +73,7 @@ class Entry:
     camera_refinement_pending: bool = False
     tessellation_revision: int = 0
     camera_changed_at: float = 0.0
+    camera_changed_with_button_down: bool = False
     camera_only_pending: bool = False
     pose_serial: int = 0
     pose_preview_serial: int = 0
@@ -82,6 +89,7 @@ class Entry:
     light_values_pending: bool = False
     linking_values_pending: set = field(default_factory=set)
     material_values_pending: bool = False
+    material_surface_rewired: bool = False
     material_edit_paths: set = field(default_factory=set)
     narrow_check: object = None
     light_basis: object = None
@@ -115,6 +123,7 @@ class Entry:
         source_node=None,
         light_value=False,
         material_value=None,
+        material_surface_rewired=False,
         linking_receiver=None,
     ):
         clean = self.change_serial == self.applied_serial
@@ -122,11 +131,12 @@ class Entry:
             self.linking_values_pending.clear()
         if linking_receiver is not None and (clean or self.linking_values_pending):
             self.linking_values_pending.add(linking_receiver)
-        # Value edits inside rendered material networks (SceneObserver material_value_callback) keep the
-        # materials-only update while nothing else is pending; any other edit revokes it.
+        # Local material edits keep the materials-only update until another scene domain changes.
         if material_value is not None and (clean or not self.material_values_pending):
             self.material_edit_paths = set()
+            self.material_surface_rewired = False
         self.material_values_pending = material_value is not None and (clean or self.material_values_pending)
+        self.material_surface_rewired |= material_surface_rewired
         if material_value is not None:
             self.material_edit_paths.add(material_value)
         # Edits on light nodes (SceneObserver light_value_callback) keep the
@@ -180,20 +190,14 @@ class Entry:
                 return False
         if time.monotonic() - self.changed_at < 0.15:
             return True
-        if hou.isUIAvailable():
-            from PySide6 import QtCore, QtWidgets
-
-            return QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
-        return False
+        return hou.isUIAvailable() and _mouse_button_down()
 
     def _pose_gesture_held(self):
         if os.environ.get("CYCLES_HOUDINI_DRAG_DEFER") == "0" or not hou.isUIAvailable():
             return False
         if self.error or self.last_motion is None or time.monotonic() - self.changed_at > 1.0:
             return False
-        from PySide6 import QtCore, QtWidgets
-
-        return QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
+        return _mouse_button_down()
 
     def light_value_capture(self, now, motion):
         """Lights-only read after edits on light nodes, or None for the complete read.
@@ -269,7 +273,12 @@ class Entry:
             except Exception as error:  # Resolution errors belong to the complete read's diagnostics.
                 ok, why = False, "material read failed: " + str(error)[:120]
             if ok:
-                result = dict(configuration, material_edit=True, _narrow="materials")
+                result = dict(
+                    configuration,
+                    material_edit=True,
+                    _narrow="materials",
+                    _refresh_observer=self.material_surface_rewired,
+                )
             else:
                 reason = why
         self.narrow_reason = "materials" if result is not None else "full read: " + reason
@@ -608,11 +617,12 @@ class Entry:
         ):
             self.camera_refinement_pending = True
             self.camera_changed_at = time.monotonic()
+            self.camera_changed_with_button_down = _mouse_button_down()
         elif not hou.isUIAvailable() or not self.pixel_subdivision:
             self.camera_refinement_pending = False
         # This entry belongs to an interactive viewer. Final/batch captures do
         # not use this policy. Trace with the current camera and the last complete
-        # dicing camera until the mouse is released and camera changes settle.
+        # dicing camera until the drag is released or the camera stops moving.
         update["defer_camera_subdivision"] = self.camera_refinement_pending
         if pose_preview:
             return self.session.preview_object_poses(update, at_time=now)
@@ -759,7 +769,7 @@ class Entry:
             )
             if self.light_basis is not None and os.environ.get("CYCLES_HOUDINI_NARROW_CHECK") == "1":
                 self.narrow_check = (narrow, now, dict(self.light_basis["update"]))
-        # A materials-only update keeps every material network and binding: nothing new to observe.
+        # Recheck observer dependencies after a root Surface rewire, which can activate other resources.
         if self.observer and (
             "geometry" in update or ("materials" in values and narrow != "materials") or refresh_observer
         ):
@@ -912,6 +922,7 @@ def for_rop(rop, config):
         entry.last_camera = entry.last_motion = None
         entry.pixel_subdivision = False
         entry.camera_refinement_pending = False
+        entry.camera_changed_with_button_down = False
         entry.tessellation_revision = 0
         entry.camera_only_pending = False
         entry.pose_serial = entry.pose_preview_serial = 0
@@ -927,6 +938,7 @@ def for_rop(rop, config):
         entry.light_values_pending = False
         entry.linking_values_pending.clear()
         entry.material_values_pending = False
+        entry.material_surface_rewired = False
         entry.light_basis = None
     if entry is None:
         entry = Entry(key, config, session_from_configuration(config))
@@ -946,7 +958,9 @@ def for_rop(rop, config):
                 object_pose=pose, source_node=node, light_value=True
             ),
             linking_value_callback=lambda identity: entry.changed(linking_receiver=identity),
-            material_value_callback=lambda path: entry.changed(material_value=path),
+            material_value_callback=lambda path, rewired: entry.changed(
+                material_value=path, material_surface_rewired=rewired
+            ),
             stylesheet_resources=lambda: entry.session.native_stylesheet_resources(),
             cop_sources=lambda: entry.session.native_cop_sources(),
         )
@@ -1080,15 +1094,16 @@ def _poll_host():
                     retire(key)
     now = time.monotonic()
     if hou.isUIAvailable():
-        from PySide6 import QtCore, QtWidgets
-
-        mouse_down = QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
+        mouse_down = _mouse_button_down()
         for entry in tuple(_entries.values()):
-            if entry.camera_refinement_pending and not mouse_down and now - entry.camera_changed_at >= 0.15:
+            drag_released = entry.camera_changed_with_button_down and not mouse_down
+            if entry.camera_refinement_pending and (drag_released or now - entry.camera_changed_at >= 0.15):
                 entry.camera_refinement_pending = False
-                # A release after Stop must not restart the renderer.
+                # Finishing navigation after Stop must not restart the renderer.
                 if entry.session.status()["state"] not in ("closed", "cancelled"):
-                    entry.changed()
+                    # Only the camera dicing policy changed. A pending source edit
+                    # still takes the authoritative capture path.
+                    entry.changed(camera_only=True)
     if now - _last_texture_poll >= 1.0:
         _last_texture_poll = now
         try:

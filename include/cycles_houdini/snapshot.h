@@ -7,7 +7,8 @@
 
 namespace cycles_houdini {
 inline constexpr std::uint32_t worker_protocol_version =
-    92; // 92: SessionDiagnostics.device_update_memory (per-device per-update tracked memory record); 91:
+    93; // 93: IPR subdivision topology cache policy and status;
+        // 92: SessionDiagnostics.device_update_memory (per-device per-update tracked memory record); 91:
         // WorkerUpdate.root_poses (gesture root moves: origins once, then root matrices); 90: Refit Meshes While
         // Interacting in SessionConfig; 89: reused input mapping with command 14 (release input view); 88: raw sparse
         // volume grids; 87: Curve Subdivisions in SessionConfig (86: no per-material mesh-media flag; 85: added it; 84:

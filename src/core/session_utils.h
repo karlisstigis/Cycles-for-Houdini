@@ -324,14 +324,9 @@ inline bool same_material_shading(const MaterialData &a, const MaterialData &b) 
 // shader names. Slot layout still participates: equal positions alone do not
 // establish compatible render geometry. Keep this in sync with MeshData.
 inline bool same_mesh_payload(const MeshData &a, const MeshData &b) {
-  const auto values = [](const MeshData &m) {
-    return std::tie(m.positions, m.triangles, m.corner_normals, m.corner_uv, m.corner_colors, m.triangle_material,
-                    m.smooth, m.motion, m.motion_corner_normals, m.motion_corner_uv, m.motion_corner_colors,
-                    m.motion_uv_complete, m.motion_color_complete, m.subdivision, m.nominal_pose, m.motion_blur,
-                    m.attributes, m.instance_attributes, m.pointiness, m.texture_space, m.blender_edges,
-                    m.blender_vertex_normals);
-  };
-  return a.materials.size() == b.materials.size() && mesh_payload_equal(values(a), values(b));
+  return a.materials.size() == b.materials.size() && a.instance_attributes == b.instance_attributes &&
+         mesh_payload_equal(a.triangle_material, b.triangle_material) && same_mesh_shape_payload(a, b) &&
+         (!a.subdivision || mesh_payload_equal(a.subdivision->face_material, b.subdivision->face_material));
 }
 template <class Data> inline std::vector<std::string> strand_materials(const Data &data) {
   return data.materials.empty() ? std::vector<std::string>{data.material} : data.materials;

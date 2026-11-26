@@ -444,6 +444,31 @@ void subdivision_shading_contracts() {
     require(!mesh.interpolate_subdivision_shading(),
             "A changed coarse position buffer was consumed by the attribute-only path");
     clear(mesh);
+    // A dense variant may complete dicing without retaining interpolation samples.
+    require(refresh_mesh_shading(mesh, changed, true, {}, islands, curvature, true),
+            "Could not prepare retained derived fields before removing the optional map");
+    clear(mesh);
+    {
+      auto samples = std::move(mesh.subdivision_shading_samples);
+      auto fewer_fields = changed;
+      fewer_fields.attributes.erase(fewer_fields.attributes.begin());
+      const auto generated = mesh.attributes.find(ccl::ATTR_STD_GENERATED)->data();
+      require(refresh_mesh_shading(mesh, fewer_fields, false, {}, {}, {}, true),
+              "Removal of shading demand required an unavailable interpolation map");
+      require(mesh.attributes.find(ccl::ATTR_STD_GENERATED)->data() == generated &&
+                  !mesh.attributes.find(ccl::ustring(engine_attribute_name("sample"))),
+              "Retaining derived coordinates also retained a deleted named field");
+      clear(mesh);
+      require(refresh_mesh_shading(mesh, fewer_fields, true, {}, islands, curvature, true),
+              "Reusing previously evaluated derived fields required fresh interpolation");
+      require(mesh.attributes.find(ccl::ATTR_STD_GENERATED)->data() == generated && snapshot(mesh) == geometry,
+              "Shading-only work replaced retained coordinate data or changed geometry");
+      clear(mesh);
+      require(!refresh_mesh_shading(mesh, changed, true, {}, islands, curvature, true),
+              "A newly required shading field was accepted without interpolation samples");
+      mesh.subdivision_shading_samples = std::move(samples);
+    }
+    clear(mesh);
     std::vector<int> remap(mesh.num_verts());
     std::iota(remap.begin(), remap.end(), 0);
     remap.push_back(mesh.get_triangles()[0]);

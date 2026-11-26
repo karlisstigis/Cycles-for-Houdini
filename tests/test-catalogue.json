@@ -512,6 +512,24 @@
       ]
     },
     {
+      "test": "houdini_shader_preview_displacement_smoke.py",
+      "report": "artifacts/stage3/materials/preview-displacement.json",
+      "backends": [
+        "CPU",
+        "OPTIX"
+      ],
+      "backend_policy": "selectable",
+      "options": [
+        "--device",
+        "--full-capture"
+      ],
+      "depends_on": [],
+      "prerequisites": [
+        "verified-build",
+        "houdini-sdk"
+      ]
+    },
+    {
       "test": "houdini_shader_input_states_smoke.py",
       "report": "artifacts/stage3/materials/input-states/report.json",
       "backends": [
@@ -5246,6 +5264,7 @@
     "pytest_cases/test_heavy_bias_inputs.py",
     "pytest_cases/test_heavy_bias_statistics.py",
     "pytest_cases/test_images.py",
+    "pytest_cases/test_ipr_camera_refinement.py",
     "pytest_cases/test_ipr_display_reconnect.py",
     "pytest_cases/test_legacy_contracts.py",
     "pytest_cases/test_material_convert.py",
@@ -5768,6 +5787,7 @@
     "houdini_shader_input_states_smoke.py",
     "houdini_shader_layout_gui_smoke.py",
     "houdini_shader_layout_smoke.py",
+    "houdini_shader_preview_displacement_smoke.py",
     "houdini_shader_preview_shortcut_gui_smoke.py",
     "houdini_shader_reactivation_smoke.py",
     "houdini_shader_retirement_smoke.py",
@@ -5829,6 +5849,7 @@
     "houdini_subdivision_ipr_toggle_gui_smoke.py",
     "houdini_subdivision_ipr_toggle_native_gui_smoke.py",
     "houdini_subdivision_smoke.py",
+    "houdini_subdivision_topology_cache_smoke.py",
     "houdini_subnet_dielectric_priority_smoke.py",
     "houdini_tabs_menu_smoke.py",
     "houdini_tangent_basis_gui_smoke.py",

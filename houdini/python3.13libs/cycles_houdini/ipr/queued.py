@@ -22,6 +22,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as Futur
 from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from functools import partial
+from typing import NamedTuple
 from .. import Session, _native, default_device
 from . import session_log
 from .exchange_watchdog import ExchangeWatchdog
@@ -35,6 +36,15 @@ _CAPTURE_CHAIN_SECONDS = max(0.0, float(os.environ.get("CYCLES_HOUDINI_CAPTURE_C
 
 class _CaptureInterrupted(Exception):
     """An artist-cancelled host acquisition, with the accepted render retained."""
+
+
+class _PendingNavigation(NamedTuple):
+    submission: int
+    navigation: object
+    submitted: float
+    final: bool
+    camera_policy_update: bool
+    refines_camera: bool
 
 
 @contextmanager
@@ -573,6 +583,8 @@ class QueuedController:
         self.presented_generation = 0
         self.presented_revision = None
         self.feedback_deadline = 0.0
+        self.navigation_camera_deferred = False
+        self.camera_refinement_revision = None
         self.first_frame_poll_deadline = 0.0
         self.first_frame_fast_polls = 0
         self.backend_memory = None
@@ -644,16 +656,28 @@ class QueuedController:
             self.pending, self.rejected_scene = rejected[:3], None
             self.scene_repair_retries += 1
 
-    def submit_navigation(self, navigation, submission, *, final=False, preview=True):
+    def submit_navigation(self, navigation, submission, *, final=False, preview=True, camera_subdivision_deferred=None):
         with self.condition:
             if self.closing or submission <= self.cancelled_through:
                 return
             self.navigation = (submission, navigation, _native.navigation_info(navigation)["root_revision"])
+            # A gesture can settle while its last moving update is still in
+            # this slot. Carry the refinement intent if that update coalesces.
+            refines_camera = final and self.navigation_camera_deferred and camera_subdivision_deferred is False
+            if final:
+                self.navigation_camera_deferred = camera_subdivision_deferred is True
             if preview:
                 if self.pending_navigation is not None:
                     self.coalesced += 1
-                self.pending_navigation = (submission, navigation, time.perf_counter(), final)
-            elif self.pending_navigation is not None and self.pending_navigation[0] <= submission:
+                self.pending_navigation = _PendingNavigation(
+                    submission,
+                    navigation,
+                    time.perf_counter(),
+                    final,
+                    camera_subdivision_deferred is not None,
+                    refines_camera,
+                )
+            elif self.pending_navigation is not None and self.pending_navigation.submission <= submission:
                 self.pending_navigation = None
             # A camera preview can repair an iris without applying geometry
             # from a rejected complete scene. Retry that owned complete target
@@ -694,6 +718,7 @@ class QueuedController:
                 self.pending = None
                 self.rejected_scene = None
                 self.navigation = self.pending_navigation = None
+                self.navigation_camera_deferred = False
                 # A pass preference for a discarded scene cannot be applied to
                 # the retained backend's older pass list.
                 retained = []
@@ -766,16 +791,28 @@ class QueuedController:
         # Called under the controller lock. Coalesce desired edits while the
         # current accepted scene produces one visible preview. A hidden/broken
         # viewer cannot indefinitely block updates; controls bypass this gate.
+        revision = self.epoch, self.physical
+        navigation = self.pending_navigation
+        # An unfinished automatic refinement cannot produce the preview we
+        # would wait for. Let a newer camera reach the renderer to replace it.
+        replacing_refinement = (
+            self.camera_refinement_revision == revision
+            and navigation is not None
+            and navigation.submission > self.committed
+            and navigation.camera_policy_update
+            and (self.frame_identity is None or self.frame_identity[:2] != revision)
+        )
         return bool(
             self.feedback_viewers
             and (self.pending is not None or self.pending_navigation is not None or self.preparing is not None)
             and self.committed
-            and self.presented_revision != (self.epoch, self.physical)
+            and self.presented_revision != revision
             and self.cached["status"]["state"] == "rendering"
             and time.perf_counter() < self.feedback_deadline
+            and not replacing_refinement
         )
 
-    def accept(self, reply, submission=None):
+    def accept(self, reply, submission=None, *, refines_camera=False):
         if not reply["success"]:
             raise RuntimeError(reply["error"])
         if reply["status"]["state"] == "failed":
@@ -785,15 +822,19 @@ class QueuedController:
             raise RuntimeError(reply["status"]["error"] or reply["status"]["message"] or "Renderer reported failure")
         with self.condition:
             previous_sequence = self.image_sequence
+            if reply["status"]["state"] == "cancelled":
+                self.camera_refinement_revision = None
             if submission is not None:
                 self.committed = submission
-                if self.physical != reply["status"]["generation"]:
+                physical = reply["status"]["generation"]
+                if self.physical != physical:
+                    self.camera_refinement_revision = (self.epoch, physical) if refines_camera else None
                     # Probe briefly for the first image of an edit. A fixed
                     # 16 ms poll otherwise hides an already finished preview.
                     # Controls still wake this interruptible condition wait.
                     self.first_frame_poll_deadline = time.perf_counter() + 0.08
                     self.focus_image = self.focus_identity = None
-                self.physical = reply["status"]["generation"]
+                self.physical = physical
                 self.feedback_deadline = time.perf_counter() + 1.0
                 # A retained/no-op scene has no new physical image to send.
                 # Associate the already-owned image with this request only
@@ -1075,7 +1116,7 @@ class QueuedController:
                     source_submission = 0
                     newer_scene = changed_roots = False
                     if navigation_work is not None:
-                        submission, navigation, submitted, final = navigation_work
+                        submission, navigation, submitted, final, _, _ = navigation_work
                         with self.condition:
                             base = self.acknowledged
                             obsolete = submission <= self.cancelled_through or submission < self.committed
@@ -1148,7 +1189,7 @@ class QueuedController:
                             self.required_scene >= submission
                             and self.required_scene > self.completed_scene
                             and (
-                                (navigation_work is not None and not navigation_work[3])
+                                (navigation_work is not None and not navigation_work.final)
                                 or (work is not None and not work["scene"])
                             )
                         )
@@ -1213,7 +1254,11 @@ class QueuedController:
                         # before this reply is built. Replacing the reply with
                         # the preview control's reply used to drop that frame,
                         # leaving a complete render without an image.
-                        self.accept(reply, submission)
+                        self.accept(
+                            reply,
+                            submission,
+                            refines_camera=navigation_work is not None and navigation_work.refines_camera,
+                        )
                         if first_scene:
                             with self.condition:
                                 preview = self.preview_pass if self.preview_submission <= submission else "combined"
@@ -1312,6 +1357,8 @@ class QueuedController:
                     self.rejected_scene = None
                     self.preparation_epoch += 1
                     self.navigation = self.pending_navigation = None
+                    self.navigation_camera_deferred = False
+                    self.camera_refinement_revision = None
                     # When teardown reports its final state, do not continue
                     # displaying GPU/geometry allocation from the old render.
                     self.cached["status"] = dict(
@@ -1966,8 +2013,15 @@ class WorkerSession(Session):
                 # Refresh only the fields present in this source packet so a
                 # complete light capture supersedes old overrides while a
                 # material-only capture retains the latest accepted camera.
+                camera_subdivision_deferred = (
+                    payload.get("defer_camera_subdivision") if navigation_only and "dicing" not in payload else None
+                )
                 self._controller.submit_navigation(
-                    navigation, submission, final=navigation_only, preview=self._interactive
+                    navigation,
+                    submission,
+                    final=navigation_only,
+                    preview=self._interactive,
+                    camera_subdivision_deferred=camera_subdivision_deferred,
                 )
                 if navigation_only and self._interactive:
                     self.last_capture_seconds = time.perf_counter() - started

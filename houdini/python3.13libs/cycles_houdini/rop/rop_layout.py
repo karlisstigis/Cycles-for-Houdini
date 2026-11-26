@@ -54,6 +54,17 @@ def ensure_ipr_settings_layout(node):
         group.remove(take_indices)
         group.insertAfter("f", take)
         changed = True
+    # An inherited parameter can be appended at the root in older per-node layouts.
+    name = "ipr_topology_cache_mib"
+    anchor = "limit_subdivision"
+    if definition is not None:
+        template = definition.parmTemplateGroup().find(name)
+        indices, anchor_indices = group.findIndices(name), group.findIndices(anchor)
+        if template and len(anchor_indices) > 1 and (not indices or len(indices) == 1):
+            if indices:
+                group.remove(indices)
+            group.insertBefore(anchor, template)
+            changed = True
     adaptive = group.find("tessellation_update")
     if adaptive and adaptive.label() == "Tessellation Update":
         adaptive.setLabel("Adaptive Subdivision Update")

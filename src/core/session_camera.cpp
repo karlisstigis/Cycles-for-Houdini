@@ -158,11 +158,14 @@ void RenderSession::Impl::sync_camera(const SceneUpdate &u, const PreparedUpdate
         }
   } else if (u.camera)
     i.camera_definition = u.camera;
-  if (u.dicing)
+  if (u.dicing) {
+    if (u.dicing->topology_cache_mib != i.dicing_settings.topology_cache_mib)
+      i.set_topology_cache_limit(u.dicing->topology_cache_mib);
     i.dicing_settings = *u.dicing;
+  }
   if (desired_dicing_camera &&
       ((!hold_dicing && (!u.defer_camera_subdivision || force_dicing)) || !i.dicing_camera_definition) &&
-      dicing_projection_changed) {
+      (dicing_projection_changed || i.suspended_camera_refinement)) {
     // The render camera defines rays and shader camera coordinates.
     // Dicing has its own projection, using the same Cycles camera model.
     auto *camera = scene->camera;
@@ -179,8 +182,7 @@ void RenderSession::Impl::sync_camera(const SceneUpdate &u, const PreparedUpdate
     dicing->tag_modified();
     dicing->need_device_update = true;
     for (auto &[key, record] : i.meshes)
-      if (record.source && record.source->subdivision && record.source->subdivision->settings.adaptive &&
-          record.source->subdivision->settings.space == SubdivisionSpace::Pixel) {
+      if (record.pixel_adaptive_subdivision()) {
         record.dirty = true;
         variant_updates.insert(key);
       }

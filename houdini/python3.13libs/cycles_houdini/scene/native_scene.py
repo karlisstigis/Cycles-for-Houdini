@@ -692,7 +692,9 @@ def dicing_configuration(rop, now, *, render_camera_path=None, interactive=True)
     from ..ipr import registry
 
     entry = registry.get(f"rop:{rop.sessionId()}") if interactive else None
+    cache_limit = rop.parm("ipr_topology_cache_mib")
     return dict(
+        topology_cache_mib=(cache_limit.evalAtTime(now) if cache_limit is not None else 512) if interactive else 0,
         offscreen_scale=rop.parm("offscreen_dicing_scale").evalAtTime(now),
         update=bool(
             not interactive or not rop.parm("tessellation_update") or rop.parm("tessellation_update").evalAtTime(now)
@@ -1107,24 +1109,29 @@ def _tuple_fingerprint(tuple_, kind):
 
 
 def _material_wiring(builder):
-    """The structure of a material network: every node's inputs and bypass flag (no values, no cooking)."""
-    if builder is None:
-        return None
+    """Track the root Surface connection separately from all other wiring."""
+    from ..materials import BUILDER, SURFACE_OUTPUT
+
+    outputs = [node for node in builder.children() if node.type().name() == SURFACE_OUTPUT]
+    output = outputs[0] if builder.type().name() == BUILDER and len(outputs) == 1 else None
     rows = []
+    surface = None
     for node in (builder, *builder.allSubChildren()):
         connections = []
         for connection in node.inputConnections():
             source = connection.inputNode()
-            connections.append(
-                (
-                    connection.inputIndex(),
-                    source.path() if source is not None else connection.inputName(),
-                    connection.outputIndex(),
-                )
+            endpoint = (
+                connection.inputIndex(),
+                source.path() if source is not None else connection.inputName(),
+                connection.outputIndex(),
             )
+            if node == output and connection.outputName() == "surface":
+                surface = endpoint
+            else:
+                connections.append(endpoint)
         bypassed = node.isBypassed() if hasattr(node, "isBypassed") else False
         rows.append((node.path(), bypassed, tuple(connections)))
-    return tuple(rows)
+    return tuple(rows), surface, output
 
 
 class SceneObserver:
@@ -1450,7 +1457,9 @@ class SceneObserver:
         if self.material_value_callback is not None:
             for path in self._watched_material_paths or ():
                 try:
-                    self._material_wiring[path] = _material_wiring(hou.node(path))
+                    builder = hou.node(path)
+                    if builder is not None:
+                        self._material_wiring[path] = _material_wiring(builder)
                 except hou.Error:
                     pass
         # Baseline of the lights' non-transform parameters: a handle drag reports t and r together
@@ -1912,23 +1921,20 @@ class SceneObserver:
                 pass
         if self.material_value_callback is not None and node is not None:
             try:
-                builder = self._material_value_edit(node, kwargs)
+                material_edit = self._material_value_edit(node, kwargs)
             except hou.Error:
-                builder = None
-            if builder is not None:
-                self.material_value_callback(builder)
+                material_edit = None
+            if material_edit is not None:
+                self.material_value_callback(*material_edit)
                 return
         self.callback()
 
     def _material_value_edit(self, node, kwargs):
-        """The rendered material network a value edit belongs to, or None (general notification).
+        """Return the edited material path and whether its root Surface wire changed.
 
-        Any parameter of any node inside a rendered material network (also keyframe and expression edits)
-        is a value edit of that material, except file and node references (texture and COP resources).
-        InputRewired / InputDataChanged inside the network belong to the same edit while the network's
-        structure equals its baseline; a structure change (wiring, bypass, new or deleted nodes) is general.
-        Whether the new graph still asks the same of the geometry is decided later
-        (Entry.material_value_capture). CYCLES_HOUDINI_MATERIAL_PATH=0: off.
+        Parameter edits and a replacement of the root Surface input can use the materials-only path
+        if geometry requirements are unchanged. Other topology edits and file/node reference edits
+        require a complete read.
         """
         if os.environ.get("CYCLES_HOUDINI_MATERIAL_PATH") == "0" or not self._material_wiring:
             return None
@@ -1952,9 +1958,22 @@ class SceneObserver:
                 hou.stringParmType.NodeReferenceList,
             ):
                 return None
-            return builder
+            return builder, False
         if event in (hou.nodeEventType.InputRewired, hou.nodeEventType.InputDataChanged):
-            return builder if _material_wiring(hou.node(builder)) == self._material_wiring[builder] else None
+            baseline, old_surface, _ = self._material_wiring[builder]
+            root = hou.node(builder)
+            if root is None:
+                return None
+            topology, surface, output = _material_wiring(root)
+            if topology == baseline:
+                if surface == old_surface:
+                    return builder, False
+                if surface is not None and old_surface is not None:
+                    # A reference to this output from another network can make
+                    # the surface connection observable beyond the material.
+                    prefix = builder.rstrip("/") + "/"
+                    if all(d.path() == builder or d.path().startswith(prefix) for d in output.dependents(False)):
+                        return builder, True
         return None
 
     def close(self):

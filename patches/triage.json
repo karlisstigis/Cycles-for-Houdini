@@ -1459,6 +1459,17 @@
       "next_action": "Retain exact ranges by default and explicit measured whole-host fallback only for known complete object and OptiX mirrors. Review production CPU, CUDA/OptiX and multi-device ownership and byte evidence before proposing upstream.",
       "related_fixture": "tests/multi_device_range_fault_test.py",
       "retirement_condition": "Retire when upstream Cycles exposes an exact bounded range contract and an explicit cost-based full-copy policy for complete mirrors, with the same byte-transfer and fault checks."
+    },
+    {
+      "number": 121,
+      "path": "patches/0121-Reuse-OpenSubdiv-setup-within-a-bounded-IPR-scene-ca.patch",
+      "sha256": "0c528fe62e4654cb09a97cf0020b4e0755a6a26285d7d80698917c1bd56922df",
+      "classification": "feature/bounded-subdivision",
+      "disposition": "fork-permanent",
+      "rationale": "Adaptive camera dicing repeatedly constructs OpenSubdiv topology and patches. IPR can retain that setup under an explicit host memory budget after repeat dicing.",
+      "next_action": "Maintain the opt-in scene cache with exact topology, crease and shutter-sampled face-varying validation and backend parity checks.",
+      "related_fixture": "tests/houdini_subdivision_topology_cache_smoke.py",
+      "retirement_condition": "Retire after an upstream scene-owned bounded setup cache can replace the embedding API and the affected replay, budget and parity checks pass."
     }
   ],
   "retired_patches": [

@@ -34,7 +34,7 @@ class MatrixTest(unittest.TestCase):
 
     def test_inventory_has_all_primary_related_contracts_without_isolation_claim(self):
         recipes = matrix.recipes()
-        self.assertEqual(len(recipes), 61 + self.iris_assigned)
+        self.assertEqual(len(recipes), 62 + self.iris_assigned)
         self.assertEqual(
             sorted(number for recipe in recipes for number in recipe["patches"]),
             sorted(
@@ -47,7 +47,7 @@ class MatrixTest(unittest.TestCase):
             Counter(recipe["backend_policy"] for recipe in recipes),
             dict(
                 cpu_and_default_gpu=11,
-                selected_device=40 + self.iris_assigned,
+                selected_device=41 + self.iris_assigned,
                 native_host_only=5,
                 pure_host=2,
                 gpu_only=3,
@@ -69,7 +69,7 @@ class MatrixTest(unittest.TestCase):
 
     def test_full_plan_preserves_real_backend_policies_and_pure_commands(self):
         result = self.plan(all_primary=True)
-        self.assertEqual(len(result["cases"]), 102 + 2 * self.iris_assigned)
+        self.assertEqual(len(result["cases"]), 104 + 2 * self.iris_assigned)
         self.assertEqual(result["supplemental_fixture_count"], 2)
         self.assertEqual(len(result["pure_commands"]), 2)
         self.assertEqual(sum(case["gui"] for case in result["cases"]), 8)
@@ -115,7 +115,7 @@ class MatrixTest(unittest.TestCase):
         result = matrix.plan(
             self.build, gpu_device=other, default_gpu_device=self.gpu, all_primary=True, label="unit-two-gpus"
         )
-        self.assertEqual(len(result["cases"]), 103 + 2 * self.iris_assigned)
+        self.assertEqual(len(result["cases"]), 105 + 2 * self.iris_assigned)
         preflight = [case for case in result["cases"] if case["test"] == "houdini_patch_matrix_devices_smoke.py"]
         self.assertEqual({case["device"] for case in preflight}, {self.gpu, other})
         for case in result["cases"]:
@@ -160,6 +160,25 @@ class MatrixTest(unittest.TestCase):
         self.assertEqual(result["selected_fixture_count"], 1)
         self.assertLess(names.index("houdini_subdivision_smoke.py"), names.index("core_subdivision_smoke.py"))
         self.assertLess(names.index("core_subdivision_smoke.py"), names.index("houdini_subdivision_ipr_smoke.py"))
+
+    def test_subdivision_topology_cache_runs_on_the_selected_devices_with_separate_reports(self):
+        name = "houdini_subdivision_topology_cache_smoke.py"
+        result = self.plan(selection=[name])
+        self.assertEqual(result["selected_fixture_count"], 1)
+        self.assertEqual(result["supplemental_fixture_count"], 0)
+        self.assertEqual(result["pure_commands"], [])
+        self.assertEqual(len(result["cases"]), 3)
+        cases = [case for case in result["cases"] if case["test"] == name]
+        self.assertEqual([case["device"] for case in cases], ["CPU", self.gpu])
+        for case, backend in zip(cases, ("CPU", "OPTIX"), strict=True):
+            report = f"artifacts/patch-matrix/unit-plan/subdivision-topology-cache-{backend}/report.json"
+            self.assertEqual(case["backend_policy"], "selected_device")
+            self.assertEqual(case["actual_device_scope"], [case["device"]])
+            self.assertEqual(case["execution"], "worker")
+            self.assertFalse(case["gui"])
+            self.assertEqual(case["patches"], [121])
+            self.assertEqual(case["report"], report)
+            self.assertEqual(case["arguments"], ["--report", str(ROOT / report)])
 
     def test_image_iris_keeps_each_device_report_and_render_directory_separate(self):
         name = "core_image_iris_smoke.py"

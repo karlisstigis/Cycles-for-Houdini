@@ -273,7 +273,7 @@ CH_FIELDS(GeometryMotion, v.positions, v.radii)
 CH_FIELDS(NamedAttribute, v.name, v.components, v.values, v.motion_values, v.motion_complete)
 CH_FIELDS(UniformAttribute, v.name, v.components, v.value, v.motion_values, v.motion_complete)
 CH_FIELDS(SubdivisionSettings, v.type, v.space, v.boundary, v.fvar, v.dicing_rate, v.max_level, v.triangle_limit,
-          v.adaptive, v.use_creases)
+          v.adaptive, v.use_creases, v.cache_topology)
 CH_FIELDS(SubdivisionData, v.settings, v.face_sizes, v.face_corners, v.face_material, v.face_provenance, v.edge_creases,
           v.vertex_creases)
 CH_FIELDS(MeshNominalPose, v.positions, v.corner_normals, v.corner_uv, v.corner_colors, v.attributes)
@@ -306,7 +306,7 @@ CH_FIELDS(CameraData, v.pixel_aspect, v.transform, v.short_axis_fov, v.near_clip
           v.ortho_scale, v.aperture_size, v.focus_distance, v.aperture_rotation, v.aperture_ratio, v.aperture_blades,
           v.image_iris, v.image_iris_method, v.image_iris_color, v.dof_motion, v.intrinsic_motion, v.shutter_frames,
           v.motion, v.sampling, v.panorama, v.source_diagnostics)
-CH_FIELDS(DicingSettings, v.offscreen_scale, v.camera, v.update, v.refresh_revision)
+CH_FIELDS(DicingSettings, v.offscreen_scale, v.camera, v.update, v.refresh_revision, v.topology_cache_mib)
 CH_FIELDS(Crop, v.x, v.y, v.width, v.height)
 CH_FIELDS(DenoiseSettings, v.enabled, v.method, v.use_gpu, v.quality, v.prefilter, v.start_sample, v.passes,
           v.upscale_factor)
@@ -365,11 +365,15 @@ CH_FIELDS(SessionStatus, v.image_iris_preparations, v.image_iris_table_bytes, v.
           v.shader_reuses, v.mesh_variant_resources, v.mesh_variant_bytes, v.retained_mesh_source_bytes,
           v.mesh_family_resources, v.mesh_family_members, v.mesh_variant_bindings, v.mesh_metric_records,
           v.displacement_rebuilds, v.mesh_refits, v.subdivision_control_faces, v.subdivision_vertices,
-          v.subdivision_triangles, v.subdivision_tessellations, v.volume_vector_merges, v.volume_vector_fields,
-          v.volume_vector_source_bytes, v.volume_ray_marching, v.color_update_pending, v.color_epoch,
-          v.color_target_epoch, v.denoiser, v.denoise_device_id, v.engine_nested_dielectrics,
-          v.dielectric_priority_objects, v.dielectric_priority_min, v.dielectric_priority_max,
-          v.nested_probe_unresolved, v.nested_stack_depth_clamped, v.nested_stack_depth)
+          v.subdivision_triangles, v.subdivision_tessellations, v.subdivision_topology_cache_hits,
+          v.subdivision_topology_cache_misses, v.subdivision_topology_cache_admissions,
+          v.subdivision_topology_cache_evictions, v.subdivision_topology_cache_oversized,
+          v.subdivision_topology_cache_entries, v.subdivision_topology_cache_bytes,
+          v.subdivision_topology_cache_budget_bytes, v.subdivision_topology_cache_active_retired_bytes,
+          v.volume_vector_merges, v.volume_vector_fields, v.volume_vector_source_bytes, v.volume_ray_marching,
+          v.color_update_pending, v.color_epoch, v.color_target_epoch, v.denoiser, v.denoise_device_id,
+          v.engine_nested_dielectrics, v.dielectric_priority_objects, v.dielectric_priority_min,
+          v.dielectric_priority_max, v.nested_probe_unresolved, v.nested_stack_depth_clamped, v.nested_stack_depth)
 CH_FIELDS(BufferCopyDiagnostic, v.calls, v.requested_bytes, v.host_seconds)
 CH_FIELDS(DeviceUpdateMemoryDevice, v.id, v.physical_id, v.backend, v.description, v.start_bytes, v.peak_bytes,
           v.end_bytes, v.max_build_temp_bytes, v.max_build_temp_allocation_bytes, v.build_count,

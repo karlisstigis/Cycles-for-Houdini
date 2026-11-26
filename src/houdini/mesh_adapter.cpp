@@ -390,7 +390,8 @@ void subdivision_identifiers(std::vector<std::int64_t> &values, const Subdivisio
   values.insert(values.end(),
                 {std::int64_t(settings.type), std::int64_t(settings.space), std::int64_t(settings.boundary),
                  std::int64_t(settings.fvar), std::bit_cast<std::int32_t>(settings.dicing_rate), settings.max_level,
-                 std::int64_t(settings.triangle_limit), settings.adaptive, settings.use_creases});
+                 std::int64_t(settings.triangle_limit), settings.adaptive, settings.use_creases,
+                 settings.cache_topology});
 }
 std::string subdivision_signature(const SubdivisionSettings &settings) {
   if (settings.type == SubdivisionType::None)

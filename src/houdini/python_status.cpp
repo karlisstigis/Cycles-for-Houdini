@@ -56,6 +56,15 @@ py::dict python_status_value(const SessionStatus &s, const PythonStatusExtractio
   result["subdivision_vertices"] = s.subdivision_vertices;
   result["subdivision_triangles"] = s.subdivision_triangles;
   result["subdivision_tessellations"] = s.subdivision_tessellations;
+  result["subdivision_topology_cache_hits"] = s.subdivision_topology_cache_hits;
+  result["subdivision_topology_cache_misses"] = s.subdivision_topology_cache_misses;
+  result["subdivision_topology_cache_admissions"] = s.subdivision_topology_cache_admissions;
+  result["subdivision_topology_cache_evictions"] = s.subdivision_topology_cache_evictions;
+  result["subdivision_topology_cache_oversized"] = s.subdivision_topology_cache_oversized;
+  result["subdivision_topology_cache_entries"] = s.subdivision_topology_cache_entries;
+  result["subdivision_topology_cache_bytes"] = s.subdivision_topology_cache_bytes;
+  result["subdivision_topology_cache_budget_bytes"] = s.subdivision_topology_cache_budget_bytes;
+  result["subdivision_topology_cache_active_retired_bytes"] = s.subdivision_topology_cache_active_retired_bytes;
   result["image_iris_preparations"] = s.image_iris_preparations;
   result["image_iris_table_bytes"] = s.image_iris_table_bytes;
   result["mesh_family_resources"] = s.mesh_family_resources;

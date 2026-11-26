@@ -35,8 +35,9 @@ inline bool same_mesh_geometry(const MeshData &a, const MeshData &b) {
   if (a.subdivision) {
     const auto &x = *a.subdivision;
     const auto &y = *b.subdivision;
-    if (!mesh_payload_equal(std::tie(x.settings, x.face_sizes, x.face_corners, x.edge_creases, x.vertex_creases),
-                            std::tie(y.settings, y.face_sizes, y.face_corners, y.edge_creases, y.vertex_creases)))
+    if (!mesh_payload_equal(subdivision_render_settings(x.settings), subdivision_render_settings(y.settings)) ||
+        !mesh_payload_equal(std::tie(x.face_sizes, x.face_corners, x.edge_creases, x.vertex_creases),
+                            std::tie(y.face_sizes, y.face_corners, y.edge_creases, y.vertex_creases)))
       return false;
   }
   return !a.nominal_pose || mesh_payload_equal(std::tie(a.nominal_pose->positions, a.nominal_pose->corner_normals),
@@ -194,18 +195,26 @@ inline bool refresh_mesh_shading(ccl::Mesh &mesh, const MeshData &source, bool g
                                  std::span<const float> islands, std::span<const float> pointiness, bool bound) {
   if (mesh.position_is_modified() || mesh.triangles_is_modified() || mesh.need_tessellation())
     return false;
-  if (source.subdivision && (!mesh.subdivision_shading_samples || !mesh.subdivision_shading_samples->ready ||
-                             mesh.subdivision_shading_samples->vertices.size() != mesh.num_verts() ||
-                             mesh.subdivision_shading_samples->triangles.size() != mesh.num_triangles()))
-    return false;
+  const auto *samples = mesh.subdivision_shading_samples.get();
+  const bool replay = samples && samples->ready && samples->vertices.size() == mesh.num_verts() &&
+                      samples->triangles.size() == mesh.num_triangles();
+  const auto keep_derived_field = [&](ccl::AttributeStandard field) {
+    // These three bounded fields depend on the retained mesh. Keep their
+    // completed interpolation if the current surface stops requesting it.
+    return source.subdivision && bound && !replay &&
+           (field == ccl::ATTR_STD_GENERATED || field == ccl::ATTR_STD_POINTINESS ||
+            field == ccl::ATTR_STD_RANDOM_PER_ISLAND);
+  };
   auto &target = source.subdivision ? mesh.subd_attributes : mesh.attributes;
   ccl::AttributeSet candidate(&mesh, source.subdivision ? ccl::ATTR_PRIM_SUBD : ccl::ATTR_PRIM_GEOMETRY);
   fill_mesh_shading(candidate, mesh, source, bound && generated, vertices, bound ? islands : std::span<const float>{},
                     bound ? pointiness : std::span<const float>{});
   std::set<std::string> changed;
+  bool interpolate = false;
   for (auto it = target.attributes.begin(); it != target.attributes.end();) {
     const auto *replacement = candidate.find_matching(*it);
-    if (managed_mesh_shading(*it) && (!replacement || replacement->num_motion_steps() != it->num_motion_steps())) {
+    if (managed_mesh_shading(*it) &&
+        (replacement ? replacement->num_motion_steps() != it->num_motion_steps() : !keep_derived_field(it->std))) {
       changed.insert(it->name.string());
       if (source.subdivision)
         mesh.attributes.remove(it->name);
@@ -214,7 +223,7 @@ inline bool refresh_mesh_shading(ccl::Mesh &mesh, const MeshData &source, bool g
     } else
       ++it;
   }
-  if (!bound || !generated)
+  if ((!bound || !generated) && !keep_derived_field(ccl::ATTR_STD_GENERATED))
     mesh.attributes.remove(ccl::ATTR_STD_GENERATED_TRANSFORM);
   for (auto &field : candidate.attributes) {
     // Volume samples use the base geometry attribute map, even with subdivision.
@@ -225,12 +234,13 @@ inline bool refresh_mesh_shading(ccl::Mesh &mesh, const MeshData &source, bool g
     const auto *old = target.find_matching(field);
     const bool flags_changed = old && old->flags != field.flags;
     auto *resolved = target.add_from(std::move(field));
-    resolved->modified |= flags_changed;
+    resolved->modified |= flags_changed || (source.subdivision && !mesh.attributes.find(resolved->name));
     if (resolved->modified)
       changed.insert(resolved->name.string());
+    interpolate |= resolved->modified;
   }
   if (source.subdivision) {
-    if (!changed.empty() && !mesh.interpolate_subdivision_shading())
+    if (interpolate && !mesh.interpolate_subdivision_shading())
       return false;
     const auto &materials = source.subdivision->face_material;
     auto &coarse = mesh.get_subd_shader();
@@ -241,9 +251,11 @@ inline bool refresh_mesh_shading(ccl::Mesh &mesh, const MeshData &source, bool g
       coarse[face] = slot;
     }
     if (modified) {
+      if (!replay)
+        return false;
       mesh.tag_subd_shader_modified();
       for (std::size_t triangle = 0; triangle < mesh.num_triangles(); ++triangle) {
-        const auto face = mesh.subdivision_shading_samples->triangles[triangle].face;
+        const auto face = samples->triangles[triangle].face;
         if (face < 0 || std::size_t(face) >= coarse.size())
           throw std::logic_error("Retained triangle has no owned control face");
         mesh.get_shader()[triangle] = coarse[std::size_t(face)];

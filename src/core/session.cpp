@@ -271,6 +271,25 @@ void RenderSession::Impl::configure_denoising(const DenoiseSettings &settings, c
   store->denoise_device_id = policy.device_id;
 }
 
+bool RenderSession::Impl::pending_camera_tessellation() const {
+  bool pending = false;
+  for (const auto &[key, record] : meshes) {
+    if (!record.render || record.sharing_family->leader != key)
+      continue;
+    for (const auto &entry : record.render->subdivision_metrics) {
+      const auto &metric = entry.second;
+      std::lock_guard lock(metric->mutex);
+      if (!metric->ready) {
+        // Do not interrupt unfinished geometry independent of the camera.
+        if (!record.pixel_adaptive_subdivision())
+          return false;
+        pending = true;
+      }
+    }
+  }
+  return pending;
+}
+
 void RenderSession::Impl::cancel_engine() {
   const auto started = Clock::now();
   ++session_cancel_calls;
@@ -297,6 +316,11 @@ void RenderSession::Impl::cancel_engine() {
     cancel_output_delivery_seconds = store->diagnostics.output_delivery_seconds - output_seconds;
     cancel_display_conversion_seconds = store->diagnostics.display_conversion_seconds - display_seconds;
   }
+}
+
+void RenderSession::Impl::set_topology_cache_limit(std::uint32_t mib) {
+  if (config.interactive)
+    session->scene->geometry_manager->set_subdivision_osd_cache_bytes(std::size_t(mib) * 1024 * 1024);
 }
 
 RenderSession::Impl::Impl(const SessionConfig &c, std::shared_ptr<const ColorConfiguration> color)
@@ -368,6 +392,7 @@ RenderSession::Impl::Impl(const SessionConfig &c, std::shared_ptr<const ColorCon
   }
 #endif
   session = std::make_unique<ccl::Session>(params, scene_params);
+  set_topology_cache_limit(dicing_settings.topology_cache_mib);
   if (params.use_auto_tile)
     session->full_buffer_written_cb = [this](ccl::string_view filename) {
       // Stock Cycles spills multi-tile pass buffers to disk instead of calling
@@ -602,12 +627,9 @@ std::uint64_t RenderSession::apply(const SceneUpdate &incoming, bool reuse_if_un
       return true;
     };
     const bool refine_camera = !hold_dicing && (!u.defer_camera_subdivision || force_dicing) &&
-                               dicing_projection_changed &&
-                               std::any_of(i.meshes.begin(), i.meshes.end(), [](const auto &item) {
-                                 const auto &r = item.second;
-                                 return r.source && r.source->subdivision && r.source->subdivision->settings.adaptive &&
-                                        r.source->subdivision->settings.space == SubdivisionSpace::Pixel;
-                               });
+                               (dicing_projection_changed || i.suspended_camera_refinement) &&
+                               std::any_of(i.meshes.begin(), i.meshes.end(),
+                                           [](const auto &item) { return item.second.pixel_adaptive_subdivision(); });
     const auto background_emission = u.background.value_or(i.background_definition.value_or(Float3{}));
     bool world_surface_emission = background_emission.x > 0 || background_emission.y > 0 || background_emission.z > 0;
     if (effective_world.graph) {
@@ -641,6 +663,9 @@ std::uint64_t RenderSession::apply(const SceneUpdate &incoming, bool reuse_if_un
       prepared_linking = prepare_linking(linking, i.linking_plan, &active, world_active);
     }
     const bool linking_plan_changed = prepared_linking && *prepared_linking != i.linking_plan;
+    const auto dicing_render_state = [](const DicingSettings &d) {
+      return std::tie(d.offscreen_scale, d.camera, d.update, d.refresh_revision);
+    };
     const bool unchanged =
         reuse_if_unchanged && !iris_changed && !linking_settings_changed && !linking_plan_changed && !refine_camera &&
         i.generation && !i.color_update_pending &&
@@ -653,7 +678,8 @@ std::uint64_t RenderSession::apply(const SceneUpdate &incoming, bool reuse_if_un
         std::all_of(u.lights.begin(), u.lights.end(), light_same) &&
         std::all_of(u.objects.begin(), u.objects.end(), object_same) && poses_same() && attributes_same() &&
         attribute_poses_same() && (!u.camera || i.camera_definition == u.camera) &&
-        (!u.dicing || i.dicing_settings == *u.dicing) && (!u.background || i.background_definition == u.background) &&
+        (!u.dicing || dicing_render_state(i.dicing_settings) == dicing_render_state(*u.dicing)) &&
+        (!u.background || i.background_definition == u.background) &&
         (!u.denoising || *u.denoising == i.config.denoising) && (!u.rendering || *u.rendering == i.rendering) &&
         (!u.passes || *u.passes == i.config.passes) && !aovs_changed && !lightgroups_changed && !crypto_changed &&
         (!u.background_lightgroup || i.background_lightgroup_definition == u.background_lightgroup) &&
@@ -670,6 +696,10 @@ std::uint64_t RenderSession::apply(const SceneUpdate &incoming, bool reuse_if_un
         i.source_diagnostics = *u.source_diagnostics;
       std::lock_guard frame_lock(i.store->mutex);
       if (!i.store->interrupted && i.store->error.empty()) {
+        if (u.dicing && u.dicing->topology_cache_mib != i.dicing_settings.topology_cache_mib) {
+          i.set_topology_cache_limit(u.dicing->topology_cache_mib);
+          i.dicing_settings.topology_cache_mib = u.dicing->topology_cache_mib;
+        }
         ++i.unchanged_reuses;
         i.direct_attribute_updates = 0;
         i.expanded_attribute_updates = 0;
@@ -730,15 +760,31 @@ std::uint64_t RenderSession::apply(const SceneUpdate &incoming, bool reuse_if_un
         });
     const auto started = Clock::now();
     profile.mark("update_setup");
+    const bool follows_render_camera = i.config.interactive && i.config.persistent_updates &&
+                                       !prepared.desired_dicing.camera && !hold_dicing && !force_dicing;
+    const bool camera_refinement =
+        follows_render_camera && refine_camera && u.meshes.empty() && u.volumes.empty() && u.curves.empty() &&
+        u.points.empty() && u.objects.empty() && u.object_poses.empty() && u.object_attributes.empty() &&
+        u.deleted_geometry.empty() && u.deleted_objects.empty() && effective_materials.empty() &&
+        prepared_bindings.empty() && !u.motion_blur && !prepared.recalculate_dicing;
     Impl::EngineUpdatePlan plan{.prepared_linking = std::move(prepared_linking),
                                 .world_surface_emission = world_surface_emission,
                                 .linking_plan_changed = linking_plan_changed,
                                 .reset_denoising_history = reset_denoising_history,
                                 .graph_preparation = graph_preparation,
                                 .metadata_dirty = metadata_dirty,
+                                .automatic_camera_refinement = camera_refinement,
                                 .started = started};
     const auto transaction = [&]() { i.mutate_engine(u, prepared, plan, profile); };
     mutation_started = true;
+    if (follows_render_camera && i.automatic_camera_refinement && u.camera && dicing_projection_changed &&
+        i.state != SessionState::Cancelled && !i.session->progress.get_error() && i.pending_camera_tessellation()) {
+      // Scene synchronization interrupts path tracing. An adaptive geometry
+      // update needs the normal cancellation join before we can replace it.
+      i.cancel_engine();
+      i.suspended_camera_refinement = true;
+      plan.cancelled_camera_refinement = true;
+    }
     i.run_engine_transaction(transaction);
     i.last_update_seconds = seconds(started);
     profile.mark("finish");
@@ -1049,6 +1095,18 @@ SessionStatus RenderSession::status() const {
   s.mesh_refits = i.mesh_refits;
   s.volume_vector_merges = i.volume_vector_merges;
   s.subdivision_tessellations = i.subdivision_tessellations.load();
+  if (i.session) {
+    const auto cache = i.session->scene->geometry_manager->subdivision_osd_cache_stats();
+    s.subdivision_topology_cache_hits = cache.hits;
+    s.subdivision_topology_cache_misses = cache.misses;
+    s.subdivision_topology_cache_admissions = cache.admissions;
+    s.subdivision_topology_cache_evictions = cache.evictions;
+    s.subdivision_topology_cache_oversized = cache.oversized;
+    s.subdivision_topology_cache_entries = cache.entries;
+    s.subdivision_topology_cache_bytes = cache.retained_bytes;
+    s.subdivision_topology_cache_budget_bytes = cache.budget_bytes;
+    s.subdivision_topology_cache_active_retired_bytes = cache.active_retired_bytes;
+  }
   std::set<ccl::Geometry *> counted_geometry;
   std::set<const MeshData *> counted_sources;
   std::unordered_set<const Impl::MeshFamilyMembers *> counted_families;

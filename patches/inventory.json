@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "engine_commit": "77edc33168528e06b35540452bce5cce6068c3aa",
-  "patch_count": 116,
+  "patch_count": 117,
   "evidence_scope": "Maintain source-derived contracts for every locked production renderer patch.\n\nFile overlap is dependency evidence, not a claim of minimal semantic dependency.\nBehavioral fixtures are related existing assertions; patch replay is a\ndeterministic source consistency check for every entry. Backend certification and\nfeature-off image comparisons remain explicit release evidence.\n",
   "patches": [
     {
@@ -5634,6 +5634,80 @@
           "status": "No execution asserted by this source inventory",
           "required_cli_arguments": [
             "--output"
+          ],
+          "verified_reference_subprocess_context": false,
+          "launch_contract": "Use the verified current runtime launcher and supply required arguments; GUI fixtures require the GUI runner",
+          "historical_evidence": "docs/upstream-patches.md is retained context; it does not qualify the current build"
+        },
+        "qualification": "Related behavioral coverage; this inventory does not report an execution or an individual mutation test"
+      },
+      "retirement_condition": "Retire only when the pinned upstream implements this contract and removing this patch plus replaying successors passes full-source comparison and the related fixture on affected production backends, including the feature-off control."
+    },
+    {
+      "number": 121,
+      "path": "patches/0121-Reuse-OpenSubdiv-setup-within-a-bounded-IPR-scene-ca.patch",
+      "sha256": "0c528fe62e4654cb09a97cf0020b4e0755a6a26285d7d80698917c1bd56922df",
+      "purpose": "Retain exact OpenSubdiv topology and patch setup for repeatedly diced IPR meshes under a per-scene memory budget, with live positions and face-varying invalidation.",
+      "affected_files": [
+        "src/scene/geometry.cpp",
+        "src/scene/geometry.h",
+        "src/scene/mesh.h",
+        "src/scene/mesh_subdivision.cpp",
+        "src/subd/dice.h",
+        "src/subd/interpolation.cpp",
+        "src/subd/osd.cpp",
+        "src/subd/osd.h"
+      ],
+      "dependencies": {
+        "replay_order": "Apply after every preceding locked patch",
+        "shared_file_predecessors": [
+          8,
+          9,
+          15,
+          18,
+          24,
+          25,
+          27,
+          28,
+          30,
+          33,
+          35,
+          40,
+          49,
+          50,
+          51,
+          52,
+          57,
+          80,
+          93,
+          95,
+          103,
+          104,
+          106,
+          110,
+          111,
+          115,
+          118
+        ],
+        "evidence": "Source diff path intersection; minimal semantic dependencies have not been established"
+      },
+      "backend_scope": [
+        "Host scene/integrator path used by CPU/GPU"
+      ],
+      "regression": {
+        "command": [
+          "python",
+          "scripts/verify-upstream-patches.py"
+        ],
+        "related_fixture": "tests/houdini_subdivision_topology_cache_smoke.py",
+        "fixture_sha256": "bbef9319fe783b5a1cab8d17a39853775de929bde6818ad299ac206dc9ee3f91",
+        "fixture_contract": "Render real OBJ subdivision edits through a persistent Houdini IPR worker.",
+        "assert_statements": 71,
+        "unittest_assert_calls": 0,
+        "execution": {
+          "status": "No execution asserted by this source inventory",
+          "required_cli_arguments": [
+            "--report"
           ],
           "verified_reference_subprocess_context": false,
           "launch_contract": "Use the verified current runtime launcher and supply required arguments; GUI fixtures require the GUI runner",

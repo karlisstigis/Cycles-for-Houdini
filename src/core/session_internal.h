@@ -62,6 +62,10 @@ struct RenderSession::Impl {
     std::vector<float> island_random; // Canonical face values, shared by render variants.
     std::vector<float> pointiness;    // Canonical vertex values before render seams.
     bool islands{}, has_pointiness{};
+    bool pixel_adaptive_subdivision() const {
+      return source && source->subdivision && source->subdivision->settings.adaptive &&
+             source->subdivision->settings.space == SubdivisionSpace::Pixel;
+    }
     // Logical binding contexts stay independent. Only the engine geometry
     // and its complete shader demand are shared by a compatible family.
     std::shared_ptr<const MeshFamilyMembers> sharing_family;
@@ -187,7 +191,12 @@ struct RenderSession::Impl {
   std::uint64_t image_iris_preparations{};
   std::optional<CameraData> dicing_camera_definition;
   DicingSettings dicing_settings;
+  void set_topology_cache_limit(std::uint32_t mib);
   float applied_offscreen_scale{1};
+  bool automatic_camera_refinement{};
+  // A coarse navigation preview must be refined even if the user returns
+  // to the projection the cancelled tessellation had already accepted.
+  bool suspended_camera_refinement{};
   std::optional<bool> transparent_background_definition, transparent_glass_definition, motion_blur_definition;
   std::vector<std::string> render_device_ids;
   std::optional<float> transparent_roughness_definition;
@@ -210,6 +219,7 @@ struct RenderSession::Impl {
                                           std::optional<bool> motion_blur = std::nullopt) const;
   void configure_denoising(const DenoiseSettings &settings, const DenoisePolicy &policy, bool force_passes = false);
   void cancel_engine();
+  bool pending_camera_tessellation() const;
   void validate(const SceneUpdate &u, std::map<std::string, Float3> &volume_bounds,
                 const std::map<std::string, ShaderGraphRequirements> &graph_requirements,
                 const std::map<BindingKey, ShaderGraphRequirements> &recovered, const VolumeRecovery &volume_fallbacks,
@@ -263,12 +273,13 @@ struct RenderSession::Impl {
                  std::span<const int> generated_vertices = {}, std::span<const float> islands = {},
                  std::span<const float> pointiness = {}, const DisplacementFields &displacement_fields = {},
                  const std::vector<int> &displacement_classes = {}, const std::vector<ccl::Shader *> *shared = nullptr,
-                 bool shared_generated = false, bool adaptive_update = true);
+                 bool shared_generated = false);
   static std::shared_ptr<const MeshData> displacement_seams(const std::shared_ptr<const MeshData> &source,
                                                             std::vector<int> &generated_vertices,
                                                             const DisplacementFields &used,
                                                             const std::vector<int> &classes);
-  void sync_mesh_variants(const std::set<std::string> &changed, bool refresh = false);
+  void sync_mesh_variants(const std::set<std::string> &changed, bool refresh,
+                          bool defer_interrupted_camera_subdivision);
   void recover_displacement_motion(std::set<std::string> &changed);
   void update_volume(std::shared_ptr<const VolumeData> data, const Float3 &motion_bounds, VolumeVectors vectors);
   template <typename Data>
@@ -433,6 +444,8 @@ struct RenderSession::Impl {
     bool reset_denoising_history{};
     double graph_preparation{};
     bool metadata_dirty{};
+    bool automatic_camera_refinement{};
+    bool cancelled_camera_refinement{};
     Clock::time_point started{};
   };
 

@@ -38,6 +38,11 @@ def layout():
     assert node.parm("tessellation_update").containingFolders() == ("Rendering", "IPR Settings")
     assert node.parm("tessellation_update").parmTemplate().label() == "Adaptive Subdivision Update"
     assert node.parm("refresh_tessellation").containingFolders() == ("Rendering", "IPR Settings")
+    cache = node.parm("ipr_topology_cache_mib")
+    assert cache.containingFolders() == ("Rendering", "Geometry", "Subdivision")
+    assert cache.parmTemplate().label() == "IPR Topology Cache Limit (MiB)"
+    assert cache.parmTemplate().defaultValue() == (512,)
+    assert "Zero disables and clears the cache" in cache.parmTemplate().help()
     # Refit Meshes While Interacting: IPR Settings, off by default.
     assert node.parm("ipr_refit_meshes").containingFolders() == ("Rendering", "IPR Settings")
     assert node.parm("ipr_refit_meshes").parmTemplate().label() == "Refit Meshes While Interacting"
@@ -56,6 +61,9 @@ group.replace(scene_indices, scene)
 adaptive = group.find("tessellation_update")
 adaptive.setLabel("Tessellation Update")
 group.replace("tessellation_update", adaptive)
+cache = group.find("ipr_topology_cache_mib")
+group.remove("ipr_topology_cache_mib")
+group.append(cache)
 indices = group.findIndices("ipr_samples")[:-1]
 section = group.entryAtIndices(indices)
 group.remove(indices)
@@ -81,6 +89,7 @@ node.setParms(
         artist_note="preserved custom value",
     )
 )
+node.parm("ipr_topology_cache_mib").setExpression('ch("samples") * 2', hou.exprLanguage.Hscript)
 node.parm("ipr_samples").setExpression('ch("samples") * 2', hou.exprLanguage.Hscript)
 node.parm("ipr_min_samples").setExpression('ch("min_samples")', hou.exprLanguage.Hscript)
 hou.takes.rootTake().addChildTake("SavedLayoutTake")
@@ -95,7 +104,16 @@ for frame, value in ((1, 0.073), (9, 0.021)):
 def channels():
     return {
         name: node.parm(name).asCode()
-        for name in (*names, "samples", "min_samples", "tessellation_update", "artist_note", "picture", "take")
+        for name in (
+            *names,
+            "samples",
+            "min_samples",
+            "tessellation_update",
+            "ipr_topology_cache_mib",
+            "artist_note",
+            "picture",
+            "take",
+        )
     }
 
 
@@ -143,8 +161,9 @@ out.write_text(
                 "Saved per-node layouts move once; custom parameters, values, expressions and keyframes survive",
                 "HIP save/reload runs the OnLoaded update",
                 "Final Render sampling and tessellation controls retain their locations",
+                "The IPR topology cache budget appears in Subdivision with help and an authored channel survives migration",
             ],
-            folders={name: node.parm(name).containingFolders() for name in names},
+            folders={name: node.parm(name).containingFolders() for name in (*names, "ipr_topology_cache_mib")},
         ),
         indent=2,
     )

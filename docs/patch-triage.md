@@ -2,9 +2,9 @@
 
 Source-derived local triage of all locked patches. Upstreamable means a candidate requiring extraction/review/evidence, not upstream acceptance or an executed regression. Fork-permanent means maintained until an explicit renderer API/design replaces it. Nothing was transmitted externally.
 
-Every row is bound to its exact patch SHA-256 in [triage.json](../patches/triage.json). The [patch inventory](../patches/inventory.json) records touched files, overlap predecessors and related fixture contracts. The local fork contains all 116 listed commits.
+Every row is bound to its exact patch SHA-256 in [triage.json](../patches/triage.json). The [patch inventory](../patches/inventory.json) records touched files, overlap predecessors and related fixture contracts. The local fork contains all 117 listed commits.
 
-upstreamable: **80**, fork-permanent: **26**, integration-only: **10**.
+upstreamable: **80**, fork-permanent: **27**, integration-only: **10**.
 
 **Upstreamable** identifies a generic correction or optimization to extract and review. **Fork-permanent** means a maintained feature/API until an agreed replacement exists; it is not a claim that upstream will never want it. **Integration-only** contains host build/provider/owned-data/policy seams. All dispositions require the inventory retirement gate before removal: upstream equivalent, independent successor replay, affected backend checks and feature-off controls.
 
@@ -143,3 +143,4 @@ K33 parks the exact ramps-and-curves pair outside the production patch stack. Th
 | [0118](../patches/0118-Record-tracked-device-memory-per-device-for-every-sc.patch) | fix | upstreamable | The OptiX build temporary regression guard needs per-GPU whole-update peaks and actual temporary sizes that the lifetime peak cannot give. | Keep while the integration checks device memory per update and per physical GPU. |
 | [0119](../patches/0119-Keep-camera-lookup-tables-during-progressive-resolut.patch) | fix | upstreamable | A progressive resize changes camera matrices. Marking every socket dirtied unchanged iris and shutter tables and recopied the shared lookup buffer. | Retain for progressive IPR and isolate a stock Cycles reproducer for the shutter table before proposing the correction. |
 | [0120](../patches/0120-Keep-exact-device-ranges-separate-from-whole-host-up.patch) | fix | upstreamable | Generic range requests can contain stale host bytes outside the requested offsets. An implicit full copy also makes light-tree partial upload statistics disagree with dispatch. | Retain exact ranges by default and explicit measured whole-host fallback only for known complete object and OptiX mirrors. Review production CPU, CUDA/OptiX and multi-device ownership and byte evidence before proposing upstream. |
+| [0121](../patches/0121-Reuse-OpenSubdiv-setup-within-a-bounded-IPR-scene-ca.patch) | feature/bounded-subdivision | fork-permanent | Adaptive camera dicing repeatedly constructs OpenSubdiv topology and patches. IPR can retain that setup under an explicit host memory budget after repeat dicing. | Maintain the opt-in scene cache with exact topology, crease and shutter-sampled face-varying validation and backend parity checks. |

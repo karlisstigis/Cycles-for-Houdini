@@ -326,6 +326,7 @@ struct SubdivisionSettings {
   std::uint64_t triangle_limit{}; // Optional per-mesh allocation guard; zero disables it.
   bool adaptive{true};            // False samples the limit surface at uniform subdivision levels.
   bool use_creases{true};
+  bool cache_topology{}; // Opt in to the IPR-only adaptive Catmull-Clark cache.
   bool operator==(const SubdivisionSettings &) const = default;
 };
 struct EdgeCrease {
@@ -640,6 +641,7 @@ struct DicingSettings {
   std::optional<CameraData> camera; // Empty follows the render camera.
   bool update{true};                // Automatic adaptive tessellation updates in IPR.
   std::uint64_t refresh_revision{}; // A changed revision requests one explicit update.
+  std::uint32_t topology_cache_mib{512};
   bool operator==(const DicingSettings &) const = default;
 };
 struct SessionConfig {
@@ -783,6 +785,11 @@ struct SessionStatus {
   std::uint64_t mesh_refits{};
   std::size_t subdivision_control_faces{}, subdivision_vertices{}, subdivision_triangles{};
   std::uint64_t subdivision_tessellations{};
+  std::uint64_t subdivision_topology_cache_hits{}, subdivision_topology_cache_misses{},
+      subdivision_topology_cache_admissions{}, subdivision_topology_cache_evictions{},
+      subdivision_topology_cache_oversized{};
+  std::size_t subdivision_topology_cache_entries{}, subdivision_topology_cache_bytes{},
+      subdivision_topology_cache_budget_bytes{}, subdivision_topology_cache_active_retired_bytes{};
   std::uint64_t volume_vector_merges{};                             // Cumulative demanded scalar-triplet assemblies.
   std::size_t volume_vector_fields{}, volume_vector_source_bytes{}; // Live derived CPU grids.
   bool volume_ray_marching{}; // Active session policy, including static volumes in a moving-volume scene.

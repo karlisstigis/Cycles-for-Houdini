@@ -116,7 +116,8 @@
     "117": "tests/houdini_sampled_instance_attribute_smoke.py",
     "118": "tests/houdini_device_update_memory_smoke.py",
     "119": "tests/core_image_iris_smoke.py",
-    "120": "tests/multi_device_range_fault_test.py"
+    "120": "tests/multi_device_range_fault_test.py",
+    "121": "tests/houdini_subdivision_topology_cache_smoke.py"
   },
   "purposes": {
     "0001-integration-build-hook.patch": "Attach the integration targets to the official engine build with its configured dependencies.",
@@ -175,6 +176,7 @@
     "0117-Write-the-values-of-every-object-with-attributes-whe.patch": "Correctness of kept attribute tables: write values of every object with attributes",
     "0118-Record-tracked-device-memory-per-device-for-every-sc.patch": "Telemetry: per-device whole-update tracked memory and OptiX build temporaries for every scene device update",
     "0119-Keep-camera-lookup-tables-during-progressive-resolut.patch": "Recompute camera ray matrices for progressive raster changes while retaining authored Image Iris and shutter lookup tables.",
-    "0120-Keep-exact-device-ranges-separate-from-whole-host-up.patch": "Exact device range transfers with explicit whole-host optimization for complete mirrors"
+    "0120-Keep-exact-device-ranges-separate-from-whole-host-up.patch": "Exact device range transfers with explicit whole-host optimization for complete mirrors",
+    "0121-Reuse-OpenSubdiv-setup-within-a-bounded-IPR-scene-ca.patch": "Retain exact OpenSubdiv topology and patch setup for repeatedly diced IPR meshes under a per-scene memory budget, with live positions and face-varying invalidation."
   }
 }

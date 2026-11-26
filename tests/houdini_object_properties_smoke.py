@@ -37,6 +37,14 @@ for name, x in [("editable", -1), ("unchanged", 1)]:
     panel = obj.parmTemplateGroup().find("cycles_subdivision").parmTemplates()
     assert [parm.name() for parm in panel[:2]] == ["cycles_subdivision_ipr", "cycles_subdivision_type"]
     assert obj.parm("cycles_subdivision_render_level").containingFolders()[0] == "Cycles"
+    subdivision_names = [parm.name() for parm in panel]
+    assert (
+        subdivision_names.index("cycles_subdivision_cache_topology")
+        == subdivision_names.index("cycles_subdivision_adaptive") + 1
+    )
+    cache = obj.parm("cycles_subdivision_cache_topology")
+    assert cache.eval() == 1 and cache.parmTemplate().label() == "Cache Subdivision Topology"
+    assert "IPR Topology Cache Limit" in cache.parmTemplate().help()
     panels = {
         "cycles_mask": ("Mask", ("cycles_shadow_catcher", "cycles_holdout")),
         "cycles_shadow_terminator": (
@@ -57,7 +65,7 @@ for name, x in [("editable", -1), ("unchanged", 1)]:
     assert "cycles_dielectric_priority" in [parm.name() for parm in shading.parmTemplates()], (
         "Dielectric Priority is its own Shading row"
     )
-    assert object_properties.properties_folder(obj.parmTemplateGroup()).tags()["cycles_properties_version"] == "22"
+    assert object_properties.properties_folder(obj.parmTemplateGroup()).tags()["cycles_properties_version"] == "23"
     assert obj.evalParm("cycles_blender_subdivision") == 1
     assert obj.evalParm("cycles_point_render_mode") == "auto"
     assert obj.parm("cycles_point_render_mode").parmTemplate().menuItems() == ("auto", "spheres", "gaussian_splats")
@@ -90,8 +98,13 @@ for parm in shading.parmTemplates():
 shading.setParmTemplates(flat)
 group.replace(group.findIndices("cycles_shading"), shading)
 group.remove("cycles_subdivision_ipr")
+group.remove("cycles_subdivision_cache_topology")
 obj.setParmTemplateGroup(group)
+obj.setParms(dict(cycles_subdivision_override=1, cycles_subdivision_adaptive=1))
+settings = dict(max_level=12, dicing_rate=1, triangle_limit=0)
+assert object_properties.subdivision_settings(obj, hou.time(), settings)["cache_topology"]
 assert object_properties.install(obj) and obj.evalParm("cycles_subdivision_ipr") == 1
+assert obj.evalParm("cycles_subdivision_cache_topology") == 1 and not object_properties.install(obj)
 assert obj.evalParm("cycles_subdivision_render_level") == 4
 assert obj.parm("cycles_subdivision_ipr_level").expression() == "1 + $F"
 assert obj.evalParm("cycles_caustics_caster") == 1 and obj.evalParm("cycles_shadow_catcher") == 1
@@ -111,7 +124,36 @@ obj.setParms(
     )
 )
 obj.parm("cycles_subdivision_ipr_level").deleteAllKeyframes()
-obj.setParms(dict(cycles_subdivision_ipr_level=1, cycles_subdivision_render_level=2))
+cache = obj.parm("cycles_subdivision_cache_topology")
+regular = ("cycles_subdivision_ipr_level", "cycles_subdivision_render_level")
+adaptive = (
+    "cycles_subdivision_space",
+    "cycles_subdivision_pixel_size",
+    "cycles_subdivision_edge_length",
+    "cycles_subdivision_fvar",
+    "cycles_subdivision_boundary",
+    "cycles_subdivision_use_creases",
+)
+for enabled in (False, True, False):
+    obj.parm("cycles_subdivision_adaptive").set(enabled)
+    obj.updateParmStates()
+    assert cache.isDisabled() != enabled and not cache.isHidden()
+    assert all(obj.parm(name).isHidden() == enabled for name in regular)
+    assert all(not obj.parm(name).isHidden() for name in adaptive)
+    assert obj.evalParm("cycles_subdivision_render_level") == 4
+    assert object_properties.subdivision_settings(obj, hou.time(), settings)["cache_topology"] == enabled
+    assert not object_properties.subdivision_settings(obj, hou.time(), settings, interactive=False)["cache_topology"]
+obj.setParms(dict(cycles_subdivision_adaptive=1, cycles_subdivision_cache_topology=0))
+assert not object_properties.subdivision_settings(obj, hou.time(), settings)["cache_topology"]
+obj.setParms(
+    dict(
+        cycles_subdivision_override=0,
+        cycles_subdivision_adaptive=0,
+        cycles_subdivision_cache_topology=1,
+        cycles_subdivision_ipr_level=1,
+        cycles_subdivision_render_level=2,
+    )
+)
 camera = hou.node("/obj").createNode("cam", "object_properties_camera")
 camera.setParms(dict(tz=5, projection=1, orthowidth=4))
 rop = hou.node("/out").createNode("cycles_ipr", "object_properties_rop")

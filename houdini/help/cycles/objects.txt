@@ -8,6 +8,8 @@ Enable Subdivision on each mesh that requires it. Levels IPR and Levels Render c
 
 Adaptive Subdivision chooses detail from projected pixel size or object-space edge length. The ROP sets the shared dicing rate, dicing camera, offscreen scale and limits. A triangle budget can reject a render when enabled. Check this limit if a dense asset fails during tessellation.
 
+Cache Subdivision Topology is enabled by default for adaptive Catmull-Clark in IPR. It reuses OpenSubdiv topology while Cycles recalculates the detail. Rendering > Geometry > Subdivision on the ROP sets the shared IPR Topology Cache Limit in MiB. Set it to zero to clear the session cache.
+
 == Instancing ==
 
 Render Packed Instances controls packed primitives in the SOP geometry. A string point attribute named `instance` references an OBJ or subnet by path. For a subnet, All Objects includes its members even when its display flag is off. Use the ROP object exclusion control to remove the original from the render while keeping copies.

@@ -1,0 +1,792 @@
+From 9785b7c709c610e46cff0928fa1c34cee7525c8a Mon Sep 17 00:00:00 2001
+From: Cycles Houdini engine authoring <engine@localhost>
+Date: Thu, 26 Nov 2026 04:31:36 +0000
+Subject: [PATCH] Reuse OpenSubdiv setup within a bounded IPR scene cache
+
+Rationale: Rebuilding Catmull-Clark topology and patch tables on repeated adaptive dicing can cost over a hundred milliseconds on dense control meshes.
+Contract: Reuse only exactly matching setup for opted-in adaptive meshes, evaluate live positions and primvars, and budget retained entries and active readers per scene.
+Tests: tests/houdini_subdivision_topology_cache_smoke.py, tests/houdini_subdivision_smoke.py
+---
+ src/scene/geometry.cpp         |  23 ++
+ src/scene/geometry.h           |  21 ++
+ src/scene/mesh.h               |  10 +
+ src/scene/mesh_subdivision.cpp |  36 ++-
+ src/subd/dice.h                |   2 +
+ src/subd/interpolation.cpp     |   3 +-
+ src/subd/osd.cpp               | 424 ++++++++++++++++++++++++++++++++-
+ src/subd/osd.h                 |  43 +++-
+ 8 files changed, 548 insertions(+), 14 deletions(-)
+
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 14635fe07a7ee19d96f3eb202d99c12cc1104e93..116236a9bb652b5e9023e9d81205e878e0ee1854 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -21,6 +21,7 @@
+ #include "scene/stats.h"
+ #include "scene/volume.h"
+ 
++#include "subd/osd.h"
+ #include "subd/split.h"
+ 
+ #ifdef WITH_OSL
+@@ -234,12 +235,33 @@ void Geometry::tag_update(Scene *scene, bool rebuild)
+ 
+ GeometryManager::GeometryManager()
+ {
++#ifdef WITH_OPENSUBDIV
++  subdivision_osd_cache = std::make_shared<SubdivisionOsdCache>();
++#endif
+   update_flags = UPDATE_ALL;
+   need_flags_update = true;
+ }
+ 
+ GeometryManager::~GeometryManager() = default;
+ 
++void GeometryManager::set_subdivision_osd_cache_bytes(const size_t bytes)
++{
++#ifdef WITH_OPENSUBDIV
++  subdivision_osd_cache->set_budget(bytes);
++#else
++  (void)bytes;
++#endif
++}
++
++SubdivisionOsdCacheStats GeometryManager::subdivision_osd_cache_stats() const
++{
++#ifdef WITH_OPENSUBDIV
++  return subdivision_osd_cache->stats();
++#else
++  return {};
++#endif
++}
++
+ void GeometryManager::update_interactive_motion(Scene *scene)
+ {
+   bool update = false;
+@@ -977,6 +999,7 @@ void GeometryManager::device_update(Device *device,
+         subd_params.max_level = mesh->get_subd_max_level();
+         subd_params.progress = &progress;
+         subd_params.triangle_limit = mesh->subdivision_triangle_limit;
++        subd_params.osd_cache = subdivision_osd_cache.get();
+         if (mesh->get_subd_adaptive_space() == Mesh::SUBDIVISION_ADAPTIVE_SPACE_PIXEL) {
+           subd_params.objecttoworld = mesh->get_subd_objecttoworld();
+           subd_params.camera = dicing_camera;
+diff --git a/src/scene/geometry.h b/src/scene/geometry.h
+index bb08fbd27eb20741a68a682b8bc02b7a4b7eccd0..f331f5bca55b86bcefee412940a37e8123e42ba8 100644
+--- a/src/scene/geometry.h
++++ b/src/scene/geometry.h
+@@ -28,6 +28,7 @@ class RenderStats;
+ class Scene;
+ class SceneParams;
+ class Shader;
++class SubdivisionOsdCache;
+ class Volume;
+ struct PackedBVH;
+ 
+@@ -227,6 +228,20 @@ class Geometry : public Node {
+ 
+ /* Geometry Manager */
+ 
++#define CYCLES_HOUDINI_HAS_SUBDIVISION_OSD_CACHE 1
++
++struct SubdivisionOsdCacheStats {
++  size_t budget_bytes = 0;
++  size_t retained_bytes = 0;
++  size_t active_retired_bytes = 0;
++  size_t entries = 0;
++  size_t hits = 0;
++  size_t misses = 0;
++  size_t admissions = 0;
++  size_t evictions = 0;
++  size_t oversized = 0;
++};
++
+ class GeometryManager {
+   uint32_t update_flags;
+ 
+@@ -273,6 +288,10 @@ class GeometryManager {
+   GeometryManager();
+   ~GeometryManager();
+ 
++  /* The host opts in for IPR. This budget can also be changed during a tessellation. */
++  void set_subdivision_osd_cache_bytes(size_t bytes);
++  SubdivisionOsdCacheStats subdivision_osd_cache_stats() const;
++
+   void update_interactive_motion(Scene *scene);
+ 
+   /* Device Updates */
+@@ -328,6 +347,8 @@ class GeometryManager {
+   size_t kept_num_geometry = 0;
+   vector<vector<ustring>> kept_object_names;
+   size_t kept_table_sizes[int(AttrKernelDataType::NUM)] = {};
++  std::shared_ptr<SubdivisionOsdCache> subdivision_osd_cache;
++
+   bool update_attributes_kept(Device *device, DeviceScene *dscene, Scene *scene, Progress &progress);
+ 
+   bool displace(Device *device, Scene *scene, Mesh *mesh, Progress &progress);
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index d66f5823a568b3e5202c84b4e0c655a847c40e26..8238bd718a50eab06cff9ad84633b3efa8ee397d 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -221,9 +221,19 @@ class Mesh : public Geometry {
+ 
+   unique_ptr<SubdParams> subd_params;
+ 
++ private:
++  friend class SubdivisionOsdCache;
++  void release_subdivision_osd_cache();
++  std::weak_ptr<SubdivisionOsdCache> subdivision_osd_cache_owner;
++  size_t subdivision_osd_cache_key = 0;
++  bool subdivision_osd_cache_enabled = false;
++
+  public:
+   /* Functions */
+   Mesh();
++  ~Mesh() override;
++
++  void set_subdivision_osd_cache_enabled(bool enabled);
+ 
+   void resize_mesh(const int numverts, const int numtris);
+   void resize_subd_faces(const int numfaces, const int numcorners);
+diff --git a/src/scene/mesh_subdivision.cpp b/src/scene/mesh_subdivision.cpp
+index 4e6437953531db60c3b4c10a59914831fd12d10b..030a63486401c7f936545da593e3f04cfa91c6cf 100644
+--- a/src/scene/mesh_subdivision.cpp
++++ b/src/scene/mesh_subdivision.cpp
+@@ -16,10 +16,41 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++Mesh::~Mesh()
++{
++  release_subdivision_osd_cache();
++}
++
++void Mesh::release_subdivision_osd_cache()
++{
++#ifdef WITH_OPENSUBDIV
++  if (const auto cache = subdivision_osd_cache_owner.lock()) {
++    cache->erase(subdivision_osd_cache_key);
++  }
++#endif
++  subdivision_osd_cache_owner.reset();
++  subdivision_osd_cache_key = 0;
++}
++
++void Mesh::set_subdivision_osd_cache_enabled(const bool enabled)
++{
++  if (subdivision_osd_cache_enabled && !enabled) {
++    release_subdivision_osd_cache();
++  }
++  subdivision_osd_cache_enabled = enabled;
++}
++
+ void Mesh::tessellate(SubdParams &params)
+ {
+   params.fixed = subdivision_fixed;
+   const int num_faces = get_num_subd_faces();
++#ifdef WITH_OPENSUBDIV
++  if (subdivision_osd_cache_key && (num_faces == 0 || params.fixed ||
++                                   subdivision_type != SUBDIVISION_CATMULL_CLARK))
++  {
++    release_subdivision_osd_cache();
++  }
++#endif
+ 
+   /* If there are no faces there is nothing to subdivide, and the required
+    * subd position attribute may not exist. */
+@@ -32,9 +63,8 @@ void Mesh::tessellate(SubdParams &params)
+   OsdData osd_data;
+ 
+   if (subdivision_type == SUBDIVISION_CATMULL_CLARK) {
+-    if (get_num_subd_faces()) {
+-      osd_data.build(osd_mesh);
+-    }
++    osd_data.build(osd_mesh, subdivision_osd_cache_enabled && !params.fixed ? params.osd_cache :
++                                                                            nullptr);
+   }
+   else
+ #endif
+diff --git a/src/subd/dice.h b/src/subd/dice.h
+index 0911a3641e087466059b3a918148f2e604007a7e..dc27ce25aad525e4d2ee844d6da6348c8254f9c0 100644
+--- a/src/subd/dice.h
++++ b/src/subd/dice.h
+@@ -22,6 +22,7 @@ class Mesh;
+ class Patch;
+ class SubdAttributeInterpolation;
+ class DiagSplit;
++class SubdivisionOsdCache;
+ 
+ struct SubdParams {
+   Mesh *mesh = nullptr;
+@@ -36,6 +37,7 @@ struct SubdParams {
+   Progress *progress = nullptr;
+   uint64_t triangle_limit = 0;
+   bool fixed = false;
++  SubdivisionOsdCache *osd_cache = nullptr;
+ 
+   SubdParams(Mesh *mesh_, bool ptex_ = false) : mesh(mesh_), ptex(ptex_) {}
+ };
+diff --git a/src/subd/interpolation.cpp b/src/subd/interpolation.cpp
+index e44bc99997571d39b90f9da9436c54558fc472ce..c947f42f20c08c6a074bdf4032a18cd017dfbce5 100644
+--- a/src/subd/interpolation.cpp
++++ b/src/subd/interpolation.cpp
+@@ -681,7 +681,8 @@ void SubdAttributeInterpolation::setup_attribute_type(const Attribute &subd_attr
+           if (&merged_fvar.attr == &subd_attr) {
+             if constexpr (std::is_same_v<typename T::Type, float2> ||
+                           std::is_same_v<typename T::Type, packed_float3>) {
+-              setup_attribute_corner_smooth<T>(mesh_attr, merged_fvar.channel, merged_fvar.values, merged_fvar.step);
++              setup_attribute_corner_smooth<T>(
++                  mesh_attr, merged_fvar.channel, merged_fvar.read_values(), merged_fvar.step);
+               interpolated = true;
+             }
+           }
+diff --git a/src/subd/osd.cpp b/src/subd/osd.cpp
+index 0404e1a2658cb2236540ae1d43a31bb555556ae3..3040e5e28a7885f9880a802df1c3408920c7911f 100644
+--- a/src/subd/osd.cpp
++++ b/src/subd/osd.cpp
+@@ -7,10 +7,19 @@
+ #  include "subd/osd.h"
+ 
+ #  include "scene/attribute.h"
++#  include "scene/geometry.h"
+ #  include "scene/mesh.h"
+ 
+ #  include "util/log.h"
+ 
++#  include <atomic>
++#  include <iterator>
++#  include <list>
++#  include <mutex>
++#  include <new>
++#  include <optional>
++#  include <unordered_map>
++
+ /* Specialization of TopologyRefinerFactory for OsdMesh */
+ 
+ namespace OpenSubdiv::OPENSUBDIV_VERSION::Far {
+@@ -311,12 +320,357 @@ bool OsdMesh::use_smooth_fvar() const
+   return false;
+ }
+ 
+-/* OsdData */
++/* Retained entries own only immutable setup data. A dicing pass pins an entry until its last
++ * patch or borrowed face-varying value has been consumed. */
++struct OsdCacheEntry {
++  struct Charge {
++    std::shared_ptr<std::atomic<size_t>> total;
++    size_t bytes = 0;
++    ~Charge()
++    {
++      if (total) {
++        total->fetch_sub(bytes, std::memory_order_relaxed);
++      }
++    }
++  } charge;  /* Release the charge after the payload is destroyed. */
++
++  OsdTopology topology;
++  vector<char> key;
++  vector<vector<char>> merged_values;
++};
++
++namespace {
++
++/* Compare only inputs consumed by the cached setup. Position and all other interpolated
++ * primvars are computed from the current mesh on every pass. */
++template<typename Visit> bool visit_osd_key(const OsdMesh &osd_mesh, Visit visit)
++{
++  const Mesh &mesh = osd_mesh.mesh;
++  const auto scalar = [&](const auto value) { return visit(&value, sizeof(value)); };
++  const auto array = [&](const auto &values) {
++    return scalar(values.size()) && visit(values.data(), values.size() * sizeof(*values.data()));
++  };
++
++  if (!scalar(mesh.get_num_subd_base_verts()) || !scalar(mesh.get_num_subd_faces()) ||
++      !scalar(mesh.get_subdivision_boundary_interpolation()) ||
++      !scalar(mesh.get_subdivision_fvar_interpolation()) ||
++      !array(mesh.get_subd_num_corners()) || !array(mesh.get_subd_start_corner()) ||
++      !array(mesh.get_subd_face_corners()) || !array(mesh.get_subd_creases_edge()) ||
++      !array(mesh.get_subd_creases_weight()) || !array(mesh.get_subd_vert_creases()) ||
++      !array(mesh.get_subd_vert_creases_weight()))
++  {
++    return false;
++  }
++
++  const size_t corners = mesh.get_subd_face_corners().size();
++  for (const Attribute &attr : mesh.subd_attributes.attributes) {
++    if (!osd_mesh.use_smooth_fvar(attr)) {
++      continue;
++    }
++    const size_t name_size = attr.name.size();
++    if (size_t(attr.size) != corners || !scalar(name_size) ||
++        !visit(attr.name.c_str(), name_size) || !scalar(attr.std) || !scalar(attr.element) ||
++        !scalar(attr.flags) || !scalar(attr.type.basetype) || !scalar(attr.type.aggregate) ||
++        !scalar(attr.type.vecsemantics) || !scalar(attr.type.arraylen) ||
++        !scalar(attr.num_motion_steps()))
++    {
++      return false;
++    }
++    const size_t step_size = corners * attr.data_sizeof();
++    for (int step = 0; step < attr.num_motion_steps(); ++step) {
++      if ((step_size && !attr.data(step)) || !visit(attr.data(step), step_size)) {
++        return false;
++      }
++    }
++  }
++  return true;
++}
++
++bool key_matches(const OsdCacheEntry &entry, const OsdMesh &osd_mesh)
++{
++  size_t offset = 0;
++  return visit_osd_key(osd_mesh, [&](const void *data, size_t size) {
++    if (size > entry.key.size() - offset ||
++        (size && std::memcmp(data, entry.key.data() + offset, size) != 0))
++    {
++      return false;
++    }
++    offset += size;
++    return true;
++  }) && offset == entry.key.size();
++}
++
++size_t key_size(const OsdMesh &osd_mesh, const size_t budget)
++{
++  size_t bytes = 0;
++  const bool fits = visit_osd_key(osd_mesh, [&](const void *, size_t size) {
++    if (size > budget - bytes) {
++      return false;
++    }
++    bytes += size;
++    return true;
++  });
++  return fits ? bytes : 0;
++}
++
++void restore_fvar_values(const OsdCacheEntry &entry, OsdMesh &osd_mesh)
++{
++  int channel = 0;
++  osd_mesh.merged_fvars.reserve(entry.merged_values.size());
++  for (const Attribute &attr : osd_mesh.mesh.subd_attributes.attributes) {
++    if (!osd_mesh.use_smooth_fvar(attr)) {
++      continue;
++    }
++    for (int step = 0; step < attr.num_motion_steps(); ++step, ++channel) {
++      osd_mesh.merged_fvars.push_back({attr, step, channel, {}, &entry.merged_values[channel]});
++    }
++  }
++  assert(size_t(channel) == entry.merged_values.size());
++}
++
++/* Use exposed capacities and component counts for OpenSubdiv's private buffers, with headroom
++ * for allocator rounding and structures without a capacity API. This is an accounting charge,
++ * independent of process working set and uncached, pass-local tessellation memory. */
++size_t estimate_entry_bytes(const OsdMesh &mesh,
++                            const OsdTopology &topology,
++                            const size_t key_bytes,
++                            const size_t budget)
++{
++  const size_t limit = (budget / 5) * 4;
++  size_t bytes = 0;
++  const auto add = [&](const size_t count, const size_t stride) {
++    if (count > (limit - bytes) / stride) {
++      return false;
++    }
++    bytes += count * stride;
++    return true;
++  };
++  const auto stencil = [&](const Far::StencilTable *table) {
++    return !table || (add(1, sizeof(*table)) && add(table->GetSizes().capacity(), sizeof(int)) &&
++                       add(table->GetOffsets().capacity(), sizeof(Far::Index)) &&
++                       add(table->GetControlIndices().capacity(), sizeof(Far::Index)) &&
++                       add(table->GetWeights().capacity(), sizeof(float)));
++  };
++
++  const auto &refiner = *topology.refiner;
++  const auto &table = *topology.patch_table;
++  if (!add(1, sizeof(OsdCacheEntry) + sizeof(refiner) + sizeof(table) + sizeof(Far::PatchMap) +
++                   1024) ||
++      !add(key_bytes, 1) || !add(refiner.GetNumVerticesTotal(), 64) ||
++      !add(refiner.GetNumEdgesTotal(), 64) || !add(refiner.GetNumFacesTotal(), 64) ||
++      !add(refiner.GetNumFaceVerticesTotal(), 32) || !add(table.GetNumPatchesTotal(), 64) ||
++      !add(table.GetNumPtexFaces(), 16) ||
++      !add(table.GetNumControlVerticesTotal(), sizeof(Far::Index)) ||
++      !stencil(table.GetLocalPointStencilTable()) ||
++      !stencil(table.GetLocalPointVaryingStencilTable()))
++  {
++    return 0;
++  }
++  for (const auto &channel : mesh.merged_fvars) {
++    if (!add(1, sizeof(channel.values)) || !add(channel.values.capacity(), 1) ||
++        !add(refiner.GetNumFVarValuesTotal(channel.channel), 64) ||
++        !add(table.GetFVarValues(channel.channel).size(), sizeof(Far::Index)) ||
++        !add(table.GetFVarPatchParams(channel.channel).size(), sizeof(Far::PatchParam)) ||
++        !stencil(table.GetLocalPointFaceVaryingStencilTable(channel.channel)))
++    {
++      return 0;
++    }
++  }
++
++  return bytes + (bytes + 3) / 4; /* 25% headroom. */
++}
++
++}  // namespace
++
++struct SubdivisionOsdCache::Impl {
++  struct Record {
++    size_t key;
++    std::shared_ptr<const OsdCacheEntry> entry;
++  };
++  using RecencyList = std::list<Record>;
++
++  mutable std::mutex mutex;
++  SubdivisionOsdCacheStats stats;
++  size_t last_key = 0;
++  RecencyList lru;
++  std::optional<std::unordered_map<size_t, RecencyList::iterator>> by_mesh;
++  std::shared_ptr<std::atomic<size_t>> charged = std::make_shared<std::atomic<size_t>>(0);
++
++  RecencyList::iterator lookup(const size_t key)
++  {
++    if (by_mesh) {
++      const auto record = by_mesh->find(key);
++      if (record != by_mesh->end()) {
++        return record->second;
++      }
++    }
++    return lru.end();
++  }
++
++  std::shared_ptr<const OsdCacheEntry> remove(RecencyList::iterator record)
++  {
++    auto entry = std::move(record->entry);
++    stats.retained_bytes -= entry->charge.bytes;
++    by_mesh->erase(record->key);
++    if (by_mesh->empty()) {
++      by_mesh.reset();
++    }
++    lru.erase(record);
++    return entry;
++  }
++};
++
++SubdivisionOsdCache::SubdivisionOsdCache() : impl(std::make_unique<Impl>()) {}
++SubdivisionOsdCache::~SubdivisionOsdCache() = default;
++
++void SubdivisionOsdCache::set_budget(const size_t bytes)
++{
++  const std::lock_guard lock(impl->mutex);
++  auto &stats = impl->stats;
++  stats.budget_bytes = bytes;
++  while (stats.retained_bytes > bytes) {
++    impl->remove(std::prev(impl->lru.end()));
++    ++stats.evictions;
++  }
++}
+ 
+-void OsdData::build(OsdMesh &osd_mesh)
++SubdivisionOsdCacheStats SubdivisionOsdCache::stats() const
+ {
++  const std::lock_guard lock(impl->mutex);
++  auto result = impl->stats;
++  result.entries = impl->lru.size();
++  result.active_retired_bytes =
++      impl->charged->load(std::memory_order_relaxed) - result.retained_bytes;
++  return result;
++}
++
++void SubdivisionOsdCache::erase(const size_t key)
++{
++  std::shared_ptr<const OsdCacheEntry> retired;
++  {
++    const std::lock_guard lock(impl->mutex);
++    const auto record = impl->lookup(key);
++    if (record != impl->lru.end()) {
++      retired = impl->remove(record);
++    }
++  }
++  /* Destroy a removed mesh's entry after releasing the cache lock. */
++}
++
++std::shared_ptr<const OsdCacheEntry> SubdivisionOsdCache::find(const OsdMesh &osd_mesh,
++                                                             size_t &admission_budget)
++{
++  auto &mesh = osd_mesh.mesh;
++  std::shared_ptr<const OsdCacheEntry> entry;
++  {
++    const std::lock_guard lock(impl->mutex);
++    if (impl->stats.budget_bytes == 0) {
++      return {};
++    }
++
++    if (mesh.subdivision_osd_cache_owner.lock().get() != this) {
++      mesh.subdivision_osd_cache_owner = weak_from_this();
++      mesh.subdivision_osd_cache_key = ++impl->last_key;
++      ++impl->stats.misses;
++      /* A mesh diced once has no retained entry. */
++      return {};
++    }
++
++    admission_budget = impl->stats.budget_bytes;
++    const auto record = impl->lookup(mesh.subdivision_osd_cache_key);
++    if (record == impl->lru.end()) {
++      ++impl->stats.misses;
++      return {};
++    }
++    entry = record->entry;
++  }
++
++  /* Only compare the entry for this mesh, without blocking another mesh's lookup. */
++  const bool matched = key_matches(*entry, osd_mesh);
++  const std::lock_guard lock(impl->mutex);
++  const auto record = impl->lookup(mesh.subdivision_osd_cache_key);
++  const bool still_retained = record != impl->lru.end() && record->entry == entry;
++  if (matched) {
++    if (still_retained) {
++      impl->lru.splice(impl->lru.begin(), impl->lru, record);
++    }
++    ++impl->stats.hits;
++    return entry;
++  }
++
++  if (still_retained) {
++    impl->remove(record);
++  }
++  ++impl->stats.misses;
++  return {};
++}
++
++void SubdivisionOsdCache::admit(const OsdMesh &osd_mesh, std::shared_ptr<OsdCacheEntry> entry)
++{
++  const std::lock_guard lock(impl->mutex);
++  auto &stats = impl->stats;
++  const size_t bytes = entry->charge.bytes;
++  if (stats.budget_bytes == 0 || bytes > stats.budget_bytes) {
++    return;
++  }
++  const size_t key = osd_mesh.mesh.subdivision_osd_cache_key;
++  if (impl->lookup(key) != impl->lru.end()) {
++    return;
++  }
++
++  /* Only idle LRU victims can make room for an admission. Active or recently retired
++   * entries consume their charge until the last reader releases them. */
++  const size_t available = stats.budget_bytes - bytes;
++  auto next_victim = impl->lru.end();
++  while (impl->charged->load(std::memory_order_relaxed) > available &&
++         next_victim != impl->lru.begin())
++  {
++    auto victim = std::prev(next_victim);
++    if (victim->entry.use_count() != 1) {
++      next_victim = victim;
++      continue;
++    }
++    /* Release idle entries here so the admission uses the resulting charge. */
++    impl->remove(victim);
++    ++stats.evictions;
++  }
++  if (impl->charged->load(std::memory_order_relaxed) > available) {
++    return;
++  }
++
++  impl->lru.push_front({key, entry});
++  try {
++    if (!impl->by_mesh) {
++      impl->by_mesh.emplace();
++    }
++    impl->by_mesh->emplace(key, impl->lru.begin());
++  }
++  catch (...) {
++    impl->lru.pop_front();
++    if (impl->by_mesh && impl->by_mesh->empty()) {
++      impl->by_mesh.reset();
++    }
++    throw;
++  }
++  entry->charge.total = impl->charged;
++  impl->charged->fetch_add(bytes, std::memory_order_relaxed);
++  stats.retained_bytes += bytes;
++  ++stats.admissions;
++}
++
++void SubdivisionOsdCache::record_oversized()
++{
++  const std::lock_guard lock(impl->mutex);
++  if (impl->stats.budget_bytes) {
++    ++impl->stats.oversized;
++  }
++}
++
++static OsdTopology build_osd_topology(OsdMesh &osd_mesh)
++{
++  OsdTopology topology;
+   /* create refiner */
+-  refiner.reset(Far::TopologyRefinerFactory<OsdMesh>::Create(
++  topology.refiner.reset(Far::TopologyRefinerFactory<OsdMesh>::Create(
+       osd_mesh,
+       Far::TopologyRefinerFactory<OsdMesh>::Options(Sdc::SCHEME_CATMARK, osd_mesh.sdc_options())));
+ 
+@@ -327,7 +681,7 @@ void OsdData::build(OsdMesh &osd_mesh)
+   Far::TopologyRefiner::AdaptiveOptions adaptive_options(max_isolation);
+   adaptive_options.considerFVarChannels = has_fvar;
+   adaptive_options.useInfSharpPatch = true;
+-  refiner->RefineAdaptive(adaptive_options);
++  topology.refiner->RefineAdaptive(adaptive_options);
+ 
+   /* create patch table */
+   Far::PatchTableFactory::Options patch_options;
+@@ -336,7 +690,64 @@ void OsdData::build(OsdMesh &osd_mesh)
+   patch_options.generateFVarLegacyLinearPatches = false;
+   patch_options.useInfSharpPatch = true;
+ 
+-  patch_table.reset(Far::PatchTableFactory::Create(*refiner, patch_options));
++  topology.patch_table.reset(Far::PatchTableFactory::Create(*topology.refiner, patch_options));
++  topology.patch_map = make_unique<Far::PatchMap>(*topology.patch_table);
++  return topology;
++}
++
++void OsdData::build(OsdMesh &osd_mesh, SubdivisionOsdCache *cache)
++{
++  size_t budget = 0;
++  if (cache) {
++    cached_topology = cache->find(osd_mesh, budget);
++  }
++  if (cached_topology) {
++    restore_fvar_values(*cached_topology, osd_mesh);
++  }
++  else {
++    owned_topology = build_osd_topology(osd_mesh);
++    if (budget) {
++      const size_t key_bytes = key_size(osd_mesh, budget);
++      const size_t bytes = key_bytes ?
++                               estimate_entry_bytes(osd_mesh, owned_topology, key_bytes, budget) :
++                               0;
++      if (bytes) {
++        try {
++          auto entry = std::make_shared<OsdCacheEntry>();
++          entry->charge.bytes = bytes;
++          entry->key.resize(key_bytes);
++          size_t offset = 0;
++          visit_osd_key(osd_mesh, [&](const void *data, const size_t size) {
++            if (size) {
++              std::memcpy(entry->key.data() + offset, data, size);
++            }
++            offset += size;
++            return true;
++          });
++          entry->merged_values.reserve(osd_mesh.merged_fvars.size());
++          for (auto &channel : osd_mesh.merged_fvars) {
++            entry->merged_values.push_back(std::move(channel.values));
++            channel.cached_values = &entry->merged_values.back();
++          }
++          entry->topology = std::move(owned_topology);
++          cached_topology = entry;
++          cache->admit(osd_mesh, std::move(entry));
++        }
++        catch (const std::bad_alloc &) {
++          /* Optional retention must not interrupt otherwise valid dicing. Whether the
++           * move took place or not, the pass still owns its topology and values. */
++        }
++      }
++      else {
++        cache->record_oversized();
++      }
++    }
++  }
++
++  const OsdTopology &topology = cached_topology ? cached_topology->topology : owned_topology;
++  refiner = topology.refiner.get();
++  patch_table = topology.patch_table.get();
++  patch_map = topology.patch_map.get();
+ 
+   /* interpolate verts */
+   const int num_refiner_verts = refiner->GetNumVerticesTotal();
+@@ -360,9 +771,6 @@ void OsdData::build(OsdMesh &osd_mesh)
+   if (num_local_points) {
+     patch_table->ComputeLocalPointValues(refined_verts.data(), &refined_verts[num_refiner_verts]);
+   }
+-
+-  /* Create patch map */
+-  patch_map = make_unique<Far::PatchMap>(*patch_table);
+ }
+ 
+ /* OsdPatch */
+diff --git a/src/subd/osd.h b/src/subd/osd.h
+index a9eae04976b13ca10dae8f414dfd221b54873665..b5f79a5e5621719c3e54349753235715a1aaab58 100644
+--- a/src/subd/osd.h
++++ b/src/subd/osd.h
+@@ -22,6 +22,8 @@
+ #  include "util/unique_ptr.h"
+ #  include "util/vector.h"
+ 
++#  include <memory>
++
+ CCL_NAMESPACE_BEGIN
+ 
+ /* Directly use some OpenSubdiv namespaces for brevity. */
+@@ -30,6 +32,29 @@ namespace Sdc = OpenSubdiv::Sdc;
+ 
+ class Attribute;
+ class Mesh;
++class OsdMesh;
++struct OsdCacheEntry;
++struct OsdData;
++struct SubdivisionOsdCacheStats;
++
++class SubdivisionOsdCache : public std::enable_shared_from_this<SubdivisionOsdCache> {
++ public:
++  SubdivisionOsdCache();
++  ~SubdivisionOsdCache();
++
++  void set_budget(size_t bytes);
++  SubdivisionOsdCacheStats stats() const;
++  void erase(size_t key);
++
++ private:
++  friend struct OsdData;
++  std::shared_ptr<const OsdCacheEntry> find(const OsdMesh &mesh, size_t &admission_budget);
++  void admit(const OsdMesh &mesh, std::shared_ptr<OsdCacheEntry> entry);
++  void record_oversized();
++
++  struct Impl;
++  std::unique_ptr<Impl> impl;
++};
+ 
+ /* OpenSubdiv interface for vertex and attribute values. */
+ 
+@@ -67,6 +92,12 @@ class OsdMesh {
+     int step = 0;
+     int channel = -1;
+     vector<char> values;
++    const vector<char> *cached_values = nullptr;
++
++    const vector<char> &read_values() const
++    {
++      return cached_values ? *cached_values : values;
++    }
+   };
+ 
+   Mesh &mesh;
+@@ -81,13 +112,21 @@ class OsdMesh {
+ 
+ /* OpenSubdiv refiner and patch data structures. */
+ 
+-struct OsdData {
++struct OsdTopology {
+   unique_ptr<Far::TopologyRefiner> refiner;
+   unique_ptr<Far::PatchTable> patch_table;
+   unique_ptr<Far::PatchMap> patch_map;
++};
++
++struct OsdData {
++  OsdTopology owned_topology;
++  std::shared_ptr<const OsdCacheEntry> cached_topology;
++  const Far::TopologyRefiner *refiner = nullptr;
++  const Far::PatchTable *patch_table = nullptr;
++  const Far::PatchMap *patch_map = nullptr;
+   vector<OsdValue<packed_float3>> refined_verts;
+ 
+-  void build(OsdMesh &osd_mesh);
++  void build(OsdMesh &osd_mesh, SubdivisionOsdCache *cache = nullptr);
+ };
+ 
+ /* Patch with OpenSubdiv evaluation. */

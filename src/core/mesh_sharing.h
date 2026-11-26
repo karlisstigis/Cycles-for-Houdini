@@ -50,7 +50,7 @@ inline bool same_mesh_shape(const MeshData &a, const MeshData &b) {
       bool(a.nominal_pose) != bool(b.nominal_pose))
     return false;
   if (a.subdivision &&
-      (!mesh_payload_equal(subdivision_payload_members(*a.subdivision), subdivision_payload_members(*b.subdivision)) ||
+      (!mesh_payload_equal(subdivision_shape_members(*a.subdivision), subdivision_shape_members(*b.subdivision)) ||
        !same_material_slots(a.subdivision->face_material, b.subdivision->face_material)))
     return false;
   if (a.nominal_pose && !mesh_payload_equal(std::tie(a.nominal_pose->positions, a.nominal_pose->corner_normals),
@@ -88,9 +88,6 @@ template <class T> void mesh_shape_hash_value(std::uint64_t &hash, const T &valu
     std::apply([&](const auto &...item) { (mesh_shape_hash_value(hash, item), ...); }, value);
   else if constexpr (std::is_same_v<U, GeometryMotion>)
     mesh_shape_hash_value(hash, std::tie(value.positions, value.radii));
-  else if constexpr (std::is_same_v<U, SubdivisionSettings>)
-    mesh_shape_hash_value(hash, std::tie(value.type, value.space, value.boundary, value.fvar, value.dicing_rate,
-                                         value.max_level, value.triangle_limit, value.adaptive, value.use_creases));
   else if constexpr (std::is_same_v<U, EdgeCrease>)
     mesh_shape_hash_value(hash, std::tie(value.a, value.b, value.sharpness));
   else if constexpr (std::is_same_v<U, VertexCrease>)
@@ -113,7 +110,7 @@ inline std::uint64_t mesh_shape_hash(const MeshData &m) {
   slots(m.triangle_material);
   mesh_shape_hash_value(result, bool(m.subdivision));
   if (m.subdivision) {
-    mesh_shape_hash_value(result, subdivision_payload_members(*m.subdivision));
+    mesh_shape_hash_value(result, subdivision_shape_members(*m.subdivision));
     slots(m.subdivision->face_material);
   }
   mesh_shape_hash_value(result, bool(m.nominal_pose));

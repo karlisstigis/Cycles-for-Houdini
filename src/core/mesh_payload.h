@@ -19,6 +19,14 @@ template <class T> auto mesh_payload_members(T &m) {
 template <class T> auto subdivision_payload_members(T &s) {
   return std::tie(s.settings, s.face_sizes, s.face_corners, s.face_provenance, s.edge_creases, s.vertex_creases);
 }
+inline auto subdivision_render_settings(const SubdivisionSettings &s) {
+  return std::tie(s.type, s.space, s.boundary, s.fvar, s.dicing_rate, s.max_level, s.triangle_limit, s.adaptive,
+                  s.use_creases);
+}
+inline auto subdivision_shape_members(const SubdivisionData &s) {
+  return std::tuple_cat(subdivision_render_settings(s.settings),
+                        std::tie(s.face_sizes, s.face_corners, s.face_provenance, s.edge_creases, s.vertex_creases));
+}
 template <class> struct payload_vector : std::false_type {};
 template <class T> struct payload_vector<std::vector<T>> : std::true_type {};
 template <class T> struct payload_vector<SharedArray<T>> : std::true_type {};
@@ -68,10 +76,8 @@ template <class T> bool mesh_payload_equal(const T &a, const T &b) {
     return mesh_payload_equal(std::tie(a.positions, a.corner_normals, a.corner_uv, a.corner_colors, a.attributes),
                               std::tie(b.positions, b.corner_normals, b.corner_uv, b.corner_colors, b.attributes));
   else if constexpr (std::is_same_v<U, SubdivisionSettings>)
-    return mesh_payload_equal(std::tie(a.type, a.space, a.boundary, a.fvar, a.dicing_rate, a.max_level,
-                                       a.triangle_limit, a.adaptive, a.use_creases),
-                              std::tie(b.type, b.space, b.boundary, b.fvar, b.dicing_rate, b.max_level,
-                                       b.triangle_limit, b.adaptive, b.use_creases));
+    return a.cache_topology == b.cache_topology &&
+           mesh_payload_equal(subdivision_render_settings(a), subdivision_render_settings(b));
   else if constexpr (std::is_same_v<U, EdgeCrease>)
     return mesh_payload_equal(std::tie(a.a, a.b, a.sharpness), std::tie(b.a, b.b, b.sharpness));
   else if constexpr (std::is_same_v<U, VertexCrease>)
@@ -85,11 +91,15 @@ template <class T> bool mesh_payload_equal(const std::vector<T> &a, const Shared
 template <class T> bool mesh_payload_equal(const SharedArray<T> &a, const std::vector<T> &b) {
   return mesh_payload_equal(static_cast<const std::vector<T> &>(a), b);
 }
-inline bool same_mesh_wire_payload(const MeshData &a, const MeshData &b) {
+inline bool same_mesh_shape_payload(const MeshData &a, const MeshData &b) {
   return mesh_payload_equal(mesh_payload_members(a), mesh_payload_members(b)) &&
          bool(a.subdivision) == bool(b.subdivision) &&
          (!a.subdivision ||
-          mesh_payload_equal(subdivision_payload_members(*a.subdivision), subdivision_payload_members(*b.subdivision)));
+          mesh_payload_equal(subdivision_shape_members(*a.subdivision), subdivision_shape_members(*b.subdivision)));
+}
+inline bool same_mesh_wire_payload(const MeshData &a, const MeshData &b) {
+  return same_mesh_shape_payload(a, b) &&
+         (!a.subdivision || a.subdivision->settings.cache_topology == b.subdivision->settings.cache_topology);
 }
 inline void copy_mesh_payload(MeshData &target, const MeshData &source) {
   mesh_payload_members(target) = mesh_payload_members(source);

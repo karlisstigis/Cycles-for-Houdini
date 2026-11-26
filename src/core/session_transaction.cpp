@@ -26,6 +26,9 @@ void RenderSession::Impl::publish_generation(const SceneUpdate &u, const Prepare
   if (prepared.expanded_attribute_updates)
     ++i.attribute_fallback_count;
   ++i.generation;
+  i.automatic_camera_refinement = plan.automatic_camera_refinement;
+  if (!prepared.hold_dicing && (!u.defer_camera_subdivision || prepared.force_dicing))
+    i.suspended_camera_refinement = false;
   i.source_color = i.target_color;
   i.source_color_epoch = i.target_color_epoch;
   i.color_update_pending = false;
@@ -88,7 +91,7 @@ void RenderSession::Impl::mutate_engine(const SceneUpdate &u, PreparedUpdate &pr
   // render/output/display callback has returned. No UI owns this wait.
   if (!i.config.persistent_updates)
     i.cancel_engine();
-  else {
+  else if (!plan.cancelled_camera_refinement) {
     i.cancel_join_seconds = 0;
     i.cancel_output_deliveries = i.cancel_display_updates = 0;
     i.cancel_output_reads_skipped = i.cancel_display_updates_skipped = 0;

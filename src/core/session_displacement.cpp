@@ -28,7 +28,8 @@ bool RenderSession::Impl::camera_displacement(const MeshRecord &record, bool mat
   return false;
 }
 
-void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &changed, bool refresh) {
+void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &changed, bool refresh,
+                                             bool defer_interrupted_camera_subdivision) {
   if (changed.empty())
     return;
   const bool adaptive_update = !config.interactive || dicing_settings.update || refresh;
@@ -53,8 +54,7 @@ void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &change
     if (found == meshes.end() || !found->second.source)
       continue;
     auto &record = found->second;
-    const bool pixel = record.source->subdivision && record.source->subdivision->settings.adaptive &&
-                       record.source->subdivision->settings.space == SubdivisionSpace::Pixel;
+    const bool pixel = record.pixel_adaptive_subdivision();
     bool unfinished = false;
     for (const auto &[node, metric] : record.render->subdivision_metrics) {
       std::lock_guard lock(metric->mutex);
@@ -204,6 +204,24 @@ void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &change
       } else
         ++it;
     }
+    std::shared_ptr<const MeshData> coarse_source, coarse_render;
+    std::vector<int> coarse_vertices;
+    std::vector<float> coarse_islands;
+    const bool coarse_update = render_source->subdivision && render_source->subdivision->settings.adaptive &&
+                               (!adaptive_update || (defer_interrupted_camera_subdivision && pixel));
+    const auto prepare_coarse = [&](bool split_seams) {
+      if (!coarse_source) {
+        std::vector<int> faces;
+        coarse_source = std::make_shared<MeshData>(coarse_subdivision_mesh(*render_source, faces));
+        if (!record.island_random.empty()) {
+          coarse_islands.reserve(faces.size());
+          for (int face : faces)
+            coarse_islands.push_back(record.island_random[face]);
+        }
+      }
+      if (split_seams && !coarse_render)
+        coarse_render = displacement_seams(coarse_source, coarse_vertices, displacement.fields, classes);
+    };
     for (const auto &[variant, users] : groups) {
       ccl::Mesh *mesh;
       bool fresh = false;
@@ -222,9 +240,18 @@ void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &change
       bool reuse = !fresh && !rebuild && !mesh->position_is_modified() && !mesh->triangles_is_modified() &&
                    !mesh->need_tessellation();
       mesh->validated_displacement_reuse = reuse;
-      if (reuse && record.shading_dirty)
-        reuse = refresh_mesh_shading(*mesh, *render_source, need_generated, record.seam_vertices, record.island_random,
-                                     record.pointiness, !users.empty());
+      const bool retained_coarse =
+          render_source->subdivision && mesh->get_subdivision_type() == ccl::Mesh::SUBDIVISION_NONE;
+      if (reuse && record.shading_dirty) {
+        if (retained_coarse) {
+          prepare_coarse(displaced && !users.empty());
+          const auto vertices = users.empty() ? std::span<const int>{} : std::span<const int>(coarse_vertices);
+          reuse = refresh_mesh_shading(*mesh, *coarse_source, need_generated, vertices, coarse_islands,
+                                       record.pointiness, !users.empty());
+        } else
+          reuse = refresh_mesh_shading(*mesh, *render_source, need_generated, record.seam_vertices,
+                                       record.island_random, record.pointiness, !users.empty());
+      }
       mesh->validated_displacement_reuse = reuse;
       if (reuse) {
         mesh_update_profile(generation, record.shading_dirty ? "shading_fields_reuse" : "displacement_reuse");
@@ -244,7 +271,13 @@ void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &change
         mesh_update_profile(generation, "mesh_displacement", shader_changed, displaced != record.displaced);
         if (displaced && !users.empty())
           prepare_seams();
-        const auto &m = displaced && !users.empty() ? *record.seam_source : *render_source;
+        // Keep a completed diced variant if a surface field needs a full interpolation.
+        // Only a real geometry/dicing change follows the current coarse-update policy.
+        const bool coarse_fill = coarse_update && (fresh || rebuild || retained_coarse);
+        if (coarse_fill)
+          prepare_coarse(displaced && !users.empty());
+        const auto &m = coarse_fill ? (displaced && !users.empty() ? *coarse_render : *coarse_source)
+                                    : (displaced && !users.empty() ? *record.seam_source : *render_source);
         auto &metric = record.render->subdivision_metrics[mesh];
         if (!metric)
           metric = std::make_shared<SubdivisionMetrics>();
@@ -269,9 +302,10 @@ void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &change
             object_motion_steps =
                 std::max(object_motion_steps, material_definitions.at(material).displacement_samples.size());
         fill_mesh(mesh, m, !users.empty(), matrix, metric, displaced && !users.empty(), record.sampled_displacement,
-                  object_motion_steps, record.frozen_temporal_materials, render_source.get(), record.seam_vertices,
-                  record.island_random, record.pointiness, displacement.fields, classes, shared, need_generated,
-                  adaptive_update);
+                  object_motion_steps, record.frozen_temporal_materials, render_source.get(),
+                  coarse_fill ? coarse_vertices : record.seam_vertices,
+                  coarse_fill ? coarse_islands : record.island_random, record.pointiness, displacement.fields, classes,
+                  shared, need_generated);
         if (displaced || record.displaced)
           ++displacement_rebuilds;
         {
@@ -279,6 +313,16 @@ void RenderSession::Impl::sync_mesh_variants(const std::set<std::string> &change
           metric->bytes = subdivision_engine_bytes(*mesh);
         }
       }
+      // Preserve sharing when policy differs. A physical variant can reuse topology
+      // for all its users if any of its source objects permits it.
+      const bool cache_enabled = config.interactive && render_source->subdivision &&
+                                 render_source->subdivision->settings.adaptive &&
+                                 render_source->subdivision->settings.type == SubdivisionType::CatmullClark &&
+                                 std::any_of(users.begin(), users.end(), [&](auto *user) {
+                                   const auto &source = *meshes.at(owner_records.at(user)->geometry_key).source;
+                                   return source.subdivision->settings.cache_topology;
+                                 });
+      mesh->set_subdivision_osd_cache_enabled(cache_enabled);
       if (variant == primary)
         record.bytes = subdivision_engine_bytes(*mesh);
       for (auto *object : users) {
@@ -719,7 +763,10 @@ void RenderSession::Impl::finish_geometry_sync(const SceneUpdate &u, PreparedUpd
       material_work || motion_changed || uv_pass_changed || previous_vectors != i.motion_vectors() || pose_edits)
     i.reconcile_mesh_sharing(variant_updates);
   profile.mark("mesh_sharing");
-  i.sync_mesh_variants(variant_updates, force_dicing);
+  // The interrupted geometry may contain partially diced triangles. Use
+  // source polygons for any rebuilt pixel variant until navigation settles.
+  i.sync_mesh_variants(variant_updates, force_dicing,
+                       i.suspended_camera_refinement && u.defer_camera_subdivision && !force_dicing);
   profile.mark("mesh_variants");
   std::unordered_set<const Impl::MeshRenderState *> motion_render_states;
   for (const auto &key : variant_updates) {

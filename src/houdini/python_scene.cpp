@@ -224,6 +224,11 @@ ch::GeometryRequest geometry_request(py::handle value, int depth) {
           throw std::invalid_argument("Subdivision adaptive must be boolean");
         s.adaptive = field.is(py::bool_(true));
       }
+      if (auto field = item(settings, "cache_topology", false)) {
+        if (!py::isinstance<py::bool_>(field))
+          throw std::invalid_argument("Subdivision cache_topology must be boolean");
+        s.cache_topology = field.is(py::bool_(true));
+      }
       if (auto field = item(settings, "use_creases", false)) {
         if (!py::isinstance<py::bool_>(field))
           throw std::invalid_argument("Subdivision use_creases must be boolean");
@@ -616,6 +621,9 @@ void prepare_camera_update(ch::SceneUpdate &update, py::handle data, const ch::N
         throw std::invalid_argument("Tessellation update requires a boolean");
       settings.update = v.is(py::bool_(true));
     }
+    if (auto v = item(value, "topology_cache_mib", false))
+      settings.topology_cache_mib =
+          integer<std::uint32_t>(v, "IPR Topology Cache Limit must be a nonnegative integer in MiB");
     if (auto v = item(value, "refresh_revision", false)) {
       settings.refresh_revision =
           integer<unsigned long long>(v, "Tessellation refresh revision must be a nonnegative integer");

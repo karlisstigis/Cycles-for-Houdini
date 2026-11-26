@@ -105,6 +105,95 @@ inline SceneUpdate subdivision_scene(const std::shared_ptr<MeshData> &mesh) {
   scene.meshes = {mesh};
   return scene;
 }
+inline void camera_tessellation_supersession(const std::string &device) {
+  SessionConfig config;
+  config.device_id = device;
+  config.width = config.height = 320;
+  config.samples = 2;
+  config.threads = 2;
+  config.persistent_updates = true;
+  config.collect_diagnostics = true;
+  RenderSession session(config);
+
+  auto scene = displacement_reference_fixture();
+  scene.materials.front().kind = MaterialKind::Diffuse;
+  scene.background = Float3{.25f, .25f, .25f};
+  scene.camera->ortho_scale = 16;
+  scene.dicing.emplace().offscreen_scale = 1;
+  auto mesh = std::make_shared<MeshData>(*scene.meshes.front());
+  mesh->positions.clear();
+  mesh->triangles.clear();
+  auto &subdivision = mesh->subdivision.emplace();
+  subdivision.settings.type = SubdivisionType::CatmullClark;
+  subdivision.settings.space = SubdivisionSpace::Pixel;
+  subdivision.settings.dicing_rate = .16f;
+  subdivision.settings.max_level = 4;
+  subdivision.settings.triangle_limit = 12000000;
+  constexpr int side = 65;
+  for (int y = 0; y < side; ++y)
+    for (int x = 0; x < side; ++x)
+      mesh->positions.push_back({x / 8.f - 4, y / 8.f - 4, .1f * ((x + y) % 3)});
+  for (int y = 0; y < side - 1; ++y)
+    for (int x = 0; x < side - 1; ++x) {
+      const auto corner = y * side + x;
+      subdivision.face_sizes.push_back(4);
+      const std::array corners = {corner, corner + 1, corner + side + 1, corner + side};
+      subdivision.face_corners.insert(subdivision.face_corners.end(), corners.begin(), corners.end());
+    }
+  scene.meshes = {mesh};
+  motion_wait(session, session.apply(scene));
+  const auto camera_triangles = session.status().subdivision_triangles;
+
+  auto object_space = subdivision_cube();
+  object_space->key = "object-space";
+  object_space->subdivision->settings.max_level = 3;
+  SceneUpdate mixed;
+  mixed.meshes = {object_space};
+  mixed.objects = {{object_space->key, object_space->key}};
+  mixed.objects.front().transform[3] = 20;
+  motion_wait(session, session.apply(mixed));
+  const auto initial = session.status();
+  motion_require(initial.subdivision_triangles > camera_triangles, "Missing object-space subdivision fixture");
+  const auto object_triangles = initial.subdivision_triangles - camera_triangles;
+  const auto cancels = session.diagnostics().session_cancel_calls;
+
+  SceneUpdate stale;
+  stale.camera = scene.camera;
+  stale.camera->ortho_scale = 4.5f;
+  const auto refining = session.apply(stale);
+  session.pause(true);
+  const auto active = session.status();
+  motion_require(active.generation == refining && active.subdivision_triangles == object_triangles,
+                 "Expected a camera generation with an unpublished tessellation");
+
+  SceneUpdate drag;
+  drag.camera = scene.camera;
+  drag.camera->transform[3] = .5f;
+  drag.defer_camera_subdivision = true;
+  const auto preview = session.apply(drag);
+  motion_require(session.status().state == SessionState::Paused &&
+                     session.diagnostics().session_cancel_calls == cancels + 1,
+                 "Superseding a camera tessellation did not cancel it while preserving Pause");
+  session.pause(false);
+  motion_wait(session, preview);
+  const auto coarse = session.status();
+  motion_require(coarse.subdivision_tessellations == initial.subdivision_tessellations &&
+                     coarse.subdivision_triangles == 2 * subdivision.face_sizes.size() + object_triangles,
+                 "Deferred navigation used unfinished triangles instead of valid source polygons");
+
+  // A later motion can return to the projection first submitted by the
+  // interrupted generation. The same-camera release still owes a redice.
+  auto back = stale;
+  back.defer_camera_subdivision = true;
+  motion_wait(session, session.apply(back));
+  motion_wait(session, session.apply(SceneUpdate{}, true));
+  const auto refined = session.status();
+  motion_require(refined.subdivision_tessellations == initial.subdivision_tessellations + 1 &&
+                     refined.subdivision_triangles > coarse.subdivision_triangles &&
+                     refined.geometry_conversions == initial.geometry_conversions,
+                 "Releasing an unchanged returned camera did not refine retained source geometry");
+}
+
 inline void subdivision_test(const std::string &device, const std::string &output) {
   const std::filesystem::path directory(output);
   std::filesystem::create_directories(directory);
@@ -195,6 +284,8 @@ inline void subdivision_test(const std::string &device, const std::string &outpu
   session.close();
   motion_require(session.status().owned_geometry_bytes == 0 && session.status().device_allocation_bytes == 0,
                  "Subdivision shutdown retained geometry");
+  ++checks;
+  camera_tessellation_supersession(device);
   ++checks;
   std::cout << "{\"result\":\"passed\",\"checks\":" << checks << "}\n";
 }

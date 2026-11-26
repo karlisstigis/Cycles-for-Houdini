@@ -3,8 +3,8 @@
   "cycles": {
     "url": "https://github.com/blender/cycles.git",
     "commit": "77edc33168528e06b35540452bce5cce6068c3aa",
-    "authoring_tip": "fa17cec676abe51d7d4cb2c43b906b0247502aa9",
-    "authoring_tree": "3bd195e641fabc895a77b0019f5ffde8a52ddd86",
+    "authoring_tip": "9785b7c709c610e46cff0928fa1c34cee7525c8a",
+    "authoring_tree": "b2fcce3f41bb52673513b2d4ca6615490b5f98ba",
     "patches": [
       "patches/0001-integration-build-hook.patch",
       "patches/0002-houdini-usd-link-libraries.patch",
@@ -121,7 +121,8 @@
       "patches/0117-Write-the-values-of-every-object-with-attributes-whe.patch",
       "patches/0118-Record-tracked-device-memory-per-device-for-every-sc.patch",
       "patches/0119-Keep-camera-lookup-tables-during-progressive-resolut.patch",
-      "patches/0120-Keep-exact-device-ranges-separate-from-whole-host-up.patch"
+      "patches/0120-Keep-exact-device-ranges-separate-from-whole-host-up.patch",
+      "patches/0121-Reuse-OpenSubdiv-setup-within-a-bounded-IPR-scene-ca.patch"
     ],
     "candidate": {
       "blender_version": "5.3.0",
@@ -248,7 +249,8 @@
       "patches/0117-Write-the-values-of-every-object-with-attributes-whe.patch": "f82dc9ff798e779799fd4180155cf75b309ba37f128dad29558e062716534cca",
       "patches/0118-Record-tracked-device-memory-per-device-for-every-sc.patch": "50c7b7ed88f9753708b2504c75219658afea953a402482878ae11844798ce210",
       "patches/0119-Keep-camera-lookup-tables-during-progressive-resolut.patch": "4c71a0d0574f5e1d2f4462a92811835b975443c7fa4167b9fcdbb204d71504b0",
-      "patches/0120-Keep-exact-device-ranges-separate-from-whole-host-up.patch": "71987407d71aee20ef8cae6bbd34756f8e776872572202dfe9d440f21bf613fb"
+      "patches/0120-Keep-exact-device-ranges-separate-from-whole-host-up.patch": "71987407d71aee20ef8cae6bbd34756f8e776872572202dfe9d440f21bf613fb",
+      "patches/0121-Reuse-OpenSubdiv-setup-within-a-bounded-IPR-scene-ca.patch": "0c528fe62e4654cb09a97cf0020b4e0755a6a26285d7d80698917c1bd56922df"
     },
     "release_rebase_approval": "patches/rebase/blender53/release-approval.json"
   },

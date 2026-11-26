@@ -34,7 +34,7 @@ for device in ("CPU", ch.default_device()):
     )
     assert run.returncode == 0, (device, run.stdout, run.stderr)
     events = [json.loads(line) for line in run.stdout.splitlines() if line.startswith("{")]
-    assert events[-1]["result"] == "passed" and events[-1]["checks"] == 8, events
+    assert events[-1]["result"] == "passed" and events[-1]["checks"] == 9, events
     native = OIIO.ImageBuf(str(destination / (prefix + "-cube.exr")))
     reference = OIIO.ImageBuf(str(output / "reference-cube.exr"))
     actual = native.get_pixels()

@@ -134,6 +134,7 @@
     
     
     
+    parm { name "ipr_topology_cache_mib" label "IPR Topology Cache Limit (MiB)" type integer size 1 default { 512 } range { 0! 4096 } help "Host memory budget for cached OpenSubdiv topology shared by opted-in objects in the current IPR session. Zero disables and clears the cache. The limit does not change tessellation detail." }
     parm { name "limit_subdivision" label "Limit Subdivision Triangles" type toggle size 1 default { 0 } }
     parm { name "subdivision_limit" label "Triangle Budget" type integer size 1 default { 100000000 } range { 1! 100000000 } disablewhen "{ limit_subdivision == 0 }" help "Optional per-mesh allocation ceiling, disabled by default. Exceeding it reports an error without reducing subdivision quality." }
     

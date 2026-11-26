@@ -692,6 +692,12 @@
                 "hide_label": false
               },
               {
+                "name": "ipr_topology_cache_mib",
+                "label": "IPR Topology Cache Limit (MiB)",
+                "join": false,
+                "hide_label": false
+              },
+              {
                 "name": "limit_subdivision",
                 "label": "Limit Subdivision Triangles",
                 "join": false,

@@ -93,7 +93,7 @@ def test_fast_qualification_requires_the_official_plan_and_reports(tmp_path, def
         assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("tier,count", [("fast", 17), ("extended", 29), ("nightly", 529)])
+@pytest.mark.parametrize("tier,count", [("fast", 17), ("extended", 29), ("nightly", 531)])
 def test_full_ordered_payload_preserves_pre_migration_plan_with_readiness_case(tier, count):
     before = json.loads((ROOT / "tests/fixtures/runner-plan-before-stage4.json").read_text())
     actual = planner.tier_cases(tier, before["destination"])
@@ -145,6 +145,14 @@ def test_full_ordered_payload_preserves_pre_migration_plan_with_readiness_case(t
         else []
     )
     additions += volume_bounds
+    new_contract_recipes = (
+        ("houdini_shader_preview_displacement_smoke.py", "artifacts/stage3/materials/preview-displacement.json"),
+        (
+            "houdini_material_motion_mesh_gate_smoke.py",
+            "artifacts/stage3/stylesheet-storage/material-motion-mesh-gate/report.json",
+        ),
+        ("houdini_packed_alias_conversion_smoke.py", "artifacts/stage3/packed-alias-conversion/report.json"),
+    )
     new_contracts = (
         [
             dict(
@@ -155,19 +163,13 @@ def test_full_ordered_payload_preserves_pre_migration_plan_with_readiness_case(t
                 gui=False,
                 prerequisites=["verified-build", "houdini-sdk"],
             )
-            for name, report in (
-                (
-                    "houdini_material_motion_mesh_gate_smoke.py",
-                    "artifacts/stage3/stylesheet-storage/material-motion-mesh-gate/report.json",
-                ),
-                ("houdini_packed_alias_conversion_smoke.py", "artifacts/stage3/packed-alias-conversion/report.json"),
-            )
+            for name, report in new_contract_recipes
             for backend in ("CPU", "OPTIX")
         ]
         if tier == "nightly"
         else []
     )
-    names = {"houdini_material_motion_mesh_gate_smoke.py", "houdini_packed_alias_conversion_smoke.py"}
+    names = {name for name, _ in new_contract_recipes}
     assert [row for row in actual if row["test"] in names] == new_contracts
     additions += new_contracts
     # The fatal GPU reply check (installer candidate 7429a7a0) runs once, script-declared, in nightly.
@@ -814,7 +816,11 @@ def test_opt_in_domain_and_generic_recipes_collect_each_backend_identity_once(tm
     )
     ids = [line.rsplit("[", 1)[1].removesuffix("]") for line in result.stdout.splitlines() if "::test_" in line]
     expected = [row["test"].removesuffix(".py") + "-" + row["device"] for row in planner.catalogue_cases()]
-    assert len(ids) == len(set(ids)) == 520
+    assert len(ids) == len(set(ids)) == 522
+    assert {
+        "houdini_shader_preview_displacement_smoke-CPU",
+        "houdini_shader_preview_displacement_smoke-OPTIX",
+    } <= set(ids)
     assert set(ids) == set(expected)
     assert not list((tmp_path / "evidence").rglob("selection.json"))
 

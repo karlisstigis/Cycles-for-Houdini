@@ -420,7 +420,9 @@ try:
     # supplied source fields without publishing a camera-only render, and keep
     # untouched camera/light fields through partial source updates.
     class SourceController(PoseController):
-        def submit_navigation(self, navigation, submission, *, final=False, preview=True):
+        def submit_navigation(
+            self, navigation, submission, *, final=False, preview=True, camera_subdivision_deferred=None
+        ):
             self.navigation = (submission, navigation, 0)
             self.submissions.append((navigation, submission, final, preview))
 
@@ -624,6 +626,72 @@ finally:
     pose_refresh.stop()
 assert not controller.thread.is_alive()
 
+# A known automatic refinement with no image must yield immediately to a newer
+# camera, but it cannot usefully be superseded by a same-view control or an
+# ordinary source obligation. Freeze the clock so progressing by timeout is impossible.
+module.ExternalBackend = Backend
+package._native.navigation_info = lambda nav: dict(root_revision=0)
+package._native.navigation_snapshot = lambda baseline, navigation, *args: (
+    None if baseline == "new-scene" else navigation
+)
+controller = module.QueuedController(None)
+clock = SimpleNamespace(now=100.0)
+
+
+def submit_camera(view, deferred=None):
+    submission = controller.reserve()
+    controller.submit_navigation(view, submission, final=True, camera_subdivision_deferred=deferred)
+    return submission
+
+
+try:
+    with patch.object(module.time, "perf_counter", lambda: clock.now):
+        controller.set_feedback("visible-viewer", True)
+        first = controller.submit("baseline")
+        until(lambda: controller.committed == first)
+        held = submit_camera("held", True)
+        assert controller.feedback_waiting()
+        controller.presented(first)
+        until(lambda: controller.committed == held)
+
+        settled = submit_camera("settled", False)
+        assert controller.feedback_waiting()
+        controller.presented(held)
+        until(lambda: controller.committed == settled)
+
+        clock.now += 0.005
+        with controller.condition:
+            # Full source work and candidates without automatic camera metadata
+            # still observe the original gate.
+            scene = controller.submit("new-scene")
+            assert controller.feedback_waiting()
+            submit_camera("explicit-dicing")
+            assert controller.feedback_waiting()
+            submit_camera("second-drag", True)
+            second_settle = submit_camera("second-settle", False)
+            assert not controller.feedback_waiting(), "Automatic refinement held navigation until its first image"
+        until(lambda: controller.committed == second_settle)
+        assert controller.backend.scenes[-1] == ("second-settle", "settled")
+        assert all(view not in ("explicit-dicing", "second-drag") for view, _ in controller.backend.scenes)
+
+        # The second gesture's settle coalesced its moving update before the
+        # engine could admit it. A third drag must still supersede the settle.
+        latest = submit_camera("third-drag", True)
+        assert not controller.feedback_waiting()
+        until(lambda: controller.committed == latest)
+        assert controller.backend.scenes[-1] == ("third-drag", "second-settle")
+
+        # The new deferred camera still owes its own frame. The ordinary gate
+        # and authoritative source obligation survive the refinement bypass.
+        assert controller.feedback_waiting()
+        controller.presented(latest)
+        until(lambda: controller.completed_scene == scene)
+        assert controller.backend.scenes[-1][0] == "new-scene"
+finally:
+    controller.close()
+assert controller.closed and not controller.thread.is_alive()
+
+
 destination = artifacts_root() / "stage1/queued-feedback"
 destination.mkdir(parents=True, exist_ok=True)
 (destination / "queued-feedback-test.json").write_text(
@@ -639,6 +707,7 @@ destination.mkdir(parents=True, exist_ok=True)
                 "Atomic display identity under concurrent publication, deduplicated wakeups and unsubscribe",
                 "Pose acquisition blocks nested source loading, restores guards and drops stopped/paused/replaced work",
                 "Default feedback gate defers pose preparation and coalesces to the newest pose",
+                "A camera supersedes unpresented automatic refinement without delaying for the feedback timeout",
                 "Experimental pose refresh preserves running jobs, geometry, fairness and failures",
             ],
             scope="Deterministic controller/backend fixture; actual worker/image contracts are tested separately.",

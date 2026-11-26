@@ -160,7 +160,7 @@ void run(std::size_t count) {
 } // namespace
 int main(int argc, char **argv) {
   try {
-    static_assert(worker_protocol_version == 92, "review fixture before advancing protocol");
+    static_assert(worker_protocol_version == 93, "review fixture before advancing protocol");
     if (argc >= 2) {
       require(argc == 2 || argc == 4, "replay expects packet and optional expected pose/attribute counts");
       std::ifstream input(argv[1], std::ios::binary | std::ios::ate);

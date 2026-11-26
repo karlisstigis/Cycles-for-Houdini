@@ -263,7 +263,7 @@ void RenderSession::Impl::reconcile_mesh_sharing(std::set<std::string> &changed)
                                record.sharing_islands != family.islands ||
                                record.sharing_pointiness != family.pointiness;
     bool dirty = !chosen.render->source || !family.same_physical_source(*chosen.render->source);
-    bool shading = state_changed || !old_source || !same_mesh_wire_payload(*old_source, *family.source);
+    bool shading = state_changed || !old_source || !same_mesh_shape_payload(*old_source, *family.source);
     for (const auto &member : family.members) {
       dirty |= meshes.at(member).dirty;
       shading |= meshes.at(member).shading_dirty;
@@ -438,24 +438,7 @@ void RenderSession::Impl::fill_mesh(ccl::Mesh *mesh, const MeshData &source, boo
                                     std::span<const int> generated_vertices, std::span<const float> islands,
                                     std::span<const float> pointiness, const DisplacementFields &displacement_fields,
                                     const std::vector<int> &displacement_classes,
-                                    const std::vector<ccl::Shader *> *shared, bool shared_generated,
-                                    bool adaptive_update) {
-  if (source.subdivision && source.subdivision->settings.adaptive && !adaptive_update) {
-    std::vector<int> faces, vertices;
-    auto coarse = std::make_shared<MeshData>(coarse_subdivision_mesh(source, faces));
-    std::vector<float> coarse_islands;
-    if (!islands.empty()) {
-      coarse_islands.reserve(faces.size());
-      for (int face : faces)
-        coarse_islands.push_back(islands[face]);
-    }
-    const auto render =
-        displaced ? displacement_seams(coarse, vertices, displacement_fields, displacement_classes) : coarse;
-    fill_mesh(mesh, *render, bound, matrix, metrics, displaced, sampled_displacement, object_motion_steps,
-              frozen_temporal, generated_source ? generated_source : &source, vertices, coarse_islands, pointiness,
-              displacement_fields, displacement_classes, shared, shared_generated);
-    return;
-  }
+                                    const std::vector<ccl::Shader *> *shared, bool shared_generated) {
   std::optional<MeshData> repeated;
   if (sampled_displacement)
     for (const auto &key : source.materials)

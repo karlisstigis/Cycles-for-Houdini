@@ -166,13 +166,25 @@ class CameraSubdivision(HeavyResponse):
                 self.report["phase"] = "continuous-camera-export"
                 self.move_camera()
             elif self.stage == "camera-drag":
-                assert status["subdivision_tessellations"] == self.diced_status["subdivision_tessellations"], status
-                if self.camera_edits < 60 or not self.ready(entry):
+                if self.camera_edits < 60:
+                    assert status["subdivision_tessellations"] == self.diced_status["subdivision_tessellations"], status
+                    return
+                self.stage = "camera-hold"
+                self.report["phase"] = "hold-camera-stationary"
+            elif self.stage == "camera-hold":
+                if (
+                    not self.ready(entry)
+                    or entry.camera_refinement_pending
+                    or entry.change_serial > entry.applied_serial
+                ):
+                    return
+                if status["subdivision_tessellations"] == self.diced_status["subdivision_tessellations"]:
                     return
                 self.check_camera_export()
-                assert entry.camera_refinement_pending
+                assert QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
+                assert status["subdivision_tessellations"] == self.diced_status["subdivision_tessellations"] + 1
                 assert status["geometry_conversions"] == self.diced_status["geometry_conversions"]
-                self.event("Camera feedback uses retained tessellation during 60 exports with mouse held", entry)
+                self.event("Camera refines after 60 exports while the mouse is still held", entry)
                 self.before = status["generation"]
                 self.stage = "camera-settle"
                 QtTest.QTest.mouseRelease(

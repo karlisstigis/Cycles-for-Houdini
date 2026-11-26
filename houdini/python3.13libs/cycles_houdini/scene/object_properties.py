@@ -104,6 +104,12 @@ def template(*, point_instancing=True):
             "Adaptive Subdivision",
             help="Vary tessellation with the selected pixel or object-space edge length. Turn this off to use Levels IPR and Levels Render.",
         ),
+        _toggle(
+            "subdivision_cache_topology",
+            "Cache Subdivision Topology",
+            True,
+            help="Reuse OpenSubdiv topology for adaptive Catmull-Clark subdivision during IPR. Tessellation and rendered detail still update normally. The ROP IPR Topology Cache Limit caps retained host memory.",
+        ),
         _integer(
             "subdivision_ipr_level",
             "Levels IPR",
@@ -174,14 +180,16 @@ def template(*, point_instancing=True):
     for parm in subdivision:
         disable = "{ cycles_subdivision_override == 0 } { cycles_subdivision_type == none }"
         if parm.name().endswith(("_ipr_level", "_render_level")):
-            disable += " { cycles_subdivision_adaptive == 1 }"
+            _hide(parm, "{ cycles_subdivision_adaptive == 1 }")
         elif parm.name().endswith("_space"):
             disable += " { cycles_subdivision_adaptive == 0 }"
         elif parm.name().endswith("_pixel_size"):
             disable += " { cycles_subdivision_adaptive == 0 } { cycles_subdivision_space != pixel }"
         elif parm.name().endswith("_edge_length"):
             disable += " { cycles_subdivision_adaptive == 0 } { cycles_subdivision_space != object }"
-        if parm.name() in ("cycles_subdivision_ipr_level",):
+        elif parm.name() == "cycles_subdivision_cache_topology":
+            disable = "{ cycles_subdivision_override == 0 } { cycles_subdivision_adaptive == 0 }"
+        if parm.name() == "cycles_subdivision_ipr_level":
             disable += " { cycles_subdivision_ipr == 0 }"
         # Type must remain editable when it currently says Disabled.
         _condition(
@@ -520,7 +528,7 @@ def template(*, point_instancing=True):
             _section("motion", "Motion Blur", motion),
         ],
         folder_type=hou.folderType.Tabs,
-        tags={"cycles_properties_version": "22"},
+        tags={"cycles_properties_version": "23"},
     )
 
 
@@ -585,10 +593,11 @@ def install(node):
     folder = properties_folder(group)
     if folder and group.find("cycles_subdivision_override"):
         if (
-            folder.tags().get("cycles_properties_version") == "22"
+            folder.tags().get("cycles_properties_version") == "23"
             and group.find("cycles_point_render_mode")
             and group.find("cycles_blender_subdivision")
             and group.find("cycles_subdivision_ipr")
+            and group.find("cycles_subdivision_cache_topology")
             and (not point_instancing or group.find("cycles_subnet_filter"))
         ):
             return False
@@ -633,6 +642,10 @@ def subdivision_settings(node, now, inherited, *, interactive=True):
     return dict(
         type=kind,
         adaptive=adaptive,
+        cache_topology=interactive
+        and adaptive
+        and kind == "catmull_clark"
+        and bool(_value(node, "subdivision_cache_topology", now, True)),
         space=space,
         max_level=level,
         dicing_rate=rate,

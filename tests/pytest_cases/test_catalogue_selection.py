@@ -15,21 +15,22 @@ from support.workers import ordinary_python, pure_python_environment
 pytestmark = [pytest.mark.pure, pytest.mark.cpu]
 
 
-# Backend identities added after the original 518 (each a legitimately new headless test):
-# the fatal GPU reply check (installer candidate 7429a7a0) and the curve-mapping table check
-# (independent curve-mapping rewrite, docs/dev/provenance/curve-mapping.md).
+# Backend identities added after the original 518: fatal GPU replies,
+# independent curve-mapping tables and displaced shader output previews.
 ADDED_IDENTITIES = [
     dict(test="houdini_fatal_gpu_render_smoke.py", device="script-declared"),
     dict(test="houdini_curve_mapping_table_smoke.py", device="script-declared"),
+    dict(test="houdini_shader_preview_displacement_smoke.py", device="CPU"),
+    dict(test="houdini_shader_preview_displacement_smoke.py", device="OPTIX"),
 ]
 
 
 def test_catalogue_retains_all_original_headless_backend_identities():
     cases = catalogue_cases()
-    assert len(cases) == 518 + len(ADDED_IDENTITIES) == 520
-    assert len({(row["test"], row["device"]) for row in cases}) == 520
+    assert len(cases) == 518 + len(ADDED_IDENTITIES) == 522
+    assert len({(row["test"], row["device"]) for row in cases}) == 522
     assert all(row in cases for row in ADDED_IDENTITIES)
-    assert len(headless_recipes()) == 319 + len(ADDED_IDENTITIES) == 321
+    assert len(headless_recipes()) == 319 + len({row["test"] for row in ADDED_IDENTITIES}) == 322
     for case in cases:
         assert case in required_cases([case])
 

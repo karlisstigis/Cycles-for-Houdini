@@ -16,6 +16,8 @@ pytestmark = [pytest.mark.hython, pytest.mark.slow]
 CASES = [
     pytest.param("core_image_iris_smoke.py", "CPU", marks=[pytest.mark.cpu, pytest.mark.release_gate]),
     pytest.param("core_image_iris_smoke.py", "OPTIX", marks=[pytest.mark.optix, pytest.mark.release_gate]),
+    pytest.param("houdini_subdivision_topology_cache_smoke.py", "CPU", marks=pytest.mark.cpu),
+    pytest.param("houdini_subdivision_topology_cache_smoke.py", "OPTIX", marks=pytest.mark.optix),
     pytest.param("hython_scene_contract.py", "CPU", marks=pytest.mark.cpu),
     pytest.param("hython_scene_contract.py", "OPTIX", marks=pytest.mark.optix),
 ]
