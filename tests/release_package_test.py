@@ -957,7 +957,9 @@ class ReleaseTests(unittest.TestCase):
         source = self.base / "made-up-source"
         source.mkdir()
         (source / "f").write_bytes(b"made up")
-        plan = dict(files={too_long: source / "f"}, runtime_fingerprint="b" * 64, manifest={"host_sdk": {"houdini": "22.0.429"}})
+        plan = dict(
+            files={too_long: source / "f"}, runtime_fingerprint="b" * 64, manifest={"host_sdk": {"houdini": "22.0.429"}}
+        )
         plan["runtime_overrides"] = {}
         report = dict(result="passed", gates={"build_sources": "passed", "dependencies": "passed", "notices": "passed"})
         with patch.object(P, "payload_plan", return_value=plan), patch.object(P, "audit", return_value=(report, {})):
@@ -970,7 +972,14 @@ class ReleaseTests(unittest.TestCase):
         self.manifest = fixture_archive(self.archive, extra_path="host/resources/" + "a" * 65 + ".txt")
         names = [entry["path"] for entry in self.manifest["files"]] + [P.MANIFEST]
         longest = max(len(n) for n in names)
-        fixed = len(str(self.base)) + 1 + len("installation") + 1 + (P.PAYLOAD_PREFIX_CHARS - len("installation/")) + longest
+        fixed = (
+            len(str(self.base))
+            + 1
+            + len("installation")
+            + 1
+            + (P.PAYLOAD_PREFIX_CHARS - len("installation/"))
+            + longest
+        )
         pad = total - fixed - 1
         if pad < 1:
             self.skipTest("the test folder is already too long for this case")
@@ -978,7 +987,10 @@ class ReleaseTests(unittest.TestCase):
 
     def test_install_refuses_an_app_folder_that_is_too_long_before_writing(self):
         root = self.long_root(P.WINDOWS_PATH_LIMIT + 1)
-        with self.assertRaisesRegex(P.PackageError, r"is too long for Cycles for Houdini: .* 260 characters and Windows allows 259, so choose a folder at least 1 character shorter"):
+        with self.assertRaisesRegex(
+            P.PackageError,
+            r"is too long for Cycles for Houdini: .* 260 characters and Windows allows 259, so choose a folder at least 1 character shorter",
+        ):
             P.install(self.archive, root, self.prefs, self.data, allow_internal=True)
         self.assertFalse(root.parent.exists())
         self.assertFalse(self.prefs.exists())

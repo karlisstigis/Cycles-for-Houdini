@@ -190,14 +190,23 @@ class EngineForkTest(unittest.TestCase):
         # The upstream fetch fails every time (here: a server that does not exist): tried FETCH_ATTEMPTS times with
         # growing pauses, then one plain sentence; the unfinished folder is removed, so the next run starts clean.
         names = FORK["materialize_public"].__globals__
-        lock = dict(url="file://localhost/" + (self.root / "no-such-server").as_posix().lstrip("/"), commit=self.base,
-                    authoring_tree="0" * 40, patches=[])
+        lock = dict(
+            url="file://localhost/" + (self.root / "no-such-server").as_posix().lstrip("/"),
+            commit=self.base,
+            authoring_tree="0" * 40,
+            patches=[],
+        )
         pauses = []
         destination = self.root / "never-answered/cycles"
-        with patch.dict(names, lock_engine=lambda root: lock, locked_patches=lambda root, engine: []), patch.object(
-            names["time"], "sleep", pauses.append
-        ), redirect_stderr(io.StringIO()):
-            with self.assertRaisesRegex(RuntimeError, r"^The download from localhost did not answer, .*double-click the file again \(nothing is left half-installed\)\.$"):
+        with (
+            patch.dict(names, lock_engine=lambda root: lock, locked_patches=lambda root, engine: []),
+            patch.object(names["time"], "sleep", pauses.append),
+            redirect_stderr(io.StringIO()),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"^The download from localhost did not answer, .*double-click the file again \(nothing is left half-installed\)\.$",
+            ):
                 FORK["materialize_public"](self.root, destination)
         self.assertEqual(pauses, [5.0, 10.0, 20.0])
         self.assertFalse(destination.with_name("cycles.incomplete").exists())

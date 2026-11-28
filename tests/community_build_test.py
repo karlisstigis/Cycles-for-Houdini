@@ -947,15 +947,17 @@ class CudaToolkitPartsTest(unittest.TestCase):
                 if cut_after is None:
                     raise TimeoutError("[WinError 10060] the server did not answer")
                 start = int(request.get_header("Range")[6:-1]) if request.get_header("Range") and honour_range else 0
+
                 class Cut(self.FakeResponse):
                     def read(inner, n=-1):
                         if inner.tell() >= cut_after:
                             raise ConnectionResetError("connection reset")
                         return super().read(min(n, cut_after - inner.tell()) if n > 0 else cut_after - inner.tell())
+
                 return Cut(data[start:], 206 if start else 200)
             rng = request.get_header("Range")
             if rng and honour_range:
-                return self.FakeResponse(data[int(rng[6:-1]):], 206)
+                return self.FakeResponse(data[int(rng[6:-1]) :], 206)
             return self.FakeResponse(data, 200)
 
         return opener, calls
@@ -965,8 +967,13 @@ class CudaToolkitPartsTest(unittest.TestCase):
         target = self.temp / "dl" / "part.zip"
         target.parent.mkdir(exist_ok=True)
         self.tool["_download"](
-            "https://example.invalid/part.zip", target, len(data), hashlib.sha256(data).hexdigest(), lines.append,
-            opener=opener, sleep=pauses.append,
+            "https://example.invalid/part.zip",
+            target,
+            len(data),
+            hashlib.sha256(data).hexdigest(),
+            lines.append,
+            opener=opener,
+            sleep=pauses.append,
         )
         return target, pauses, lines
 
@@ -1914,7 +1921,12 @@ class FreshCloneJudgeTest(unittest.TestCase):
         self.assertJudged(self.j["reference_compile"](s["reuse_off_first"], {}), True)
         # The driver failed this step on its own slash-only search of build.ninja; judged on the record it passed.
         self.assertJudged(self.j["first_compile"](s["on_new_schema"]), True)
-        self.assertJudged(self.j["reuse_all"](dict(s["on_new_schema"], compiled=[], reused=list(self.j["ALL"])), s["reuse_off_first"]), True)
+        self.assertJudged(
+            self.j["reuse_all"](
+                dict(s["on_new_schema"], compiled=[], reused=list(self.j["ALL"])), s["reuse_off_first"]
+            ),
+            True,
+        )
 
     def test_k_c2c_the_lost_decision_line(self):
         s = self.run_record("k-c2c")["states"]
@@ -1933,7 +1945,12 @@ class FreshCloneJudgeTest(unittest.TestCase):
         record = self.run_record("k-c2e")
         s = record["states"]
         self.assertJudged(self.j["first_compile"](s["on_new_schema"]), True)
-        self.assertJudged(self.j["reuse_all"](s["on_new_schema"] | {"compiled": [], "reused": list(self.j["ALL"])}, s["reuse_off_first"]), True)
+        self.assertJudged(
+            self.j["reuse_all"](
+                s["on_new_schema"] | {"compiled": [], "reused": list(self.j["ALL"])}, s["reuse_off_first"]
+            ),
+            True,
+        )
         self.assertJudged(self.j["reuse_all"](s["other_houdini_path_doubled"], s["on_new_schema"]), True)
         self.assertJudged(self.j["reference_compile"](s["reuse_off"], {"new tool": s["on_new_schema"]}), True)
         self.assertJudged(self.j["reuse_all"](s["reuse_on_again_path_doubled"], s["reuse_off"]), True)
@@ -1946,23 +1963,43 @@ class FreshCloneJudgeTest(unittest.TestCase):
             self.assertEqual(s["real_edit"]["22.0.508"]["reused"], [])
 
     def test_judges_reject_what_they_must(self):
-        state = {"mode": "on", "state": "reused", "reused": list(self.j["ALL"]), "compiled": [], "decisions": [{}],
-                 "files": {f"f{n}": "a" for n in range(12)}}
+        state = {
+            "mode": "on",
+            "state": "reused",
+            "reused": list(self.j["ALL"]),
+            "compiled": [],
+            "decisions": [{}],
+            "files": {f"f{n}": "a" for n in range(12)},
+        }
         self.assertJudged(self.j["reuse_all"](state, state), True)
         self.assertJudged(self.j["reuse_all"](dict(state, files={"f0": "a"}), state), False, "expected 12")
-        self.assertJudged(self.j["reuse_all"](state, dict(state, files={f"f{n}": "b" for n in range(12)})), False, "differ")
+        self.assertJudged(
+            self.j["reuse_all"](state, dict(state, files={f"f{n}": "b" for n in range(12)})), False, "differ"
+        )
         self.assertJudged(self.j["reuse_all"](dict(state, reused=[], decisions=[]), state), False, "no kernel rule ran")
         self.assertJudged(self.j["reference_compile"](dict(state, mode="off"), {}), False, "decisions")
         self.assertJudged(self.j["cache_entries"]({"a": 2, "b": 3}), False, "more than two")
         self.assertJudged(self.j["cache_entries"]({}), False)
-        self.assertJudged(self.j["damaged"](dict(state, damaged_ignored=True, decisions=[{"output": "x", "decision": "reused"}]), "x", state), False)
+        self.assertJudged(
+            self.j["damaged"](
+                dict(state, damaged_ignored=True, decisions=[{"output": "x", "decision": "reused"}]), "x", state
+            ),
+            False,
+        )
 
     def test_powershell_51_array_shape_is_read_as_a_list(self):
         names = list(self.j["ALL"])
-        wrapped = {"mode": "on", "reused": {"value": names, "Count": 6}, "compiled": {"value": [], "Count": 0},
-                   "decisions": {"value": [{"output": n} for n in names], "Count": 6}, "files": {f"f{n}": "a" for n in range(12)}}
+        wrapped = {
+            "mode": "on",
+            "reused": {"value": names, "Count": 6},
+            "compiled": {"value": [], "Count": 0},
+            "decisions": {"value": [{"output": n} for n in names], "Count": 6},
+            "files": {f"f{n}": "a" for n in range(12)},
+        }
         self.assertJudged(self.j["reuse_all"](wrapped, wrapped), True)
-        self.assertJudged(self.j["reuse_all"](dict(wrapped, reused="kernel_optix.ptx"), wrapped), False, "reused 1 of six")
+        self.assertJudged(
+            self.j["reuse_all"](dict(wrapped, reused="kernel_optix.ptx"), wrapped), False, "reused 1 of six"
+        )
 
     def test_x_c1_empty_listings(self):
         record = self.run_record("x-c1")
@@ -1998,7 +2035,10 @@ class FreshCloneJudgeTest(unittest.TestCase):
         # y-c1b: the check's earlier padding (no separator after the padding folder) made its "259" folder 260.
         old_pad = 259 - below - 1 - (len(base) + 1 + len("installation"))
         old_root = base + "\\" + "r" * old_pad + "\\installation"
-        self.assertIn(f"{self.run_record('y-c1b')['at_the_limit_refused_with']} characters", P["install_path_problem"](old_root, names))
+        self.assertIn(
+            f"{self.run_record('y-c1b')['at_the_limit_refused_with']} characters",
+            P["install_path_problem"](old_root, names),
+        )
         with self.assertRaises(ValueError):
             self.j["long_root"]("C:\\" + "x" * 300, below, 259)
 
@@ -2306,7 +2346,9 @@ class KernelCacheTest(unittest.TestCase):
         ]
         [x.start() for x in threads]
         [x.join() for x in threads]
-        self.assertEqual(sorted(d["output"] for d in self.kc["read_decisions"](build)), sorted(f"k{n}" for n in range(24)))
+        self.assertEqual(
+            sorted(d["output"] for d in self.kc["read_decisions"](build)), sorted(f"k{n}" for n in range(24))
+        )
         self.kc["prepare"](build, self.cache, self.nvcc, self.cuda)  # the next build starts with none
         self.assertEqual(self.kc["read_decisions"](build), [])
 
