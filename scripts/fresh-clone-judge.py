@@ -88,7 +88,9 @@ def first_compile(state):
     if _nothing_ran(state):
         return fail(f"no kernel rule ran (ninja found them up to date): {_line(state)}")
     if _names(state, "compiled") != sorted(ALL):
-        return fail(f"expected all six compiled, got compiled {_names(state, 'compiled')}, reused {_names(state, 'reused')}")
+        return fail(
+            f"expected all six compiled, got compiled {_names(state, 'compiled')}, reused {_names(state, 'reused')}"
+        )
     return ok()
 
 
@@ -155,7 +157,9 @@ def real_edit(states, newest, before):
     for name in sorted(files):
         changed = files.get(name) != old.get(name)
         if name.startswith("cuda/") != changed:
-            return fail(f"newest: {name} {'changed' if changed else 'did not change'}; only the CUDA kernels may change")
+            return fail(
+                f"newest: {name} {'changed' if changed else 'did not change'}; only the CUDA kernels may change"
+            )
     for version, state in states.items():
         if version == newest:
             continue
@@ -217,7 +221,9 @@ def path_rounds(record):
     if not at.get("result", "").startswith("installed"):
         return fail(f"at the limit: {at.get('result')}: {at.get('message')}")
     if at.get("longest_installed") != LIMIT:
-        return fail(f"at the limit the longest installed file has {at.get('longest_installed')} characters, not {LIMIT}")
+        return fail(
+            f"at the limit the longest installed file has {at.get('longest_installed')} characters, not {LIMIT}"
+        )
     if over.get("app_folder_length") != at.get("app_folder_length", -1) + 1:
         return fail("the two folders are not one character apart")
     return ok()

@@ -149,7 +149,11 @@ def materialize_public(root, destination, output=None):
                 print(f"   the last try did not finish either ({error})", file=sys.stderr, flush=True)
                 raise RuntimeError(FETCH_NOT_ANSWERED.format(host=engine["url"].split("/")[2])) from None
             pause = FETCH_FIRST_PAUSE * 2 ** (attempt - 1)
-            print(f"   try {attempt} of {FETCH_ATTEMPTS} did not finish; trying again in {pause:.0f} s", file=sys.stderr, flush=True)
+            print(
+                f"   try {attempt} of {FETCH_ATTEMPTS} did not finish; trying again in {pause:.0f} s",
+                file=sys.stderr,
+                flush=True,
+            )
             time.sleep(pause)
     run("checkout", "-q", "-b", PUBLIC_BRANCH, engine["commit"])
     print(f"Applying {len(patches)} patches from patches/", file=sys.stderr, flush=True)

@@ -1360,7 +1360,9 @@ def archive_contents(plan, report, notices, purpose, public_sdk_roots=(), build=
             dict(
                 schema_version=1,
                 about="Every licence or notice text in this folder: where it is stored and its path in the "
-                "component's own source. Texts whose path would be longer than " + str(NOTICE_PATH_LIMIT) + " characters "
+                "component's own source. Texts whose path would be longer than "
+                + str(NOTICE_PATH_LIMIT)
+                + " characters "
                 "are stored flat in their component's folder under a name made of 12 hex of the original path and the "
                 "file name.",
                 notices={
@@ -2275,7 +2277,11 @@ def verify_installed(version, expected_id=None):
     package_id = identity.pop("package_id")
     require(
         digest(canonical(identity)) == package_id
-        and (expected_id == package_id if expected_id else version.name in (package_id, package_id[:VERSION_FOLDER_CHARS])),
+        and (
+            expected_id == package_id
+            if expected_id
+            else version.name in (package_id, package_id[:VERSION_FOLDER_CHARS])
+        ),
         "Installed release identity mismatch",
     )
     expected = {entry["path"] for entry in manifest["files"]} | {MANIFEST}
