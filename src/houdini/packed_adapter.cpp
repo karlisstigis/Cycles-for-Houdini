@@ -164,6 +164,7 @@ NativePackedPreparationCache::prepare(const GU_Detail &source, const GeometryReq
   // runs unchanged.
   if (frozen && !serial_packed_rows() && work.next < count) {
     constexpr std::size_t block = 4096;
+    constexpr std::size_t commit_batch = 256;
     constexpr std::size_t turn_blocks = 16; // Rows read per parallel turn: 65,536.
     const auto read_row = [&](std::size_t index, NativePackedInstance &instance,
                               const std::shared_ptr<const PreservedDetail> *&entry, char &is_blender) {
@@ -301,10 +302,11 @@ NativePackedPreparationCache::prepare(const GU_Detail &source, const GeometryReq
     const auto control = _mm_getcsr();
     while (work.next < count) {
       if (work.next == work.read_end) {
-        if (budget && budget->expired())
-          throw NativePreparationPending{};
         const auto first = work.next;
-        const auto last = std::min(count, (first / block + turn_blocks) * block);
+        // Earlier roots can consume the whole host time slice on every retry.
+        // Read one commit batch in that case so the saved cursor always advances.
+        const auto last =
+            std::min(count, budget && budget->expired() ? first + commit_batch : (first / block + turn_blocks) * block);
         // Rows are written in place: one row per index, all rows before
         // `first` are committed and none after it exist yet.
         if (result.size() != first)
@@ -382,7 +384,7 @@ NativePackedPreparationCache::prepare(const GU_Detail &source, const GeometryReq
           }
         }
         ++work.next;
-        if (work.next % 256 == 0 && work.next < count && budget && budget->expired())
+        if (work.next % commit_batch == 0 && work.next < count && budget && budget->expired())
           throw NativePreparationPending{};
       }
     }

@@ -103,8 +103,40 @@ class Proxy:
         return encode
 
 
+def check_expired_packed_turns():
+    # Force every preparation turn to enter the packed adapter after its 20 ms
+    # deadline, as when earlier objects in a scene take up the whole slice.
+    class SlowFlag:
+        def __bool__(self):
+            time.sleep(0.035)
+            return True
+
+    request = ch.geometry_request(roots[0]["obj"], roots[0]["end"], material_mode="uniform")
+    update = dict(geometry=[request])
+    handle = ch._native.create("CPU", 8, 8, 1, True, False, False, False, None, True)
+    try:
+        now = hou.time()
+        job = ch._native.acquire_apply(handle, update, now)
+        while True:
+            ch._native.prewarm_apply(job)
+            if not ch._native.expand_apply(job):
+                break
+        request["smooth"] = SlowFlag()
+        for _ in range(16):
+            if ch._native.prepare_apply(handle, update, now, False, job):
+                break
+        else:
+            raise AssertionError("Packed preparation repeatedly yielded without finishing a small frozen root")
+        ch._native.convert_apply(job)
+        snapshot = ch._native.finish_apply(job)
+        assert ch._native.snapshot_info(snapshot)["objects"] == 56
+    finally:
+        ch._native.close(handle)
+
+
 queued._native = Proxy()
 try:
+    check_expired_packed_turns()
     with ExitStack() as stack:
         sessions = {
             mode: stack.enter_context(
